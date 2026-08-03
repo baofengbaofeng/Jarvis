@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-doc-type="requirements" data-doc-version="1.0-mvp" data-doc-date="2026-08-02" data-project="JARVIS">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="JARVIS 桌面端 AI 助手 V1.0-MVP 需求调研文档 — 跨平台本地 Agent 平台，兼容 Multica 协议">
+  <meta name="author" content="JARVIS Project">
+  <meta name="keywords" content="JARVIS,AI Agent,Multica,桌面端,需求文档">
+  <title>JARVIS 需求文档 V1.0-MVP (2026-08-02)</title>
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #fff; --border: #e2e8f0;
+      --text: #1e293b; --text-muted: #64748b; --primary: #2563eb;
+      --primary-light: #eff6ff; --accent: #0f766e; --warn: #b45309;
+      --sidebar-w: 280px; --banner-h: auto; --radius: 8px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono: "SF Mono", "Fira Code", Consolas, monospace;
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a; --surface: #1e293b; --border: #334155;
+      --text: #f1f5f9; --text-muted: #94a3b8; --primary: #60a5fa;
+      --primary-light: #1e3a5f; --accent: #2dd4bf;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 15px; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.7; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: var(--mono); font-size: 0.88em; }
+    pre { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; overflow-x: auto; margin: 1rem 0; }
+    code { background: var(--bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre code { background: none; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; vertical-align: top; }
+    th { background: var(--primary-light); font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) { background: rgba(0,0,0,0.02); }
+    [data-theme="dark"] tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+    h1,h2,h3,h4 { line-height: 1.35; margin: 1.5rem 0 0.75rem; }
+    h1 { font-size: 1.75rem; } h2 { font-size: 1.4rem; border-bottom: 2px solid var(--primary); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; color: var(--accent); } h4 { font-size: 1rem; }
+    p, ul, ol { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.25rem 0; }
+    .banner { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 60%, #0f766e 100%); color: #fff; padding: 1.75rem 2rem; }
+    .banner-inner { max-width: 1400px; margin: 0 auto; }
+    .banner h1 { color: #fff; border: none; margin: 0 0 0.5rem; font-size: 2rem; }
+    .banner-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.88em; opacity: 0.92; margin-top: 0.75rem; }
+    .banner-meta span { background: rgba(255,255,255,0.15); padding: 0.2rem 0.65rem; border-radius: 999px; }
+    .banner-desc { max-width: 900px; margin-top: 0.75rem; opacity: 0.95; font-size: 0.95em; }
+    .toolbar { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+    .toolbar button { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35); color: #fff; padding: 0.35rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+    .toolbar button:hover { background: rgba(255,255,255,0.3); }
+    .layout { display: flex; max-width: 1400px; margin: 0 auto; min-height: calc(100vh - 200px); }
+    .sidebar { width: var(--sidebar-w); flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--surface); border-right: 1px solid var(--border); padding: 1.25rem 0; }
+    .sidebar-title { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 0 1.25rem; margin-bottom: 0.5rem; }
+    .toc { list-style: none; padding: 0; }
+    .toc li { margin: 0; }
+    .toc a { display: block; padding: 0.35rem 1.25rem; font-size: 0.88em; color: var(--text-muted); border-left: 3px solid transparent; }
+    .toc a:hover, .toc a.active { color: var(--primary); background: var(--primary-light); border-left-color: var(--primary); text-decoration: none; }
+    .toc .toc-l2 a { padding-left: 2rem; font-size: 0.84em; }
+    .toc .toc-l3 a { padding-left: 2.75rem; font-size: 0.8em; }
+    .content { flex: 1; padding: 2rem 2.5rem 4rem; min-width: 0; background: var(--surface); }
+    section { margin-bottom: 2.5rem; scroll-margin-top: 1rem; }
+    section > .section-id { font-family: var(--mono); font-size: 0.75em; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .badge { display: inline-block; font-size: 0.75em; padding: 0.15em 0.55em; border-radius: 999px; font-weight: 600; margin-left: 0.35rem; vertical-align: middle; }
+    .badge-in { background: #dcfce7; color: #166534; }
+    .badge-out { background: #fee2e2; color: #991b1b; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-p0 { background: #dbeafe; color: #1e40af; }
+    [data-theme="dark"] .badge-in { background: #14532d; color: #86efac; }
+    [data-theme="dark"] .badge-out { background: #7f1d1d; color: #fca5a5; }
+    [data-theme="dark"] .badge-pending { background: #78350f; color: #fde68a; }
+    .callout { border-left: 4px solid var(--primary); background: var(--primary-light); padding: 0.85rem 1.1rem; border-radius: 0 var(--radius) var(--radius) 0; margin: 1rem 0; font-size: 0.93em; }
+    .callout-warn { border-left-color: var(--warn); background: #fffbeb; }
+    [data-theme="dark"] .callout-warn { background: #422006; }
+    .diagram { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; font-family: var(--mono); font-size: 0.82em; white-space: pre; overflow-x: auto; line-height: 1.5; }
+    .cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .cap-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 0.88em; }
+    .cap-card .cap-id { font-family: var(--mono); font-weight: 700; color: var(--primary); }
+    .cap-card.in-scope { border-left: 3px solid #22c55e; }
+    .cap-card.out-scope { border-left: 3px solid #ef4444; opacity: 0.75; }
+    .cap-card.pending { border-left: 3px solid #f59e0b; }
+    .ai-block { border: 1px dashed var(--border); border-radius: var(--radius); padding: 1rem; margin: 1rem 0; background: var(--bg); }
+    .ai-block summary { cursor: pointer; font-weight: 600; font-size: 0.88em; color: var(--text-muted); }
+    .ai-block pre { margin: 0.75rem 0 0; font-size: 0.8em; }
+    footer.doc-footer { text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.82em; border-top: 1px solid var(--border); }
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
+      .content { padding: 1.25rem; }
+    }
+    @media print {
+      .sidebar, .toolbar { display: none; }
+      .content { padding: 0; }
+      .banner { background: #1e3a5f; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body data-theme="light">
+
+<!-- ============================================================
+     DOCUMENT METADATA (AI-parseable)
+     ============================================================ -->
+<script type="application/ld+json" id="doc-metadata">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "name": "JARVIS 需求文档 V1.0-MVP",
+  "version": "1.0-mvp",
+  "datePublished": "2026-08-02",
+  "description": "JARVIS 跨平台桌面 AI Agent 平台第一版需求调研文档",
+  "about": {
+    "@type": "SoftwareApplication",
+    "name": "JARVIS",
+    "applicationCategory": "DesktopApplication",
+    "operatingSystem": "macOS, Windows"
+  },
+  "keywords": ["AI Agent", "Multica", "Electron", "Go", "MCP", "Skills"]
+}
+</script>
+
+<!-- BANNER: 项目说明 -->
+<header class="banner" id="top" role="banner" data-section="banner">
+  <div class="banner-inner">
+    <h1>JARVIS 需求调研文档</h1>
+    <p class="banner-desc">
+      JARVIS 是一款面向个人办公场景的跨平台桌面 AI 助手。主界面参考豆包桌面端，
+      支持本地模式下直接执行任务，整合办公助手、编程 Agent、自定义多 Agent 协作能力，
+      并兼容 Multica 远端智能体调度协议。本文档为 <strong>V1.0-MVP</strong> 需求范围确认、MVP 裁剪与技术调研结论。
+    </p>
+    <div class="banner-meta">
+      <span>版本 V1.0-MVP</span>
+      <span>日期 2026-08-02</span>
+      <span>语言 zh-CN / en</span>
+      <span>状态 需求调研</span>
+      <span>平台 macOS / Windows</span>
+      <span>参考 Multica 开源实现</span>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="btn-theme" aria-label="切换深色模式">切换主题</button>
+      <button type="button" id="btn-expand-toc" aria-label="展开全部目录">展开目录</button>
+      <button type="button" id="btn-print" aria-label="打印文档">打印 / 导出 PDF</button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT: 文档目录 -->
+  <nav class="sidebar" id="sidebar" role="navigation" aria-label="文档目录">
+    <div class="sidebar-title">目录 Navigation</div>
+    <ul class="toc" id="toc-list"><!-- JS 自动生成 --></ul>
+  </nav>
+
+  <!-- RIGHT: 具体内容 -->
+  <main class="content" id="main-content" role="main">
+
+    <!-- §1 文档概述 -->
+    <section id="sec-01-overview" data-section-type="overview" data-priority="meta">
+      <div class="section-id">§1 · doc-overview</div>
+      <h2>1. 文档概述</h2>
+
+      <h3 id="sec-01-1-purpose">1.1 文档目的</h3>
+      <p>本文档是 <strong>JARVIS</strong> 桌面端产品 <strong>V1.0-MVP</strong> 的需求调研、范围确认与 MVP 裁剪文档，用于：</p>
+      <ul>
+        <li>明确 V1.0 功能边界与排除项，避免范围蔓延</li>
+        <li>记录技术栈选型建议及 Multica 开源项目参考路径</li>
+        <li>为后续架构设计、开发排期、AI 辅助编码提供结构化上下文</li>
+        <li>作为团队与 AI Agent 协作的统一需求基线</li>
+      </ul>
+
+      <h3 id="sec-01-2-audience">1.2 目标读者</h3>
+      <table>
+        <thead><tr><th>读者</th><th>使用方式</th></tr></thead>
+        <tbody>
+          <tr><td>产品负责人</td><td>确认范围、优先级、待决策事项</td></tr>
+          <tr><td>开发工程师</td><td>理解模块划分、技术栈、Multica 参考路径</td></tr>
+          <tr><td>AI Coding Agent</td><td>通过语义化 HTML 结构、section id、data-* 属性快速定位需求</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-01-3-conventions">1.3 文档约定</h3>
+      <ul>
+        <li><span class="badge badge-in">纳入</span> 产品范围清单内纳入（交付层级见 §10 MVP 裁剪表）</li>
+        <li><span class="badge badge-out">排除</span> 产品范围清单内排除</li>
+        <li><span class="badge badge-pending">待定</span> 需后续确认</li>
+        <li><span class="badge badge-p0">P0</span> 核心路径，Milestone 前期交付</li>
+      </ul>
+
+      <details class="ai-block" data-ai-purpose="machine-readable-summary">
+        <summary>AI 快速摘要（点击展开 JSON）</summary>
+        <pre>{
+  "project": "JARVIS",
+  "version": "1.0-mvp",
+  "revision": "V1.0-MVP",
+  "type": "desktop-ai-agent-platform",
+  "platforms": ["macOS", "windows"],
+  "locales_required": ["zh-CN", "en"],
+  "modes": ["local", "multica-runtime"],
+  "tech_stack": {
+    "daemon": "Go",
+    "ui": "TypeScript + React + Electron",
+    "db": "SQLite",
+    "i18n": "react-i18next (or equivalent)",
+    "protocol_alignment": "ACP (primary), OpenCode (secondary)"
+  },
+  "reference_project": "multica-ai/multica",
+  "ui_reference": "豆包桌面端",
+  "mvp_tiers": {
+    "mvp": "M0+M1+M2+M3-core — 首版可发布",
+    "v1_full": "M3-rest+M4+M5+M6+M7+M8 — V1.0 增量",
+    "v1_excluded": ["A3","A5","A7","A8","A9","B11","E5","H2","I1-I4","I6,I7","I9,I10","L24","L37"],
+    "v2_deferred": ["A3","H2","I-system","full-ide","A5","A7","A9","L24","extra-locales"]
+  },
+  "decisions": {
+    "Q1": "A — 多 Agent 协作完全对齐 Multica Squad（Leader + @成员）",
+    "Q2": "A — 本机 jarvis-daemon 即 Multica Client，支持 Server↔Client 全部协议；不做 H2 Client 产品功能",
+    "Q3": "B — 轻量编程形态：聊天 + 文件树 + Diff，非完整 IDE",
+    "Q4": "自定义模型模式 — 不预设任何模型；Provider 须兼容 OpenAI / Anthropic 接口规范",
+    "Q5": "B — 全局系统能力（A3、I1–I4、I6–I7、I9–I10）推迟至 V2.0"
+  },
+  "included_modules": ["A1-A2,A4,A6,A10-A11","B1-B10,B12-B13","C1-C12","D1-D15","E1-E4,E6-E11,E12-E15","F1-F15","G1-G9","H1,H3","I5,I8","J1-J7","K1-K3,K4-K7","L1-L23,L25-L36,L38-L39"],
+  "excluded_modules": ["A3","A5","A7","A8","A9","B11","E5","E11-full-ide","H2","I1-I4","I6-I7","I9-I10","L24","L37","K3-monaco-full"]
+}</pre>
+      </details>
+    </section>
+
+    <!-- §2 项目背景 -->
+    <section id="sec-02-background" data-section-type="background">
+      <div class="section-id">§2 · project-background</div>
+      <h2>2. 项目背景与定位</h2>
+
+      <h3 id="sec-02-1-problem">2.1 问题陈述</h3>
+      <p>当前市面 AI 工具各自为政：豆包桌面端擅长办公但缺乏编程 Agent 能力；Cursor/Codex 专注编程但办公场景覆盖不足；Multica 提供 Agent 团队管理但需要独立 Runtime。用户希望拥有一款<strong>统一的本地桌面 AI 平台</strong>，既能处理日常办公，又能执行编程任务，并支持自定义多 Agent 协作，同时兼容 Multica 远端调度协议。</p>
+
+      <h3 id="sec-02-2-positioning">2.2 产品定位</h3>
+      <div class="callout">
+        <strong>一句话定位：</strong>JARVIS 是面向个人办公的跨平台本地 AI Agent 平台——豆包式交互体验 + Cursor 级编程能力 + Multica 兼容的多 Agent 协作基础设施。
+      </div>
+
+      <h3 id="sec-02-3-references">2.3 参考产品能力矩阵</h3>
+      <table>
+        <thead>
+          <tr><th>参考产品</th><th>借鉴能力</th><th>JARVIS 关系</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>豆包桌面端</td><td>主界面交互、划词、写作、PDF 伴读、联网搜索</td><td>UI/UX 主要参考</td></tr>
+          <tr><td>Cursor</td><td>代码编辑、Agent 模式、MCP、@引用、Diff 预览</td><td>编程 Agent 能力参考</td></tr>
+          <tr><td>Codex (OpenAI)</td><td>沙箱执行、并行 Task、Git/PR、Plan 模式</td><td>Task 执行模型参考</td></tr>
+          <tr><td>OpenCode</td><td>开源 Agent、多 Provider、LSP、Plugin 扩展</td><td>Provider 抽象参考</td></tr>
+          <tr><td>OpenClaw</td><td>持久记忆、工具策略、多渠道（V1 不做 IM）</td><td>Agent 工具策略参考</td></tr>
+          <tr><td>Multica</td><td>Agent 配置、Skills、Squad、Daemon/Runtime 协议</td><td><strong>代码实现优先参考</strong></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- §3 产品形态 -->
+    <section id="sec-03-product-form" data-section-type="architecture">
+      <div class="section-id">§3 · product-form</div>
+      <h2>3. 产品形态与运行模式</h2>
+
+      <h3 id="sec-03-1-layout">3.1 界面布局（参考豆包桌面端）</h3>
+      <div class="diagram">┌─────────────────────────────────────────────────────────────┐
+│  JARVIS Desktop                                              │
+│  ┌─────────────┬──────────────────────────────────────────┐ │
+│  │ 左侧导航      │  主工作区                                  │ │
+│  │ · Agent 列表  │  · 聊天对话（默认）                         │ │
+│  │ · Skills     │  · 代码编辑面板                             │ │
+│  │ · 设置       │  · Task / Issue 看板                       │ │
+│  │ · 工作区     │  · Canvas 可视化工作区                      │ │
+│  └─────────────┴──────────────────────────────────────────┘ │
+│  系统托盘常驻 · 本地 SQLite 存储 · 离线可用                    │
+└─────────────────────────────────────────────────────────────┘</div>
+
+      <h3 id="sec-03-2-modes">3.2 运行模式</h3>
+      <table>
+        <thead>
+          <tr><th>模式</th><th>说明</th><th>依赖</th><th>V1.0</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>本地模式</strong>（默认）</td>
+            <td>Agent 在本机队列中直接执行任务；配置存 SQLite（本地优先，无需联网即可启动 App，模型调用需 Provider 在线）</td>
+            <td>无外部服务</td>
+            <td><span class="badge badge-in">纳入</span></td>
+          </tr>
+          <tr>
+            <td><strong>Multica 客户端模式</strong>（本机 jarvis-daemon）</td>
+            <td>jarvis-daemon 注册为 Multica Client，支持 Server↔Client 全部协议：注册/发现、15s 心跳、3s 轮询接单、执行、流式回传；提供 <code>jarvis-agent</code> CLI</td>
+            <td>Multica Server（发起调度）</td>
+            <td><span class="badge badge-in">纳入</span></td>
+          </tr>
+          <tr>
+            <td><strong>Multica Client 产品功能</strong>（H2）</td>
+            <td>App 内登录、Issue/Task/Squad 管理（H2 产品功能，由 Server 提供）</td>
+            <td>Multica Server</td>
+            <td><span class="badge badge-out">排除 Q2:A</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-03-3-architecture">3.3 逻辑架构</h3>
+      <div class="diagram">┌─────────────────────────────────────────────────────────────┐
+│  apps/desktop          Electron 壳（托盘、窗口、IPC）         │
+├─────────────────────────────────────────────────────────────┤
+│  packages/views        页面：聊天、设置、Agent 管理、代码面板   │
+│  packages/core         Agent 引擎、Model Router、MCP、Skills  │
+│  packages/ui           shadcn 组件库                         │
+├─────────────────────────────────────────────────────────────┤
+│  daemon/               Go Daemon + jarvis-agent CLI          │
+│  internal/runtime      Task 调度、并发控制、Workspace 隔离     │
+│  internal/multica      Multica 协议适配（ACP 协议族）          │
+├─────────────────────────────────────────────────────────────┤
+│  data/                 SQLite（配置、对话、Task、审计日志）      │
+└─────────────────────────────────────────────────────────────┘</div>
+    </section>
+
+    <!-- §4 V1.0 范围 -->
+    <section id="sec-04-scope" data-section-type="scope">
+      <div class="section-id">§4 · v1-scope</div>
+      <h2>4. V1.0 功能范围确认</h2>
+
+      <h3 id="sec-04-1-summary">4.1 范围总览</h3>
+      <table>
+        <thead><tr><th>模块</th><th>纳入</th><th>排除</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>A 平台基础</td><td>A1,A2,A4,A6,A10,A11</td><td>A3,A5,A7,A8,A9</td><td>跨平台+托盘+吸附+SQLite+主题+多语言</td></tr>
+          <tr><td>B 模型管理</td><td>B1–B10,B12–B13</td><td>B11 本地模型</td><td>全自定义模型；兼容 OpenAI / Anthropic API（Q4）；无本机模型（B11 移除）</td></tr>
+          <tr><td>C 配置界面</td><td>C1–C12 全部</td><td>—</td><td>完整 Settings UI</td></tr>
+          <tr><td>D 办公助手</td><td>D1–D15 全部</td><td>—</td><td>对话/划词/写作/PDF/语音等</td></tr>
+          <tr><td>E 编程 Agent</td><td>E1–E4,E6–E10,E12–E15</td><td>E5,E11</td><td>无 Inline 补全/完整 IDE（Q3:B）；Agent 侧 LSP 保留</td></tr>
+          <tr><td>F Agent 系统</td><td>F1–F15 全部</td><td>—</td><td>自定义 Agent + 多 Agent 协作</td></tr>
+          <tr><td>G Skills/MCP</td><td>G1–G9 全部</td><td>—</td><td>Skills + MCP + Plugin</td></tr>
+          <tr><td>H Multica 兼容</td><td>H1,H3</td><td>H2 产品功能</td><td>本机 jarvis-daemon 即 Multica Client，支持 Server↔Client 全部协议（Q2:A，决策二 A 撤销）；H2 产品功能（登录/Issue/Autopilot）排除</td></tr>
+          <tr><td>I 系统集成</td><td>I5,I8</td><td>I1–I4,I6,I7,I9,I10</td><td>Task 通知 + 内置 WebView 浏览器</td></tr>
+          <tr><td>J 安全</td><td>J1–J7 全部</td><td>—</td><td>加密/沙箱/审计/权限</td></tr>
+          <tr><td>K UI 形态</td><td>K1,K2,K4–K7</td><td>K3 完整 IDE</td><td>轻量代码面板（Q3:B）；K3 降级为文件树+Diff 预览</td></tr>
+          <tr><td><strong>L 平台体验</strong></td><td><strong>L1–L23,L25–L36,L38–L39</strong></td><td>L24</td><td>引导/Task/Daemon/多Agent协议/备份/Multica细化等</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-04-2-boundary">4.2 边界说明与降级策略</h3>
+      <table>
+        <thead><tr><th>能力项</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Q1 多 Agent / F8/F9 Squad</td>
+            <td><span class="badge badge-in">已确认 A</span></td>
+            <td>完全对齐 Multica Squad：Leader 接收任务、@成员分派、遵循 Multica Squad Operating Protocol</td>
+          </tr>
+          <tr>
+            <td>Q2 Multica 模式</td>
+            <td><span class="badge badge-in">已确认 A</span></td>
+            <td>本机 <code>jarvis-daemon</code> 即 <strong>Multica Client</strong>，实现注册/发现、心跳、接单、执行、流式回传（决策二 A 撤销）；H2 Client 产品功能（登录/Issue/Autopilot 等）V1.0 不做</td>
+          </tr>
+          <tr>
+            <td>Q3 代码编辑深度</td>
+            <td><span class="badge badge-in">已确认 B</span></td>
+            <td>轻量形态：聊天 + 文件树 + Diff 预览；<strong>E5 Inline 补全排除</strong>；E11/K3 降级为轻量代码面板</td>
+          </tr>
+          <tr>
+            <td>Q4 模型策略</td>
+            <td><span class="badge badge-in">已确认</span></td>
+            <td><strong>全自定义模型</strong>，不预设任何模型；Provider 类型须兼容 OpenAI API 与 Anthropic API 规范；用户自行填写 model id</td>
+          </tr>
+          <tr>
+            <td>Q5 全局系统能力</td>
+            <td><span class="badge badge-in">已确认 B</span></td>
+            <td>A3、I1–I4、I6–I7、I9–I10 推迟至 <strong>V2.0</strong>；V1.0 维持 App 内能力 + I5/I8 最小实现</td>
+          </tr>
+          <tr>
+            <td>A11 多语言</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>V1.0 必须支持<strong>简体中文（zh-CN）</strong>与<strong>英文（en）</strong>；UI、系统消息、设置项均需 i18n；Agent 指令/对话内容不强制翻译</td>
+          </tr>
+          <tr>
+            <td>A4 窗口吸附</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>窗口贴边缩略/展开，参考豆包桌面端侧边栏模式</td>
+          </tr>
+          <tr>
+            <td>I5 通知</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>App 内 Task 完成提醒 + 可选系统级通知（仅 Task 完成/失败）；不做通用通知中心</td>
+          </tr>
+          <tr>
+            <td>I8 浏览器</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>内置简易 WebView 浏览器，用于 D8 网页总结；不做通用 Browser Agent 自动化</td>
+          </tr>
+          <tr>
+            <td>L24 TTS 语音播报</td>
+            <td><span class="badge badge-out">排除</span></td>
+            <td>不在 V1.0 范围；D11 语音输入仍纳入</td>
+          </tr>
+          <tr>
+            <td>D4 全局划词</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>App 内划词/粘贴分析；系统级全局 Hook 依赖 I1，V1 降级</td>
+          </tr>
+          <tr>
+            <td>D9 视频摘要</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>App 内粘贴链接/上传；I8 WebView 可辅助网页类内容</td>
+          </tr>
+          <tr>
+            <td>D11 语音对话</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>App 内语音输入/对话；系统级唤醒依赖 A3（已排除）</td>
+          </tr>
+          <tr>
+            <td>E12 外部 IDE 对接</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>CLI/协议层优先；VS Code 插件可后置</td>
+          </tr>
+          <tr>
+            <td>F8/F9 Squad 小队</td>
+            <td><span class="badge badge-in">纳入</span></td>
+            <td>Q1:A 已确认 — 完全对齐 Multica Squad 协议与 Leader 路由规则</td>
+          </tr>
+          <tr>
+            <td>A3 全局快捷键唤醒</td>
+            <td><span class="badge badge-out">排除</span></td>
+            <td>首版打开 App 使用；C5 快捷键配置仍纳入</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-04-3-revision">4.3 文档修订记录</h3>
+      <table>
+        <thead><tr><th>版本</th><th>日期</th><th>变更摘要</th></tr></thead>
+        <tbody>
+          <tr><td>V1.0</td><td>2026-08-02</td><td>初版：A–K 模块范围确认、技术栈、Multica 参考、Milestone</td></tr>
+          <tr><td>V1.0-MVP</td><td>2026-08-02</td><td>文档版本号统一为 V1.0-MVP；含 MVP 裁剪表 §10、Q1–Q5 决策</td></tr>
+          <tr><td>V1.0-r4</td><td>2026-08-02</td><td>新增 §10 最终 MVP 裁剪表（三层交付模型 + 验收标准 + 能力矩阵）</td></tr>
+          <tr><td>V1.0-r3</td><td>2026-08-02</td><td>确认 Q1–Q5：Squad 对齐 Multica；本机 jarvis-daemon 即 Multica Client（决策二 A 撤销）；轻量代码 UI；全自定义模型；全局能力推迟 V2.0</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-warn">
+        <strong>范围风险提示：</strong>V1.0 功能面覆盖豆包 + Cursor + Multica 三个产品级能力集合，工作量极大。
+        建议按 Milestone（§9）分期交付；<strong>首版发布范围以 §10 MVP 裁剪表为准</strong>。
+      </div>
+    </section>
+
+    <!-- §5 能力清单 A-K -->
+    <section id="sec-05-capabilities" data-section-type="requirements" data-ai-parse="capability-list">
+      <div class="section-id">§5 · capability-requirements</div>
+      <h2>5. 详细能力需求清单</h2>
+      <p>以下每项标注 <code>data-cap-id</code> 供 AI 精确引用。模块 A–K、L（L1–L23,L25–L39）及 A11 i18n 均为 V1.0 <span class="badge badge-in">纳入</span>；L24 明确 <span class="badge badge-out">排除</span>。</p>
+
+      <h3 id="sec-05-A">5.A 平台基础（A）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="A1" data-cap-status="in-scope"><span class="cap-id">A1</span> 跨平台桌面 App（macOS + Windows）<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card in-scope" data-cap-id="A2" data-cap-status="in-scope"><span class="cap-id">A2</span> 系统托盘 / 菜单栏常驻<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card out-scope" data-cap-id="A3" data-cap-status="out-scope"><span class="cap-id">A3</span> 全局快捷键唤醒<span class="badge badge-out">排除</span></div>
+        <div class="cap-card in-scope" data-cap-id="A4" data-cap-status="in-scope"><span class="cap-id">A4</span> 窗口吸附 / 侧边栏模式<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card out-scope" data-cap-id="A5" data-cap-status="out-scope"><span class="cap-id">A5</span> 开机自启动<span class="badge badge-out">排除</span></div>
+        <div class="cap-card in-scope" data-cap-id="A6" data-cap-status="in-scope"><span class="cap-id">A6</span> 本地数据存储（SQLite）<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card out-scope" data-cap-id="A7" data-cap-status="out-scope"><span class="cap-id">A7</span> 账号登录 / 云端同步<span class="badge badge-out">排除</span></div>
+        <div class="cap-card out-scope" data-cap-id="A8" data-cap-status="out-scope"><span class="cap-id">A8</span> 离线模式（本地模型可用）<span class="badge badge-out">移除</span>（2026-08-02 澄清：断连重试→报错，无离线本地模式）</div>
+        <div class="cap-card out-scope" data-cap-id="A9" data-cap-status="out-scope"><span class="cap-id">A9</span> 自动更新<span class="badge badge-out">排除</span></div>
+        <div class="cap-card in-scope" data-cap-id="A10" data-cap-status="in-scope"><span class="cap-id">A10</span> 深色 / 浅色主题<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card in-scope" data-cap-id="A11" data-cap-status="in-scope"><span class="cap-id">A11</span> 多语言 i18n（必须：简体中文 zh-CN、英文 en）<span class="badge badge-in">纳入</span></div>
+      </div>
+
+      <h3 id="sec-05-B">5.B 模型与 Provider 管理（B）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="B1"><span class="cap-id">B1</span> 多 Provider（OpenAI/Anthropic/Google 等云端服务）</div>
+        <div class="cap-card in-scope" data-cap-id="B2"><span class="cap-id">B2</span> 自定义 API Base URL</div>
+        <div class="cap-card in-scope" data-cap-id="B3"><span class="cap-id">B3</span> 每个 Agent 独立绑定模型（用户自定义 model id）</div>
+        <div class="cap-card in-scope" data-cap-id="B4"><span class="cap-id">B4</span> 自定义模型注册与管理（不预设模型列表，用户自行添加）</div>
+        <div class="cap-card in-scope" data-cap-id="B5"><span class="cap-id">B5</span> 思考强度 / Reasoning 档位</div>
+        <div class="cap-card in-scope" data-cap-id="B6"><span class="cap-id">B6</span> 速度档 / 成本档</div>
+        <div class="cap-card in-scope" data-cap-id="B7"><span class="cap-id">B7</span> API Key 加密本地存储</div>
+        <div class="cap-card in-scope" data-cap-id="B8"><span class="cap-id">B8</span> Provider 连通性测试</div>
+        <div class="cap-card in-scope" data-cap-id="B9"><span class="cap-id">B9</span> Token 用量统计 / 成本估算</div>
+        <div class="cap-card in-scope" data-cap-id="B10"><span class="cap-id">B10</span> 模型 Fallback 自动切换</div>
+        <div class="cap-card out-scope" data-cap-id="B11" data-cap-status="out-scope"><span class="cap-id">B11</span> 本地模型（Ollama/LM Studio/vLLM）<span class="badge badge-out">移除</span>（2026-08-02 澄清：V1.0/V2.0 均不做本机模型）</div>
+        <div class="cap-card in-scope" data-cap-id="B12"><span class="cap-id">B12</span> 第三方模型通过自定义 Provider 接入（无内置预设；基础接入能力已由 Q4/B2/B4 在 MVP 覆盖，B12 指 v1-full 的文档化引导与接入模板）</div>
+        <div class="cap-card in-scope" data-cap-id="B13"><span class="cap-id">B13</span> Provider 接口兼容：OpenAI API 规范 + Anthropic API 规范（Q4）</div>
+      </div>
+
+      <h3 id="sec-05-C">5.C 配置界面（C）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="C1"><span class="cap-id">C1</span> Provider 管理页</div>
+        <div class="cap-card in-scope" data-cap-id="C2"><span class="cap-id">C2</span> Agent 管理页（创建/编辑/归档）</div>
+        <div class="cap-card in-scope" data-cap-id="C3"><span class="cap-id">C3</span> MCP Server 管理页</div>
+        <div class="cap-card in-scope" data-cap-id="C4"><span class="cap-id">C4</span> Skills 管理页</div>
+        <div class="cap-card in-scope" data-cap-id="C5"><span class="cap-id">C5</span> 快捷键配置</div>
+        <div class="cap-card in-scope" data-cap-id="C6"><span class="cap-id">C6</span> 工具权限 / 沙箱策略配置</div>
+        <div class="cap-card in-scope" data-cap-id="C7"><span class="cap-id">C7</span> 工作区 / 项目目录绑定</div>
+        <div class="cap-card in-scope" data-cap-id="C8"><span class="cap-id">C8</span> 环境变量管理（按 Agent 注入）</div>
+        <div class="cap-card in-scope" data-cap-id="C9"><span class="cap-id">C9</span> CLI 自定义参数配置</div>
+        <div class="cap-card in-scope" data-cap-id="C10"><span class="cap-id">C10</span> 并发上限配置</div>
+        <div class="cap-card in-scope" data-cap-id="C11"><span class="cap-id">C11</span> 日志 / 调试面板</div>
+        <div class="cap-card in-scope" data-cap-id="C12"><span class="cap-id">C12</span> 配置导入 / 导出（JSON/YAML）</div>
+      </div>
+
+      <h3 id="sec-05-D">5.D 对话与办公助手（D）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="D1"><span class="cap-id">D1</span> 多轮对话 + 上下文记忆</div>
+        <div class="cap-card in-scope" data-cap-id="D2"><span class="cap-id">D2</span> 多会话 / 对话历史管理</div>
+        <div class="cap-card in-scope" data-cap-id="D3"><span class="cap-id">D3</span> 联网搜索</div>
+        <div class="cap-card in-scope" data-cap-id="D4"><span class="cap-id">D4</span> 划词：翻译/解释/总结/搜索（App 内）</div>
+        <div class="cap-card in-scope" data-cap-id="D5"><span class="cap-id">D5</span> AI 写作（邮件、报告、文案）</div>
+        <div class="cap-card in-scope" data-cap-id="D6"><span class="cap-id">D6</span> 边写边译</div>
+        <div class="cap-card in-scope" data-cap-id="D7"><span class="cap-id">D7</span> PDF / 文档伴读（中英对照、摘要）</div>
+        <div class="cap-card in-scope" data-cap-id="D8"><span class="cap-id">D8</span> 网页一键总结</div>
+        <div class="cap-card in-scope" data-cap-id="D9"><span class="cap-id">D9</span> 视频内容摘要</div>
+        <div class="cap-card in-scope" data-cap-id="D10"><span class="cap-id">D10</span> 文生图</div>
+        <div class="cap-card in-scope" data-cap-id="D11"><span class="cap-id">D11</span> 语音输入 / 语音对话</div>
+        <div class="cap-card in-scope" data-cap-id="D12"><span class="cap-id">D12</span> 文件上传分析（PDF/Word/Excel/PPT）</div>
+        <div class="cap-card in-scope" data-cap-id="D13"><span class="cap-id">D13</span> Markdown 渲染 / 代码高亮</div>
+        <div class="cap-card in-scope" data-cap-id="D14"><span class="cap-id">D14</span> 对话导出（Markdown/PDF）</div>
+        <div class="cap-card in-scope" data-cap-id="D15"><span class="cap-id">D15</span> Prompt 模板库</div>
+      </div>
+
+      <h3 id="sec-05-E">5.E 编程 Agent（E）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="E1"><span class="cap-id">E1</span> 代码库索引 / 语义搜索</div>
+        <div class="cap-card in-scope" data-cap-id="E2"><span class="cap-id">E2</span> 多文件读写 / 编辑</div>
+        <div class="cap-card in-scope" data-cap-id="E3"><span class="cap-id">E3</span> 终端命令执行（Shell）</div>
+        <div class="cap-card in-scope" data-cap-id="E4"><span class="cap-id">E4</span> Git 操作（status/diff/commit/PR）</div>
+        <div class="cap-card out-scope" data-cap-id="E5" data-cap-status="out-scope"><span class="cap-id">E5</span> 代码补全（Inline Completion）<span class="badge badge-out">排除 Q3:B</span></div>
+        <div class="cap-card in-scope" data-cap-id="E6"><span class="cap-id">E6</span> @ 引用（文件/文件夹/符号/文档）</div>
+        <div class="cap-card in-scope" data-cap-id="E7"><span class="cap-id">E7</span> LSP 集成（Agent 侧类型检查、诊断反馈）</div>
+        <div class="cap-card in-scope" data-cap-id="E8"><span class="cap-id">E8</span> 测试运行 + 失败自动修复循环</div>
+        <div class="cap-card in-scope" data-cap-id="E9"><span class="cap-id">E9</span> Diff 预览 / 逐块 Accept/Reject</div>
+        <div class="cap-card in-scope" data-cap-id="E10"><span class="cap-id">E10</span> Plan 模式（只读分析，不改文件）</div>
+        <div class="cap-card in-scope" data-cap-id="E11" data-cap-status="in-scope"><span class="cap-id">E11</span> 轻量代码面板：文件树 + 只读预览 + Diff（非完整 IDE，Q3:B）</div>
+        <div class="cap-card in-scope" data-cap-id="E12"><span class="cap-id">E12</span> 对接外部 IDE（CLI/协议层）</div>
+        <div class="cap-card in-scope" data-cap-id="E13"><span class="cap-id">E13</span> 沙箱执行（文件/网络权限隔离）</div>
+        <div class="cap-card in-scope" data-cap-id="E14"><span class="cap-id">E14</span> 并行多 Task 执行</div>
+        <div class="cap-card in-scope" data-cap-id="E15"><span class="cap-id">E15</span> 会话恢复（跨 Task 延续上下文）</div>
+      </div>
+
+      <h3 id="sec-05-F">5.F Agent 系统（F）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="F1"><span class="cap-id">F1</span> 自定义 Agent（名称、头像、描述、指令）</div>
+        <div class="cap-card in-scope" data-cap-id="F2"><span class="cap-id">F2</span> Agent 独立 System Prompt / 指令</div>
+        <div class="cap-card in-scope" data-cap-id="F3"><span class="cap-id">F3</span> Agent 绑定 Skills</div>
+        <div class="cap-card in-scope" data-cap-id="F4"><span class="cap-id">F4</span> Agent 绑定 MCP Servers</div>
+        <div class="cap-card in-scope" data-cap-id="F5"><span class="cap-id">F5</span> Agent 绑定模型 + 运行时</div>
+        <div class="cap-card in-scope" data-cap-id="F6"><span class="cap-id">F6</span> Agent 工具权限策略（allow/deny）</div>
+        <div class="cap-card in-scope" data-cap-id="F7"><span class="cap-id">F7</span> Agent 间 @ 唤醒 / 调用</div>
+        <div class="cap-card in-scope" data-cap-id="F8" data-cap-status="in-scope"><span class="cap-id">F8</span> 小队 Squad：Leader + 成员路由（对齐 Multica，Q1:A）</div>
+        <div class="cap-card in-scope" data-cap-id="F9" data-cap-status="in-scope"><span class="cap-id">F9</span> Leader 按任务分派给合适 Agent（Multica SOP，Q1:A）</div>
+        <div class="cap-card in-scope" data-cap-id="F10"><span class="cap-id">F10</span> Agent 编排 DAG / 工作流</div>
+        <div class="cap-card in-scope" data-cap-id="F11"><span class="cap-id">F11</span> Agent 持久记忆（跨会话）</div>
+        <div class="cap-card in-scope" data-cap-id="F12"><span class="cap-id">F12</span> 触发方式：手动 / 定时 / 事件</div>
+        <div class="cap-card in-scope" data-cap-id="F13"><span class="cap-id">F13</span> Agent 执行日志 / 审计追踪</div>
+        <div class="cap-card in-scope" data-cap-id="F14"><span class="cap-id">F14</span> Agent 并发控制 + 任务队列</div>
+        <div class="cap-card in-scope" data-cap-id="F15"><span class="cap-id">F15</span> 人类-in-the-loop 审批（敏感操作确认）</div>
+      </div>
+
+      <h3 id="sec-05-G">5.G Skills 与 MCP 生态（G）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="G1"><span class="cap-id">G1</span> Skills 定义（SKILL.md + 脚本/模板）</div>
+        <div class="cap-card in-scope" data-cap-id="G2"><span class="cap-id">G2</span> Skills 绑定到 Agent</div>
+        <div class="cap-card in-scope" data-cap-id="G3"><span class="cap-id">G3</span> Skills 导入 / 导出</div>
+        <div class="cap-card in-scope" data-cap-id="G4"><span class="cap-id">G4</span> MCP Server 注册（stdio/SSE/HTTP）</div>
+        <div class="cap-card in-scope" data-cap-id="G5"><span class="cap-id">G5</span> MCP 工具自动发现与调用</div>
+        <div class="cap-card in-scope" data-cap-id="G6"><span class="cap-id">G6</span> MCP 按 Agent 隔离配置</div>
+        <div class="cap-card in-scope" data-cap-id="G7"><span class="cap-id">G7</span> 内置常用 MCP（filesystem/browser/git）</div>
+        <div class="cap-card in-scope" data-cap-id="G8"><span class="cap-id">G8</span> MCP 权限审批</div>
+        <div class="cap-card in-scope" data-cap-id="G9"><span class="cap-id">G9</span> 自定义 Tool / Plugin 扩展（TypeScript）</div>
+      </div>
+
+      <h3 id="sec-05-H">5.H Multica 远端智能体协议兼容（H）</h3>
+
+      <h4 id="sec-05-H1">H1 — 作为 Multica Runtime（被调度）</h4>
+      <table>
+        <thead><tr><th>ID</th><th>能力</th><th>Multica 参考</th></tr></thead>
+        <tbody>
+          <tr><td>H1.1</td><td>CLI 入口 <code>jarvis-agent</code>，PATH 可探测</td><td><code>server/cmd/multica/</code></td></tr>
+          <tr><td>H1.2</td><td>兼容 Multica 协议族（首选 ACP）</td><td>providers 文档</td></tr>
+          <tr><td>H1.3</td><td>接收 Task 上下文（issue/评论/指令）</td><td>Task 模型</td></tr>
+          <tr><td>H1.4</td><td>流式回传执行进度 / 结果</td><td>Daemon 轮询 + WS</td></tr>
+          <tr><td>H1.5</td><td>会话恢复（<code>--conversation</code>）</td><td>各 Provider 对照表</td></tr>
+          <tr><td>H1.6</td><td>接收 Multica 注入的 MCP 配置</td><td><code>mcp_config</code> 字段</td></tr>
+          <tr><td>H1.7</td><td>接收 Multica 注入的 Skills</td><td><code>.jarvis/skills/</code></td></tr>
+          <tr><td>H1.8</td><td>接收环境变量 / CLI 自定义参数</td><td>Agent 执行配置</td></tr>
+          <tr><td>H1.9</td><td>返回可用模型列表</td><td>Runtime 模型发现</td></tr>
+          <tr><td>H1.10</td><td>内置 Daemon 模式（15s 心跳 + 3s 轮询）<strong>—— jarvis-daemon 即 Multica Client，承担注册/心跳/接单</strong></td><td><code>daemon/internal/multica/client</code></td></tr>
+          <tr><td>H1.11</td><td>并发 Task（默认 6/Agent，20/机器）</td><td>并发限制文档</td></tr>
+          <tr><td>H1.12</td><td>隔离工作目录（每次 Task 独立 workspace）</td><td>Task 安全模型</td></tr>
+          <tr><td>H1.13</td><td>Task 生命周期 queued→running→completed/failed</td><td>执行任务文档</td></tr>
+          <tr><td>H1.14</td><td>支持自定义 Runtime Profile</td><td>自定义运行时配置</td></tr>
+        </tbody>
+      </table>
+
+      <h4 id="sec-05-H2">H2 — Multica Client 产品功能（登录/Issue/Autopilot）— V1.0 排除（Q2:A）</h4>
+      <p>以下产品功能推迟实现；客户端 Runtime 协议（H1）已在 V1.0 纳入——本机 <code>jarvis-daemon</code> 即 Multica Client，支持 Server↔Client 全部协议并被 Server 直接调用（决策二 A 撤销）。</p>
+      <table>
+        <thead><tr><th>ID</th><th>能力</th><th>V1.0</th></tr></thead>
+        <tbody>
+          <tr><td>H2.1</td><td>Multica 账号登录 / OAuth</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.2</td><td>工作区 / Issue / Task 浏览</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.3</td><td>创建 / 配置 Agent 并同步到服务端</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.4</td><td>分配 Issue 给本地 Agent</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.5</td><td>小队 Squad 创建与管理（App 内 Squad 见 F8/F9）</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.6</td><td>Issue 评论中 @Agent 轻量触发</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.7</td><td>Agent 直接对话（脱离 Issue）</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.8</td><td>Autopilot 定时 / 事件触发</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.9</td><td>远端 Task 进度实时展示</td><td><span class="badge badge-out">排除</span></td></tr>
+          <tr><td>H2.10</td><td>多工作区切换</td><td><span class="badge badge-out">排除</span></td></tr>
+        </tbody>
+      </table>
+
+      <h4 id="sec-05-H3">H3 — 协议族对齐参考</h4>
+      <table>
+        <thead><tr><th>协议族</th><th>典型工具</th><th>MCP 注入方式</th><th>JARVIS 建议</th></tr></thead>
+        <tbody>
+          <tr><td>ACP</td><td>Hermes, Kimi, Kiro, Qoder</td><td><code>mcpServers</code></td><td><strong>首选对齐</strong></td></tr>
+          <tr><td>OpenCode</td><td>opencode</td><td><code>OPENCODE_CONFIG_CONTENT</code></td><td>备选</td></tr>
+          <tr><td>Codex</td><td>codex</td><td><code>$CODEX_HOME/config.toml</code></td><td>参考</td></tr>
+          <tr><td>Cursor</td><td>cursor-agent</td><td><code>.cursor/mcp.json</code></td><td>参考</td></tr>
+          <tr><td>OpenClaw</td><td>openclaw</td><td>wrapper config</td><td>参考</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-05-I">5.I 系统级集成（I）</h3>
+      <div class="cap-grid">
+        <div class="cap-card out-scope" data-cap-id="I1" data-cap-status="out-scope"><span class="cap-id">I1</span> 全局划词浮窗<span class="badge badge-out">排除</span></div>
+        <div class="cap-card out-scope" data-cap-id="I2" data-cap-status="out-scope"><span class="cap-id">I2</span> 浏览器扩展联动<span class="badge badge-out">排除</span></div>
+        <div class="cap-card out-scope" data-cap-id="I3" data-cap-status="out-scope"><span class="cap-id">I3</span> 文件管理器右键菜单<span class="badge badge-out">排除</span></div>
+        <div class="cap-card out-scope" data-cap-id="I4" data-cap-status="out-scope"><span class="cap-id">I4</span> 剪贴板后台监听<span class="badge badge-out">排除</span></div>
+        <div class="cap-card in-scope" data-cap-id="I5" data-cap-status="in-scope"><span class="cap-id">I5</span> Task 完成通知（App 内 + 可选系统通知）<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card out-scope" data-cap-id="I6" data-cap-status="out-scope"><span class="cap-id">I6</span> 日历 / 邮件集成<span class="badge badge-out">排除</span></div>
+        <div class="cap-card out-scope" data-cap-id="I7" data-cap-status="out-scope"><span class="cap-id">I7</span> IM 渠道（Telegram/微信/Slack）<span class="badge badge-out">排除</span></div>
+        <div class="cap-card in-scope" data-cap-id="I8" data-cap-status="in-scope"><span class="cap-id">I8</span> 内置简易浏览器 WebView（用于 D8 网页总结）<span class="badge badge-in">纳入</span></div>
+        <div class="cap-card out-scope" data-cap-id="I9" data-cap-status="out-scope"><span class="cap-id">I9</span> 截图 / OCR<span class="badge badge-out">排除</span></div>
+        <div class="cap-card out-scope" data-cap-id="I10" data-cap-status="out-scope"><span class="cap-id">I10</span> 本地文件全文搜索<span class="badge badge-out">排除</span></div>
+      </div>
+
+      <h3 id="sec-05-J">5.J 安全与隐私（J）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="J1"><span class="cap-id">J1</span> API Key 本地加密（Keychain/DPAPI）</div>
+        <div class="cap-card in-scope" data-cap-id="J2"><span class="cap-id">J2</span> 敏感操作二次确认</div>
+        <div class="cap-card in-scope" data-cap-id="J3"><span class="cap-id">J3</span> 工具沙箱（文件/网络/命令白名单）</div>
+        <div class="cap-card in-scope" data-cap-id="J4"><span class="cap-id">J4</span> 数据不上云选项（纯本地）</div>
+        <div class="cap-card in-scope" data-cap-id="J5"><span class="cap-id">J5</span> 执行审计日志</div>
+        <div class="cap-card in-scope" data-cap-id="J6"><span class="cap-id">J6</span> Agent 权限分级（只读/读写/系统）</div>
+        <div class="cap-card in-scope" data-cap-id="J7"><span class="cap-id">J7</span> MCP / 外部工具权限审批</div>
+      </div>
+
+      <h3 id="sec-05-K">5.K UI/UX 形态（K）</h3>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="K1"><span class="cap-id">K1</span> 主聊天窗口（豆包风格，默认视图）</div>
+        <div class="cap-card in-scope" data-cap-id="K2"><span class="cap-id">K2</span> 侧边栏 Agent 切换器</div>
+        <div class="cap-card in-scope" data-cap-id="K3" data-cap-status="in-scope"><span class="cap-id">K3</span> 轻量代码面板：文件树 + Diff 预览（Q3:B，非完整 Monaco IDE）</div>
+        <div class="cap-card in-scope" data-cap-id="K4"><span class="cap-id">K4</span> Task / Issue 看板</div>
+        <div class="cap-card in-scope" data-cap-id="K5"><span class="cap-id">K5</span> Agent 执行时间线 / 日志流</div>
+        <div class="cap-card in-scope" data-cap-id="K6"><span class="cap-id">K6</span> Canvas 可视化工作区</div>
+        <div class="cap-card in-scope" data-cap-id="K7"><span class="cap-id">K7</span> 分屏：聊天 + 文件预览</div>
+      </div>
+
+      <h3 id="sec-05-L">5.L 平台体验与基础设施（L）</h3>
+      <p>L 模块为 V1.0-MVP 增补，覆盖引导、Task 控制、Daemon 管理、多 Agent 协作协议、数据备份及 Multica 对接细化。</p>
+
+      <h4 id="sec-05-L-onboarding">L1–L3 首次引导与环境诊断</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L1" data-cap-status="in-scope"><span class="cap-id">L1</span> 首次启动向导（Provider → Agent → 工作区）</div>
+        <div class="cap-card in-scope" data-cap-id="L2" data-cap-status="in-scope"><span class="cap-id">L2</span> 环境检测（Node/Go/Git、Daemon 状态、PATH CLI）</div>
+        <div class="cap-card in-scope" data-cap-id="L3" data-cap-status="in-scope"><span class="cap-id">L3</span> 一键连通性自检报告（Provider/MCP/本地模型）</div>
+      </div>
+
+      <h4 id="sec-05-L-task">L4–L6 Task 生命周期控制</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L4" data-cap-status="in-scope"><span class="cap-id">L4</span> Task 取消 / 暂停 / 重试</div>
+        <div class="cap-card in-scope" data-cap-id="L5" data-cap-status="in-scope"><span class="cap-id">L5</span> 执行中实时流式输出（聊天 + 日志双通道）</div>
+        <div class="cap-card in-scope" data-cap-id="L6" data-cap-status="in-scope"><span class="cap-id">L6</span> Task 失败原因分类 + 一键重试</div>
+      </div>
+
+      <h4 id="sec-05-L-daemon">L7–L9 Daemon / Runtime 可视化管理</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L7" data-cap-status="in-scope"><span class="cap-id">L7</span> 托盘菜单：Daemon 状态、一键重启</div>
+        <div class="cap-card in-scope" data-cap-id="L8" data-cap-status="in-scope"><span class="cap-id">L8</span> Runtime 注册信息展示（CLI、协议族、版本）</div>
+        <div class="cap-card in-scope" data-cap-id="L9" data-cap-status="in-scope"><span class="cap-id">L9</span> 当前 Task 列表 + 资源占用（CPU/内存/并发）</div>
+      </div>
+
+      <h4 id="sec-05-L-context">L10–L11 工作区上下文文件</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L10" data-cap-status="in-scope"><span class="cap-id">L10</span> 工作区 JARVIS.md / AGENTS.md 自动生成与注入</div>
+        <div class="cap-card in-scope" data-cap-id="L11" data-cap-status="in-scope"><span class="cap-id">L11</span> Agent 专属上下文文件（.jarvis/agents/{name}.md）</div>
+      </div>
+
+      <h4 id="sec-05-L-multiagent">L12–L15 多 Agent 协作协议层</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L12" data-cap-status="in-scope"><span class="cap-id">L12</span> Agent 间消息总线（请求/响应/委派/完成）</div>
+        <div class="cap-card in-scope" data-cap-id="L13" data-cap-status="in-scope"><span class="cap-id">L13</span> 上下文传递策略（全量/摘要/仅结论/自定义）</div>
+        <div class="cap-card in-scope" data-cap-id="L14" data-cap-status="in-scope"><span class="cap-id">L14</span> Agent 调用链追踪（A→B→C 可视化）</div>
+        <div class="cap-card in-scope" data-cap-id="L15" data-cap-status="in-scope"><span class="cap-id">L15</span> 循环调用检测 / 最大委派深度限制</div>
+      </div>
+
+      <h4 id="sec-05-L-token">L16–L17 上下文与 Token 管理</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L16" data-cap-status="in-scope"><span class="cap-id">L16</span> 对话上下文窗口管理（自动摘要、pin、Token 预估）</div>
+        <div class="cap-card in-scope" data-cap-id="L17" data-cap-status="in-scope"><span class="cap-id">L17</span> 按 Agent/Task 独立上下文预算配置</div>
+      </div>
+
+      <h4 id="sec-05-L-backup">L18–L20 数据安全与恢复</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L18" data-cap-status="in-scope"><span class="cap-id">L18</span> SQLite 自动备份（定时/退出时）</div>
+        <div class="cap-card in-scope" data-cap-id="L19" data-cap-status="in-scope"><span class="cap-id">L19</span> 配置 Schema 版本迁移（migration）</div>
+        <div class="cap-card in-scope" data-cap-id="L20" data-cap-status="in-scope"><span class="cap-id">L20</span> 敏感数据擦除（Key/对话/审计一键清理）</div>
+      </div>
+
+      <h4 id="sec-05-L-office">L21–L23、L25 办公体验增强</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L21" data-cap-status="in-scope"><span class="cap-id">L21</span> 对话/Agent/Task 全局搜索</div>
+        <div class="cap-card in-scope" data-cap-id="L22" data-cap-status="in-scope"><span class="cap-id">L22</span> 拖拽文件到聊天/工作区</div>
+        <div class="cap-card in-scope" data-cap-id="L23" data-cap-status="in-scope"><span class="cap-id">L23</span> 多模态图片理解（截图/上传图）</div>
+        <div class="cap-card out-scope" data-cap-id="L24" data-cap-status="out-scope"><span class="cap-id">L24</span> TTS 语音播报<span class="badge badge-out">排除</span></div>
+        <div class="cap-card in-scope" data-cap-id="L25" data-cap-status="in-scope"><span class="cap-id">L25</span> 联网搜索源配置（搜索引擎/API 可选）</div>
+      </div>
+
+      <h4 id="sec-05-L-coding">L26–L29 编程体验增强</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L26" data-cap-status="in-scope"><span class="cap-id">L26</span> 编辑会话一键回滚（Task 级撤销文件改动）</div>
+        <div class="cap-card in-scope" data-cap-id="L27" data-cap-status="in-scope"><span class="cap-id">L27</span> 代码索引基础设施（Embedding 存储、增量更新）</div>
+        <div class="cap-card in-scope" data-cap-id="L28" data-cap-status="in-scope"><span class="cap-id">L28</span> .jarvisignore（索引/Agent 访问排除规则）</div>
+        <div class="cap-card in-scope" data-cap-id="L29" data-cap-status="in-scope"><span class="cap-id">L29</span> 结构化输出模式（JSON Schema 约束）</div>
+      </div>
+
+      <h4 id="sec-05-L-agent">L30–L34 Agent 与网络增强</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L30" data-cap-status="in-scope"><span class="cap-id">L30</span> Agent 模板库（办公/编程/审查等预设）</div>
+        <div class="cap-card in-scope" data-cap-id="L31" data-cap-status="in-scope"><span class="cap-id">L31</span> Agent 配置版本历史与回滚</div>
+        <div class="cap-card in-scope" data-cap-id="L32" data-cap-status="in-scope"><span class="cap-id">L32</span> Skills 导入增强（本地文件夹 + URL 导入）</div>
+        <div class="cap-card in-scope" data-cap-id="L33" data-cap-status="in-scope"><span class="cap-id">L33</span> HTTP/SOCKS 代理配置</div>
+        <div class="cap-card in-scope" data-cap-id="L34" data-cap-status="in-scope"><span class="cap-id">L34</span> Provider 请求超时/重试/熔断策略</div>
+      </div>
+
+      <h4 id="sec-05-L-multica">L35–L39 Multica 对接细化</h4>
+      <div class="cap-grid">
+        <div class="cap-card in-scope" data-cap-id="L35" data-cap-status="in-scope"><span class="cap-id">L35</span> jarvis-agent --version / --health / --list-models</div>
+        <div class="cap-card in-scope" data-cap-id="L36" data-cap-status="in-scope"><span class="cap-id">L36</span> Multica Task 与本地 Task 双向 ID 映射</div>
+        <div class="cap-card out-scope" data-cap-id="L37" data-cap-status="out-scope"><span class="cap-id">L37</span> Multica Server 不可达时的离线缓冲队列<span class="badge badge-out">移除</span>（2026-08-02 澄清：断连重试→报错，无离线缓冲）</div>
+        <div class="cap-card in-scope" data-cap-id="L38" data-cap-status="in-scope"><span class="cap-id">L38</span> Skills/MCP 注入冲突检测（本地 vs Multica 下发）</div>
+        <div class="cap-card in-scope" data-cap-id="L39" data-cap-status="in-scope"><span class="cap-id">L39</span> 本地模式 vs Runtime 注册状态 UI 指示（无 H2 Client）</div>
+      </div>
+    </section>
+
+    <!-- §6 技术栈 -->
+    <section id="sec-06-tech-stack" data-section-type="technical">
+      <div class="section-id">§6 · tech-stack</div>
+      <h2>6. 技术栈建议</h2>
+
+      <h3 id="sec-06-1-recommendation">6.1 推荐方案：Go + TypeScript + Electron</h3>
+      <table>
+        <thead><tr><th>层级</th><th>技术选型</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>Agent Runtime / Daemon</td><td><strong>Go 1.22+</strong></td><td>Multica Daemon/Task 调度均为 Go，可直接参考移植</td></tr>
+          <tr><td>桌面 UI</td><td><strong>TS + React 19 + Electron (electron-vite)</strong></td><td>与 Multica <code>apps/desktop/</code> 一致</td></tr>
+          <tr><td>本地数据库</td><td><strong>SQLite</strong>（Go: sqlc / TS: better-sqlite3）</td><td>个人版无需 PostgreSQL</td></tr>
+          <tr><td>Agent 核心</td><td><strong>TypeScript (packages/core)</strong></td><td>MCP SDK、LLM 调用生态最成熟</td></tr>
+          <tr><td>CLI 入口</td><td><strong>Go → jarvis-agent</strong></td><td>Multica PATH 探测需要独立二进制</td></tr>
+          <tr><td>代码编辑</td><td><strong>轻量 Diff 查看器</strong>（非 Monaco 完整 IDE）</td><td>Q3:B 轻量编程形态</td></tr>
+          <tr><td>状态管理</td><td><strong>Zustand + TanStack Query</strong></td><td>Multica 同款</td></tr>
+          <tr><td>样式</td><td><strong>Tailwind CSS v4 + shadcn/ui</strong></td><td>Multica packages/ui 可借鉴</td></tr>
+          <tr><td>国际化</td><td><strong>react-i18next</strong>（或等价方案）</td><td>A11 要求 V1.0 支持 zh-CN / en</td></tr>
+          <tr><td>构建</td><td><strong>pnpm workspaces + Turborepo</strong></td><td>Multica monorepo 模式</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-06-2-alternatives">6.2 备选方案对比</h3>
+      <table>
+        <thead><tr><th>方案</th><th>优势</th><th>劣势</th><th>建议</th></tr></thead>
+        <tbody>
+          <tr><td>Electron + Go</td><td>Multica 代码复用最高</td><td>包体积 ~150MB+</td><td><strong>V1 首选</strong></td></tr>
+          <tr><td>Tauri 2 + Go sidecar</td><td>体积小、性能好</td><td>Shell 层需重写，Multica 参考少</td><td>V2 可考虑迁移 Shell</td></tr>
+          <tr><td>纯 Tauri (Rust)</td><td>单一语言后端</td><td>与 Multica Go 代码难以复用</td><td>不推荐 V1</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-06-3-monorepo">6.3 建议 Monorepo 结构</h3>
+      <pre><code>Jarvis/
+├── apps/desktop/           # Electron 壳（托盘、窗口、IPC、Daemon 生命周期）
+├── packages/
+│   ├── core/               # 无 UI 业务逻辑（Agent、Model Router、MCP）
+│   ├── ui/                 # shadcn 原子组件
+│   ├── views/              # 共享业务页面
+│   ├── i18n/               # 多语言资源（zh-CN、en）
+│   └── protocol/           # Multica 协议 TS 类型定义
+├── daemon/                 # Go Daemon + jarvis-agent CLI
+│   ├── cmd/jarvis-agent/
+│   └── cmd/jarvis-daemon/
+├── internal/               # Go 内部包
+│   ├── runtime/            # Task 生命周期、并发、Workspace 隔离
+│   ├── provider/           # 模型 Provider 抽象
+│   └── multica/            # Multica 协议适配（ACP 协议族）
+├── data/                   # SQLite schema + migrations
+└── wiki/需求文档/           # 本文档所在目录</code></pre>
+
+      <h3 id="sec-06-5-model-policy">6.5 模型策略（Q4 已确认）</h3>
+      <table>
+        <thead><tr><th>原则</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>无预设模型</td><td>应用内不内置任何 model id 列表；所有模型由用户在 Provider 配置中自行定义添加</td></tr>
+          <tr><td>Provider 类型</td><td>至少支持两类接口规范：<strong>OpenAI API</strong>（/v1/chat/completions 等）、<strong>Anthropic API</strong>（/v1/messages 等）</td></tr>
+          <tr><td>自定义 Base URL</td><td>通过 B2 配置；兼容 OpenAI 格式的第三方服务（含 Ollama、国内中转）均作为自定义 Provider 接入</td></tr>
+          <tr><td>Model 字段</td><td>Agent 绑定时从用户已注册的自定义模型中选择，不支持应用级硬编码默认模型</td></tr>
+          <tr><td>参数映射</td><td>temperature、max_tokens、reasoning 等参数按 Provider 类型映射到对应 API 字段</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-06-4-i18n">6.4 多语言（i18n）要求</h3>
+      <table>
+        <thead><tr><th>项</th><th>要求</th></tr></thead>
+        <tbody>
+          <tr><td>必须语言</td><td><strong>简体中文（zh-CN）</strong>、<strong>英文（en）</strong></td></tr>
+          <tr><td>覆盖范围</td><td>全部 UI 文案、系统消息、设置项、错误提示、托盘菜单、通知内容</td></tr>
+          <tr><td>不覆盖</td><td>用户/Agent 对话内容、Agent 自定义指令、Skills 正文（保持用户原始语言）</td></tr>
+          <tr><td>语言切换</td><td>设置页可切换；跟随系统语言为可选项</td></tr>
+          <tr><td>资源组织</td><td><code>packages/i18n/locales/{zh-CN,en}/*.json</code></td></tr>
+          <tr><td>开发约束</td><td>禁止硬编码 UI 字符串；新增界面必须同时提供 zh-CN / en 翻译</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- §7 Multica 参考 -->
+    <section id="sec-07-multica-ref" data-section-type="reference" data-reference-repo="multica-ai/multica">
+      <div class="section-id">§7 · multica-reference</div>
+      <h2>7. Multica 开源项目参考路径</h2>
+      <p>Multica（<a href="https://github.com/multica-ai/multica">multica-ai/multica</a>）是 JARVIS 代码实现的<strong>优先参考项目</strong>。其架构为 Go Backend + pnpm Monorepo Frontend（Next.js Web + Electron Desktop）。</p>
+
+      <h3 id="sec-07-1-mapping">7.1 模块 → Multica 源码映射</h3>
+      <table>
+        <thead><tr><th>JARVIS 模块</th><th>Multica 参考路径</th><th>参考内容</th></tr></thead>
+        <tbody>
+          <tr><td>Daemon / Task 调度</td><td><code>server/cmd/multica/</code>, <code>server/internal/daemon/</code></td><td>轮询(3s)、心跳(15s)、并发限制、Task 隔离</td></tr>
+          <tr><td>Provider 协议</td><td><code>server/internal/runtime/</code>, docs/providers</td><td>MCP 注入、Skills 路径、会话恢复</td></tr>
+          <tr><td>Agent 配置</td><td><code>server/internal/agent/</code>, API schema</td><td>Agent 字段、MCP/Skills/Env 注入</td></tr>
+          <tr><td>Squad 路由</td><td><code>server/internal/squad/</code></td><td>Leader 唤醒、成员 @分派、SOP 规则</td></tr>
+          <tr><td>Skills</td><td>docs/skills, skill 注入逻辑</td><td>SKILL.md 格式、绑定/启停</td></tr>
+          <tr><td>Desktop 壳</td><td><code>apps/desktop/</code></td><td>托盘、Daemon 生命周期、CoreProvider</td></tr>
+          <tr><td>共享 UI 逻辑</td><td><code>packages/core/</code>, <code>packages/views/</code></td><td>状态管理、StorageAdapter、NavigationAdapter</td></tr>
+          <tr><td>UI 组件</td><td><code>packages/ui/</code></td><td>shadcn 组件、样式</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-07-2-multica-arch">7.2 Multica 架构摘要（供 JARVIS 理解）</h3>
+      <div class="diagram">Multica 架构（JARVIS 需理解的部分）:
+
+  Multica Server (Go)          用户电脑（JARVIS 侧）
+  ┌─────────────────┐         ┌──────────────────────────────┐
+  │ Issue/Task 队列  │◄─WS────►│ jarvis-daemon (Go, Multica   │
+  │ Agent 配置      │         │  Client)：注册/发现、15s 心跳、│
+  │ Skills/MCP 配置 │         │  3s 轮询接单                  │
+  └─────────────────┘         │  ├─ 领取 Task → spawn CLI     │
+                              │       ↓                       │
+                              │  jarvis-agent (JARVIS)        │
+                              │  ├─ 接收 Task 上下文           │
+                              │  ├─ MCP/Skills 注入           │
+                              │  └─ 流式回传结果               │
+                              └──────────────────────────────┘
+
+JARVIS 目标: 本机 jarvis-daemon 即 Multica Client（决策二 A 撤销），
+同时承担独立 Desktop App 的本地 Task 调度</div>
+
+      <h3 id="sec-07-3-skills-format">7.3 Skills 格式（对齐 Multica）</h3>
+      <ul>
+        <li>主文件：<code>SKILL.md</code>（步骤、方法、约束）</li>
+        <li>可附带：脚本、模板、参考资料</li>
+        <li>注入路径：<code>.jarvis/skills/</code>（对标 Multica 各 Provider 路径）</li>
+        <li>与 Agent 指令区分：指令 = 长期职责；Skill = 可复用方法库</li>
+      </ul>
+    </section>
+
+    <!-- §8 运行模式对比 -->
+    <section id="sec-08-mode-comparison" data-section-type="comparison">
+      <div class="section-id">§8 · mode-comparison</div>
+      <h2>8. 本地模式 vs Multica 模式对比</h2>
+      <table>
+        <thead>
+          <tr><th>维度</th><th>本地模式（默认）</th><th>Multica 模式</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>触发方式</td><td>App 内手动 / 定时 / Agent @Agent</td><td>Issue 分配、评论 @、Autopilot</td></tr>
+          <tr><td>Task 来源</td><td>本地 SQLite 队列</td><td>Multica Server 队列</td></tr>
+          <tr><td>执行引擎</td><td><code>packages/core</code>（TS）在 Electron 进程内</td><td>同上（TS core 经 jarvis-agent 内嵌 Node 执行，决策一 A）</td></tr>
+          <tr><td>配置存储</td><td>本地 SQLite</td><td>本地 + Multica Server 同步</td></tr>
+          <tr><td>Agent 协作</td><td>JARVIS 本地 Squad（对齐 Multica 协议，Q1:A）</td><td>—（H2 Client 排除）</td></tr>
+          <tr><td>Multica 集成</td><td>无 App 内 Client</td><td>本机 <code>jarvis-daemon</code> 即 Multica Client：注册/发现、心跳、接单、执行、流式回传（客户端协议全量，决策二 A 撤销）</td></tr>
+          <tr><td>离线可用</td><td>正常可用（Provider 断连重试→明确报错，无离线模式 A8）</td><td>断连重试→明确报错（无离线缓冲 L37）</td></tr>
+          <tr><td>依赖</td><td>无外部 Multica 服务</td><td>需 Multica Server 发起调度（本机 jarvis-daemon 即客户端）</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>设计原则：</strong>本地模式是默认且独立的；Multica 集成由本机 <code>jarvis-daemon</code> 注册为 Multica Client，支持 Server↔Client 全部协议并可被 Server 直接调用；App 不内置 H2 Client 产品功能（OAuth 登录/Issue 看板/Autopilot）。Squad 协作在本地实现并对齐 Multica 协议（Q1:A）。
+      </div>
+      <div class="callout callout-warn">
+        <strong>架构决策（2026-08-02 确认）：</strong>① <strong>决策一 A（引擎归属）</strong>——Agent 引擎（AgentEngine/REACT Loop/ModelRouter/MCPClient）唯一实现在 <code>packages/core</code>（TS）；Go 的 <code>jarvis-agent</code> 仅为瘦协议壳，Multica 路径经内嵌 Node headless 执行同一 REACT loop，Go 侧不重写引擎；本地任务由 TS core 在 Electron 进程内执行，Go daemon 仅做调度/队列/并发。② <strong>决策二 A（已撤销）</strong>——原"心跳/轮询/接单归外部 Multica Daemon"的边界撤销：JARVIS 本机 <code>jarvis-daemon</code> 即 Multica Client，直接实现 Server↔Client 协议（注册/发现、15s 心跳、3s 轮询接单、执行、流式回传），可被 Multica Server 直接调用（2026-08-02 澄清）。③ <strong>A8 离线模式 / B11 本地模型 / L37 离线缓冲已彻底删除</strong>（2026-08-02 澄清）：Provider 或 Server 断连一律重试→明确报错，无离线本地模式、无本机模型。
+      </div>
+    </section>
+
+    <!-- §9 Milestone -->
+    <section id="sec-09-milestones" data-section-type="planning">
+      <div class="section-id">§9 · milestones</div>
+      <h2>9. 交付 Milestone 建议</h2>
+      <p>V1.0 范围不变，建议按以下 Milestone 分期交付以降低返工风险（含 L 模块与 A11 i18n）。每行覆盖模块与 §10.6 裁剪矩阵对齐；M3 拆分为 M3核心（MVP 部分）与 M3剩余（V1.0 增量）：</p>
+      <table>
+        <thead><tr><th>Milestone</th><th>名称</th><th>交付内容</th><th>覆盖模块</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-p0">M0</span></td><td>骨架</td><td>Electron 壳、托盘、SQLite、主题、i18n 框架、设置框架、主聊天</td><td>A1,A2,A4,A6,A10,A11,K1,C1,C11,L1,L2</td></tr>
+          <tr><td><span class="badge badge-p0">M1</span></td><td>对话+模型</td><td>自定义 Provider/模型、多轮对话、OpenAI+Anthropic 兼容、Key 加密</td><td>B1–B8,B10,B13,C1,D1–D3,D13,D14,L3,L16,L33,L34</td></tr>
+          <tr><td><span class="badge badge-p0">M2</span></td><td>Agent 基础</td><td>自定义 Agent、指令、绑模型、单 Agent 执行、上下文文件、Agent 切换器</td><td>F1–F6,F12–F14,K2,C2,C7,C8,L4–L6,L10</td></tr>
+          <tr><td>M3</td><td>工具链</td><td>MCP、Skills、Shell/文件/Git、沙箱、Daemon 管理（M3核心=MVP 部分，M3剩余=V1.0）</td><td>G1–G9,E1–E4,E13,J1–J3,J6–J7,C3,C4,C6,C8,C9,C10,L7–L9,L11,L17,L32</td></tr>
+          <tr><td>M4</td><td>编程能力</td><td>轻量文件树+Diff、LSP(Agent侧)、Plan、外部 IDE、并行 Task、索引/回滚</td><td>E6–E11,E12,E14,E15,K3,K7,L26–L29</td></tr>
+          <tr><td>M5</td><td>办公增强</td><td>划词、写作、PDF、WebView 浏览器、网页/视频总结、文生图、语音</td><td>D4–D12,D15,I8,L21–L23,L25</td></tr>
+          <tr><td>M6</td><td>多 Agent</td><td>Multica Squad 对齐、@唤醒、消息总线、调用链、记忆、审批</td><td>F7–F11,F15,K5,L12–L15,L31,I5</td></tr>
+          <tr><td>M7</td><td>Multica 客户端</td><td>jarvis-agent CLI + ACP 协议 + Multica Client 注册/心跳/接单/执行/回传（无 H2 产品功能）</td><td>H1,H3,L35–L36,L38–L39</td></tr>
+          <tr><td>M8</td><td>UI 完善</td><td>Task 看板、Canvas、Token 统计、DAG 编排、备份/迁移、配置导入导出</td><td>B9,B12,F10,C5,C12,J4,J5,K4,K6,L18–L20,L30</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- §10 最终 MVP 裁剪表 -->
+    <section id="sec-10-mvp-cut" data-section-type="mvp-scope" data-ai-parse="mvp-cut-table">
+      <div class="section-id">§10 · mvp-cut-table</div>
+      <h2>10. 最终 MVP 裁剪表</h2>
+
+      <div class="callout">
+        <strong>裁剪原则：</strong>基于 Q1–Q5 已确认决策，将 V1.0 全量范围切分为三个交付层级。
+        <strong>MVP</strong> = 首版可发布最小可用产品（M0–M2 + M3 核心）；
+        <strong>V1.0 增量</strong> = MVP 之后至 V1.0 封版前的分批交付（M3 剩余 – M8）；
+        <strong>V2.0 延后</strong> = 明确不在 V1.0 实现。
+      </div>
+
+      <h3 id="sec-10-0-tiers">10.0 三层交付模型</h3>
+      <table>
+        <thead>
+          <tr><th>层级</th><th>代号</th><th>目标</th><th>Milestone</th><th>用户可感知价值</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-p0">MVP</span></td>
+            <td><code>mvp</code></td>
+            <td>首版可发布；验证核心链路</td>
+            <td>M0 + M1 + M2 + M3<sub>核心</sub></td>
+            <td>配置 Provider/模型 → 创建 Agent → 对话 + 单 Agent 执行任务（读写文件/Shell）</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-in">V1.0 增量</span></td>
+            <td><code>v1-full</code></td>
+            <td>V1.0 完整范围封版</td>
+            <td>M3<sub>剩余</sub> + M4 + M5 + M6 + M7 + M8</td>
+            <td>编程 Agent、办公增强、Squad、Multica Runtime、完善 UI</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-out">V2.0 延后</span></td>
+            <td><code>v2-deferred</code></td>
+            <td>下一主版本</td>
+            <td>—</td>
+            <td>全局快捷键、系统级集成、Multica Client、完整 IDE</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-10-1-mvp-scope">10.1 MVP 纳入清单（首版必做）</h3>
+      <table>
+        <thead>
+          <tr><th>模块</th><th>纳入 ID</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr data-mvp-tier="mvp">
+            <td><strong>A 平台</strong></td>
+            <td>A1, A2, A4, A6, A10, A11</td>
+            <td>跨平台壳、托盘、吸附、SQLite、主题、zh-CN/en</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>B 模型</strong></td>
+            <td>B1–B8, B10, B13</td>
+            <td>自定义 Provider/模型（Q4）；OpenAI+Anthropic 兼容；Key 加密；连通测试；Fallback</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>C 配置</strong></td>
+            <td>C1, C2, C7, C11</td>
+            <td>Provider 管理、Agent 管理、工作区绑定、日志面板</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>D 办公</strong></td>
+            <td>D1, D2, D3, D13, D14</td>
+            <td>多轮对话、会话历史、联网搜索、Markdown 渲染、对话导出</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>E 编程</strong></td>
+            <td>E2, E3</td>
+            <td>Agent 多文件读写、Shell 执行（M3 核心）</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>F Agent</strong></td>
+            <td>F1–F6, F12–F14</td>
+            <td>自定义 Agent、绑模型/MCP 配置入口、工具策略、手动触发、队列并发</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>G 生态</strong></td>
+            <td>G1, G2, G4, G5</td>
+            <td>Skills 定义与绑定、MCP 注册与调用（基础）</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>J 安全</strong></td>
+            <td>J1, J2, J3</td>
+            <td>Key 加密、敏感操作确认、基础沙箱</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>K UI</strong></td>
+            <td>K1, K2</td>
+            <td>豆包式主聊天、Agent 切换器</td>
+          </tr>
+          <tr data-mvp-tier="mvp">
+            <td><strong>L 平台</strong></td>
+            <td>L1, L2, L3, L4, L5, L6, L10, L16, L33, L34</td>
+            <td>首次向导、环境/连通诊断、Task 取消/流式/重试、JARVIS.md、上下文管理、代理配置</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-10-2-mvp-criteria">10.2 MVP 验收标准</h3>
+      <ul>
+        <li>用户完成首次向导，配置至少 1 个 OpenAI 或 Anthropic 兼容 Provider + 1 个自定义 model id</li>
+        <li>用户创建 Agent 并绑定模型，在主聊天窗口完成多轮对话（含流式输出）</li>
+        <li>Agent 可在绑定工作区内读写文件、执行 Shell 命令，用户可取消/重试 Task</li>
+        <li>UI 可在简体中文与英文间切换，无硬编码未翻译字符串</li>
+        <li>API Key 加密存储；危险操作有确认提示；Agent 文件访问受沙箱约束</li>
+        <li>应用重启后会话与 Agent 配置持久化（SQLite）</li>
+        <li>至少 1 个 SKILL.md 可绑定至 Agent 并在任务中生效；至少 1 个 MCP stdio Server 可注册并调用其工具</li>
+        <li>联网搜索可返回带引用的结果；Provider 断连时重试后给出明确错误提示（无离线本地模式）</li>
+        <li>Agent 对工作区外的文件访问被沙箱拒绝；并发任务按配置上限排队执行</li>
+      </ul>
+
+      <h3 id="sec-10-3-v1-increment">10.3 V1.0 增量清单（MVP 之后分批交付）</h3>
+      <table>
+        <thead>
+          <tr><th>Milestone</th><th>层级</th><th>新增能力 ID</th><th>交付目标</th></tr>
+        </thead>
+        <tbody>
+          <tr data-mvp-tier="v1-full">
+            <td>M3 剩余</td>
+            <td><span class="badge badge-in">V1.0</span></td>
+            <td>E1, E4, E13, G3, G6–G8, G9, C3, C4, C6, C8, C9, C10, J6, J7, L7–L9, L11, L17, L32</td>
+            <td>完整工具链：MCP 管理、Skills 导入、Git、沙箱策略、Daemon 可视化管理</td>
+          </tr>
+          <tr data-mvp-tier="v1-full">
+            <td>M4</td>
+            <td><span class="badge badge-in">V1.0</span></td>
+            <td>E6–E10, E12, E14, E15, K3, K7, L26–L29</td>
+            <td>轻量编程：文件树+Diff、@引用、LSP(Agent侧)、Plan、并行 Task、索引/回滚</td>
+          </tr>
+          <tr data-mvp-tier="v1-full">
+            <td>M5</td>
+            <td><span class="badge badge-in">V1.0</span></td>
+            <td>D4–D12, D15, I8, L21–L23, L25</td>
+            <td>办公增强：划词、写作、PDF、WebView、视频总结、文生图、语音、搜索/拖拽/识图</td>
+          </tr>
+          <tr data-mvp-tier="v1-full">
+            <td>M6</td>
+            <td><span class="badge badge-in">V1.0</span></td>
+            <td>F7–F11, F15, L12–L15, L31, I5, K5</td>
+            <td>多 Agent：Squad(Multica对齐)、@唤醒、消息总线、调用链、记忆、审批、通知</td>
+          </tr>
+          <tr data-mvp-tier="v1-full">
+            <td>M7</td>
+            <td><span class="badge badge-in">V1.0</span></td>
+            <td>H1.1–H1.14, H3, L35–L36, L38–L39</td>
+            <td>Multica 客户端：jarvis-agent CLI、ACP 协议、MCP/Skills 注入、注册/心跳/接单</td>
+          </tr>
+          <tr data-mvp-tier="v1-full">
+            <td>M8</td>
+            <td><span class="badge badge-in">V1.0</span></td>
+            <td>B9, B12, C5, C12, J4, J5, K4, K6, L18–L20, L30, F10</td>
+            <td>完善：Task 看板、Canvas、备份迁移、配置导入导出、Token 统计、DAG 编排</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-10-4-excluded">10.4 V1.0 明确排除（不做）</h3>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>能力</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr data-mvp-tier="excluded"><td>A3</td><td>全局快捷键唤醒</td><td>Q5:B → V2.0</td></tr>
+          <tr data-mvp-tier="excluded"><td>A5</td><td>开机自启动</td><td>V1.0 范围外</td></tr>
+          <tr data-mvp-tier="excluded"><td>A7</td><td>云端账号同步</td><td>V1.0 纯本地</td></tr>
+          <tr data-mvp-tier="excluded"><td>A9</td><td>自动更新</td><td>V1.0 范围外</td></tr>
+          <tr data-mvp-tier="excluded"><td>E5</td><td>Inline 代码补全</td><td>Q3:B 轻量编程形态</td></tr>
+          <tr data-mvp-tier="excluded"><td>H2.1–H2.10</td><td>Multica Client 产品功能（登录/Issue/Autopilot）</td><td>Q2:A 客户端协议已纳入（jarvis-daemon 即客户端），产品功能排除</td></tr>
+          <tr data-mvp-tier="excluded"><td>I1–I4</td><td>全局划词/扩展/右键/剪贴板监听</td><td>Q5:B → V2.0</td></tr>
+          <tr data-mvp-tier="excluded"><td>I6, I7</td><td>日历邮件 / IM 渠道</td><td>Q5:B → V2.0</td></tr>
+          <tr data-mvp-tier="excluded"><td>I9, I10</td><td>截图 OCR / 本地全文搜索</td><td>Q5:B → V2.0</td></tr>
+          <tr data-mvp-tier="excluded"><td>L24</td><td>TTS 语音播报</td><td>V1.0 明确排除</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-10-5-v2-deferred">10.5 V2.0 延后清单</h3>
+      <table>
+        <thead>
+          <tr><th>类别</th><th>能力</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr data-mvp-tier="v2-deferred"><td>系统级集成</td><td>A3, I1–I4, I6–I7, I9–I10</td><td>全局快捷键、划词浮窗、浏览器扩展、IM/邮件/OCR 等</td></tr>
+          <tr data-mvp-tier="v2-deferred"><td>Multica Client</td><td>H2 全量</td><td>App 内登录 Multica、Issue 看板、Autopilot</td></tr>
+          <tr data-mvp-tier="v2-deferred"><td>完整 IDE</td><td>Monaco 完整编辑、E5 Inline 补全</td><td>若 V1.0 轻量形态不满足可升级</td></tr>
+          <tr data-mvp-tier="v2-deferred"><td>平台能力</td><td>A5 自启动、A9 自动更新、A7 云同步</td><td>产品成熟期补齐</td></tr>
+          <tr data-mvp-tier="v2-deferred"><td>体验增强</td><td>L24 TTS、更多语言 locale</td><td>当前仅 zh-CN / en</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-10-6-cap-matrix">10.6 全量能力裁剪矩阵（按 ID）</h3>
+      <p>每项标注交付层级，供 AI 与排期直接引用。层级：<code>mvp</code> | <code>v1-full</code> | <code>excluded</code> | <code>v2-deferred</code></p>
+      <table id="mvp-cap-matrix">
+        <thead>
+          <tr><th>ID</th><th>层级</th><th>Milestone</th><th>能力摘要</th></tr>
+        </thead>
+        <tbody>
+          <!-- A -->
+          <tr data-cap-id="A1" data-mvp-tier="mvp"><td>A1</td><td>mvp</td><td>M0</td><td>跨平台桌面 App</td></tr>
+          <tr data-cap-id="A2" data-mvp-tier="mvp"><td>A2</td><td>mvp</td><td>M0</td><td>系统托盘常驻</td></tr>
+          <tr data-cap-id="A3" data-mvp-tier="v2-deferred"><td>A3</td><td>v2-deferred</td><td>—</td><td>全局快捷键唤醒</td></tr>
+          <tr data-cap-id="A4" data-mvp-tier="mvp"><td>A4</td><td>mvp</td><td>M0</td><td>窗口吸附/侧边栏</td></tr>
+          <tr data-cap-id="A5" data-mvp-tier="v2-deferred"><td>A5</td><td>v2-deferred</td><td>—</td><td>开机自启动</td></tr>
+          <tr data-cap-id="A6" data-mvp-tier="mvp"><td>A6</td><td>mvp</td><td>M0</td><td>SQLite 本地存储</td></tr>
+          <tr data-cap-id="A7" data-mvp-tier="v2-deferred"><td>A7</td><td>v2-deferred</td><td>—</td><td>云端账号同步</td></tr>
+          <tr data-cap-id="A8" data-mvp-tier="excluded"><td>A8</td><td>excluded</td><td>—</td><td>离线模式（2026-08-02 澄清：移除，断连重试→报错，无离线本地模式）</td></tr>
+          <tr data-cap-id="A9" data-mvp-tier="v2-deferred"><td>A9</td><td>v2-deferred</td><td>—</td><td>自动更新</td></tr>
+          <tr data-cap-id="A10" data-mvp-tier="mvp"><td>A10</td><td>mvp</td><td>M0</td><td>深/浅色主题</td></tr>
+          <tr data-cap-id="A11" data-mvp-tier="mvp"><td>A11</td><td>mvp</td><td>M0</td><td>i18n zh-CN/en</td></tr>
+          <!-- B -->
+          <tr data-cap-id="B1" data-mvp-tier="mvp"><td>B1–B8,B10,B13</td><td>mvp</td><td>M1</td><td>自定义 Provider/模型 + OpenAI/Anthropic 兼容</td></tr>
+          <tr data-cap-id="B9" data-mvp-tier="v1-full"><td>B9</td><td>v1-full</td><td>M8</td><td>Token 用量统计</td></tr>
+          <tr data-cap-id="B11" data-mvp-tier="excluded"><td>B11</td><td>excluded</td><td>—</td><td>本地模型（2026-08-02 澄清：移除，V1.0/V2.0 均不做本机模型）</td></tr>
+          <tr data-cap-id="B12" data-mvp-tier="v1-full"><td>B12</td><td>v1-full</td><td>M8</td><td>第三方自定义 Provider 的文档化引导与接入模板（基础接入已由 MVP 的 Q4/B2/B4 覆盖）</td></tr>
+          <!-- C -->
+          <tr data-cap-id="C1" data-mvp-tier="mvp"><td>C1,C2,C7,C11</td><td>mvp</td><td>M0–M2</td><td>Provider/Agent/工作区/日志</td></tr>
+          <tr data-cap-id="C3" data-mvp-tier="v1-full"><td>C3–C6,C8–C10,C12</td><td>v1-full</td><td>M3,M8</td><td>MCP/Skills/权限/Env/并发/导入导出</td></tr>
+          <tr data-cap-id="C5" data-mvp-tier="v1-full"><td>C5</td><td>v1-full</td><td>M8</td><td>快捷键配置</td></tr>
+          <!-- D -->
+          <tr data-cap-id="D1" data-mvp-tier="mvp"><td>D1–D3,D13,D14</td><td>mvp</td><td>M1</td><td>对话/历史/搜索/渲染/导出</td></tr>
+          <tr data-cap-id="D4" data-mvp-tier="v1-full"><td>D4–D12,D15</td><td>v1-full</td><td>M5</td><td>划词/写作/PDF/网页/视频/文生图/语音/文件</td></tr>
+          <!-- E -->
+          <tr data-cap-id="E2" data-mvp-tier="mvp"><td>E2,E3</td><td>mvp</td><td>M3核心</td><td>文件读写 + Shell</td></tr>
+          <tr data-cap-id="E1" data-mvp-tier="v1-full"><td>E1,E4,E6–E15</td><td>v1-full</td><td>M3–M4</td><td>索引/Git/@引用/LSP/Diff/Plan/并行/会话恢复</td></tr>
+          <tr data-cap-id="E5" data-mvp-tier="excluded"><td>E5</td><td>excluded</td><td>—</td><td>Inline 补全</td></tr>
+          <tr data-cap-id="E11" data-mvp-tier="v1-full"><td>E11,K3</td><td>v1-full</td><td>M4</td><td>轻量文件树+Diff 面板</td></tr>
+          <!-- F -->
+          <tr data-cap-id="F1" data-mvp-tier="mvp"><td>F1–F6,F12–F14</td><td>mvp</td><td>M2</td><td>Agent 基础 + 队列</td></tr>
+          <tr data-cap-id="F7" data-mvp-tier="v1-full"><td>F7–F11,F15,F10</td><td>v1-full</td><td>M6,M8</td><td>多Agent/Squad/记忆/审批/DAG</td></tr>
+          <!-- G -->
+          <tr data-cap-id="G1" data-mvp-tier="mvp"><td>G1,G2,G4,G5</td><td>mvp</td><td>M3核心</td><td>Skills+MCP 基础</td></tr>
+          <tr data-cap-id="G3" data-mvp-tier="v1-full"><td>G3,G6–G9</td><td>v1-full</td><td>M3,M8</td><td>Skills 导入/MCP 隔离/Plugin</td></tr>
+          <!-- H -->
+          <tr data-cap-id="H1" data-mvp-tier="v1-full"><td>H1,H3,L35–L36,L38–L39</td><td>v1-full</td><td>M7</td><td>Multica 客户端协议（注册/发现、心跳、接单、执行、流式回传）</td></tr>
+          <tr data-cap-id="H2" data-mvp-tier="excluded"><td>H2</td><td>excluded</td><td>—</td><td>Multica Client 产品功能（OAuth/Issue/Autopilot，Q2:A）</td></tr>
+          <!-- I -->
+          <tr data-cap-id="I5" data-mvp-tier="v1-full"><td>I5,I8</td><td>v1-full</td><td>M5,M6</td><td>Task 通知 + WebView</td></tr>
+          <tr data-cap-id="I1" data-mvp-tier="v2-deferred"><td>I1–I4,I6,I7,I9,I10</td><td>v2-deferred</td><td>—</td><td>系统级集成（Q5:B）</td></tr>
+          <!-- J -->
+          <tr data-cap-id="J1" data-mvp-tier="mvp"><td>J1–J3</td><td>mvp</td><td>M3核心</td><td>加密/确认/沙箱</td></tr>
+          <tr data-cap-id="J4" data-mvp-tier="v1-full"><td>J4–J7</td><td>v1-full</td><td>M3,M8</td><td>纯本地/审计/权限/MCP审批</td></tr>
+          <!-- K -->
+          <tr data-cap-id="K1" data-mvp-tier="mvp"><td>K1,K2</td><td>mvp</td><td>M0–M2</td><td>主聊天 + Agent 切换</td></tr>
+          <tr data-cap-id="K4" data-mvp-tier="v1-full"><td>K4–K7,K5</td><td>v1-full</td><td>M4,M6,M8</td><td>看板/Canvas/分屏/日志流</td></tr>
+          <!-- L -->
+          <tr data-cap-id="L1" data-mvp-tier="mvp"><td>L1–L6,L10,L16,L33,L34</td><td>mvp</td><td>M0–M2</td><td>向导/环境诊断/连通诊断/Task控制/上下文/代理</td></tr>
+          <tr data-cap-id="L7" data-mvp-tier="v1-full"><td>L7–L9,L11–L15,L17–L23,L25–L36,L38–L39</td><td>v1-full</td><td>M3–M8</td><td>Daemon/多Agent协议/办公/编程/Multica细化</td></tr>
+          <tr data-cap-id="L18" data-mvp-tier="v1-full"><td>L18–L20</td><td>v1-full</td><td>M8</td><td>备份/迁移/擦除</td></tr>
+          <tr data-cap-id="L24" data-mvp-tier="excluded"><td>L24</td><td>excluded</td><td>—</td><td>TTS 语音播报</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-10-7-timeline">10.7 建议交付时间线</h3>
+      <div class="diagram">Phase 1 — MVP（首版可发布）
+  M0 骨架 ──► M1 对话+模型 ──► M2 Agent基础 ──► M3核心 工具链
+  ════════════════════════════════════════════════════
+  里程碑：Alpha 内测可用（本地单 Agent 对话 + 任务执行）
+
+Phase 2 — V1.0 增量
+  M3剩余 ──► M4 编程 ──► M5 办公 ──► M6 多Agent ──► M7 Runtime ──► M8 完善
+  ════════════════════════════════════════════════════
+  里程碑：V1.0 正式封版
+
+Phase 3 — V2.0（范围外，仅规划）
+  系统级集成 / Multica Client / 完整 IDE / 云同步 / 自动更新
+</div>
+
+      <details class="ai-block" data-ai-purpose="mvp-cut-json">
+        <summary>AI MVP 裁剪 JSON（点击展开）</summary>
+        <pre id="mvp-cut-json">{
+  "mvp": {
+    "milestones": ["M0", "M1", "M2", "M3-core"],
+    "modules": ["A1,A2,A4,A6,A10,A11", "B1-B8,B10,B13", "C1,C2,C7,C11", "D1-D3,D13,D14", "E2,E3", "F1-F6,F12-F14", "G1,G2,G4,G5", "J1-J3", "K1,K2", "L1,L3-L6,L10,L16,L33,L34"]
+  },
+  "v1_full_increment": {
+    "milestones": ["M3-rest", "M4", "M5", "M6", "M7", "M8"],
+    "after_mvp": true
+  },
+  "v1_excluded": ["A3","A5","A7","A9","E5","H2","I1-I4","I6,I7","I9,I10","L24"],
+  "v2_deferred": ["A3","A5","A7","A9","H2","I1-I4","I6-I7","I9-I10","E5-full-ide","L24","extra-locales"]
+}</pre>
+      </details>
+    </section>
+
+    <!-- §11 已确认决策 -->
+    <section id="sec-11-decisions" data-section-type="decisions" data-status="confirmed">
+      <div class="section-id">§11 · confirmed-decisions</div>
+      <h2>11. 已确认决策（2026-08-02）</h2>
+      <table>
+        <thead><tr><th>#</th><th>问题</th><th>决策</th><th>影响范围</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Q1</strong></td>
+            <td>多 Agent 协作是否完全对齐 Multica Squad？</td>
+            <td><span class="badge badge-in">A — 完全对齐</span></td>
+            <td>F8/F9 按 Multica Squad 协议实现；Leader + @成员分派；遵循 Squad Operating Protocol</td>
+          </tr>
+          <tr>
+            <td><strong>Q2</strong></td>
+            <td>Multica 服务端使用方式？</td>
+            <td><span class="badge badge-in">A — Multica Client（客户端协议全量）</span></td>
+            <td>H1 + H3 纳入；本机 <code>jarvis-daemon</code> 即 Multica Client，支持 Server↔Client 全部协议并被 Server 直接调用（决策二 A 撤销）；<strong>H2 Client 产品功能排除</strong>（不提供 App 内 Multica 登录/Issue/Autopilot）</td>
+          </tr>
+          <tr>
+            <td><strong>Q3</strong></td>
+            <td>代码编辑深度？</td>
+            <td><span class="badge badge-in">B — 轻量形态</span></td>
+            <td>聊天 + 文件树 + Diff；<strong>E5 排除</strong>；E11/K3 降级为轻量代码面板；Agent 改代码仍通过工具链</td>
+          </tr>
+          <tr>
+            <td><strong>Q4</strong></td>
+            <td>模型接入策略？</td>
+            <td><span class="badge badge-in">全自定义模式</span></td>
+            <td>不预设任何模型；新增 B13；Provider 须兼容 OpenAI / Anthropic API；用户自行注册 model id</td>
+          </tr>
+          <tr>
+            <td><strong>Q5</strong></td>
+            <td>全局系统能力跟进时机？</td>
+            <td><span class="badge badge-in">B — V2.0</span></td>
+            <td>A3、I1–I4、I6–I7、I9–I10 维持排除至 V2.0；V1.0 保留 I5/I8 最小实现</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="sec-11-1-squad">11.1 Q1 落地要点 — Multica Squad 对齐</h3>
+      <ul>
+        <li>本地 Squad 数据结构对齐 Multica：Leader Agent、成员列表、角色说明、Squad Instructions</li>
+        <li>Leader 首次接单时将父 Task 置为 <code>in_progress</code>；整体完成后置为 <code>in_review</code></li>
+        <li>成员分派通过 @mention；结合 L12–L15 消息总线与调用链</li>
+        <li>参考 Multica 文档：<code>server/internal/squad/</code>、Squad Operating Protocol</li>
+      </ul>
+
+      <h3 id="sec-11-2-runtime">11.2 Q2 落地要点 — 仅 Multica Runtime</h3>
+      <ul>
+        <li>实现 <code>jarvis-agent</code> CLI（Go 瘦协议壳，内嵌 Node 执行 <code>packages/core</code> 的 REACT loop，决策一 A），作为 Multica Client 被 Server 直接调用</li>
+        <li><code>jarvis-daemon</code> 即 Multica Client：实现注册/发现、15s 心跳、3s 轮询接单、执行、流式回传（Server↔Client 全部协议，决策二 A 撤销）；L37 离线缓冲已删除，断连一律重试→明确报错</li>
+        <li>App 内展示 Runtime 注册状态、心跳、当前执行的 Multica Task（L7/L8/L39）</li>
+        <li>不在 JARVIS App 内实现 Multica OAuth、Issue 看板、Autopilot（H2 排除）</li>
+      </ul>
+
+      <h3 id="sec-11-3-coding-ui">11.3 Q3 落地要点 — 轻量编程 UI</h3>
+      <ul>
+        <li>主交互仍为 Agent 聊天；文件变更通过 Diff 面板预览和 Accept/Reject（E9）</li>
+        <li>文件树用于浏览工作区结构；代码只读预览（语法高亮即可，无需完整编辑能力）</li>
+        <li>Agent 侧仍保留终端、Git、LSP 诊断（E3/E4/E7），LSP 服务于 Agent 自愈而非用户 IDE</li>
+      </ul>
+
+      <h3 id="sec-11-4-models">11.4 Q4 落地要点 — 全自定义模型</h3>
+      <ul>
+        <li>Provider 配置页：选择类型（OpenAI 兼容 / Anthropic 兼容）→ 填写 Base URL、Key → 添加自定义 model id</li>
+        <li>禁止在代码或配置中硬编码 gpt-4、claude-3 等预设名称</li>
+        <li>连通性测试（B8）对用户填写的 model id 发真实请求验证</li>
+      </ul>
+    </section>
+
+    <!-- §12 术语表 -->
+    <section id="sec-12-glossary" data-section-type="glossary">
+      <div class="section-id">§12 · glossary</div>
+      <h2>12. 术语表</h2>
+      <table>
+        <thead><tr><th>术语</th><th>定义</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Agent</strong></td><td>一套身份、指令、能力、模型和执行配置的可复用协作者</td></tr>
+          <tr><td><strong>Runtime</strong></td><td>具体执行环境 = 一台电脑 + 一款 AI 工具/CLI</td></tr>
+          <tr><td><strong>Daemon</strong></td><td>后台守护进程，负责连接服务器、领取 Task、调用 CLI</td></tr>
+          <tr><td><strong>Task</strong></td><td>一次 Agent 执行的完整生命周期记录</td></tr>
+          <tr><td><strong>Skill</strong></td><td>可复用的工作方法库（SKILL.md + 附属文件）</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol，Agent 获取外部工具/数据的协议</td></tr>
+          <tr><td><strong>Squad</strong></td><td>小队：Leader Agent + 成员，Leader 负责路由分派</td></tr>
+          <tr><td><strong>ACP</strong></td><td>Agent Client Protocol，Multica 支持的协议族之一</td></tr>
+          <tr><td><strong>BYOK</strong></td><td>Bring Your Own Key，用户自带 API Key</td></tr>
+          <tr><td><strong>Provider</strong></td><td>模型服务提供方（OpenAI、Anthropic、Ollama 等）</td></tr>
+          <tr><td><strong>MVP</strong></td><td>Minimum Viable Product；首版可发布最小范围，见 §10</td></tr>
+          <tr><td><strong>i18n</strong></td><td>国际化；V1.0 必须支持 zh-CN（简体中文）与 en（英文）</td></tr>
+          <tr><td><strong>消息总线</strong></td><td>Agent 间结构化通信通道（L12），支撑多 Agent 协作</td></tr>
+        </tbody>
+      </table>
+
+      <details class="ai-block" data-ai-purpose="full-capability-index">
+        <summary>AI 能力索引（全部 cap-id 列表，点击展开）</summary>
+        <pre id="cap-index"><!-- JS 填充 --></pre>
+      </details>
+    </section>
+
+  </main>
+</div>
+
+<footer class="doc-footer">
+  JARVIS Project &copy; 2026 &mdash; 需求文档 V1.0-MVP &mdash; 最后更新 2026-08-02
+  &mdash; 本文档为单文件 HTML，CSS/JS 内联，可直接分发。
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---- Theme Toggle ---- */
+  document.getElementById('btn-theme').addEventListener('click', function () {
+    var body = document.body;
+    var next = body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    body.setAttribute('data-theme', next);
+    try { localStorage.setItem('jarvis-doc-theme', next); } catch (e) {}
+  });
+  try {
+    var saved = localStorage.getItem('jarvis-doc-theme');
+    if (saved) document.body.setAttribute('data-theme', saved);
+  } catch (e) {}
+
+  /* ---- Print ---- */
+  document.getElementById('btn-print').addEventListener('click', function () { window.print(); });
+
+  /* ---- Build TOC from headings ---- */
+  var main = document.getElementById('main-content');
+  var tocList = document.getElementById('toc-list');
+  var headings = main.querySelectorAll('section > h2, section > h3');
+  var html = '';
+  headings.forEach(function (h) {
+    var id = h.closest('section').id;
+    if (!id) return;
+    var cls = h.tagName === 'H3' ? 'toc-l2' : '';
+    html += '<li class="' + cls + '"><a href="#' + id + '">' + h.textContent + '</a></li>';
+  });
+  tocList.innerHTML = html;
+
+  /* ---- Scroll spy ---- */
+  var sections = main.querySelectorAll('section[id]');
+  var links = tocList.querySelectorAll('a');
+  function onScroll() {
+    var current = '';
+    sections.forEach(function (s) {
+      if (s.getBoundingClientRect().top <= 120) current = s.id;
+    });
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---- Expand all details ---- */
+  document.getElementById('btn-expand-toc').addEventListener('click', function () {
+    document.querySelectorAll('details.ai-block').forEach(function (d) { d.open = true; });
+  });
+
+  /* ---- Build capability index for AI ---- */
+  var capIndex = document.getElementById('cap-index');
+  if (capIndex) {
+    var caps = document.querySelectorAll('[data-cap-id]');
+    var lines = ['# JARVIS V1.0-MVP Capability Index', '# Format: ID | status | text', ''];
+    caps.forEach(function (el) {
+      var id = el.getAttribute('data-cap-id');
+      var status = el.getAttribute('data-cap-status') || 'in-scope';
+      var text = el.textContent.replace(/\s+/g, ' ').trim();
+      lines.push(id + ' | ' + status + ' | ' + text);
+    });
+    capIndex.textContent = lines.join('\n');
+  }
+})();
+</script>
+</body>
+</html>
