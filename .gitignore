@@ -1,2 +1,7 @@
 .DS_Store
 **/.DS_Store
+*.db
+*.db-wal
+*.db-shm
+dist/
+node_modules/
