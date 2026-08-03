@@ -1,10 +1,12 @@
 import zhCommon from '../locales/zh-CN/common.json';
 import enCommon from '../locales/en/common.json';
 
-export interface I18nResources {
+// Type alias (not interface) so the object literal gets an implicit index
+// signature, making it assignable to i18next's `Resource` in i18n.init().
+export type I18nResources = {
   'zh-CN': { common: Record<string, unknown> };
   en: { common: Record<string, unknown> };
-}
+};
 
 export function getResources(): I18nResources {
   return {

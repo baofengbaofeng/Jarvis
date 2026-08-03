@@ -1,0 +1,11 @@
+/* Minimal placeholder reset — replaced by Task 7 (real theme system). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
