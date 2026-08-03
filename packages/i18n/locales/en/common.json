@@ -1,0 +1,27 @@
+{
+  "app": { "title": "JARVIS", "subtitle": "Your AI assistant" },
+  "menu": {
+    "agents": "Agents",
+    "skills": "Skills",
+    "settings": "Settings",
+    "workspace": "Workspace",
+    "quit": "Quit",
+    "open": "Open JARVIS",
+    "daemonStatus": "Daemon Status"
+  },
+  "settings": {
+    "title": "Settings",
+    "nav": { "providers": "Providers", "logs": "Logs" },
+    "provider": {
+      "title": "Provider Management",
+      "add": "Add Provider",
+      "empty": "No provider configured yet",
+      "language": "Language",
+      "languageHint": "Choose the interface language"
+    }
+  },
+  "theme": { "light": "Light", "dark": "Dark", "system": "System" },
+  "onboarding": { "title": "Welcome to JARVIS", "start": "Get started" },
+  "chat": { "placeholder": "Type a message…" },
+  "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…" }
+}
