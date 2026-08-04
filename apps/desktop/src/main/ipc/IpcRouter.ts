@@ -35,6 +35,8 @@ export class IpcRouter {
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
+    this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });
+    this.register('proxy.set', (_e, cfg: unknown) => { settings.set('proxy_json', cfg); return { ok: true }; });
     this.register(IpcChannel.secretsSet, async (_e, key, value) => { await secrets.set(key as string, value as string); return { ok: true }; });
     this.register(IpcChannel.secretsGet, async (_e, key) => secrets.get(key as string));
     this.register(IpcChannel.secretsDelete, async (_e, key) => { await secrets.delete(key as string); return { ok: true }; });
