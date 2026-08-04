@@ -1,7 +1,8 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding } from '@jarvis/core';
+import { createCodeIndexAdapter, reindexWorkspace } from './coding';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
@@ -49,6 +50,20 @@ export class IpcRouter {
     this.register('workspace.bind', (_e, agentId, path) => { workspace.bind(agentId as string, path as string); return { ok: true }; });
     this.register('workspace.listBound', () => workspace.listBound());
     this.register('workspace.loadContext', (_e, agentId) => workspace.loadContext(agentId as string));
+    // M4 Task 6 (E1/L27): code index IPC. The embeddingFn defaults to the
+    // deterministic local hashEmbedding; production Provider embedding (M1
+    // ModelRouter extension) is a later swap — construct IndexStore with a
+    // provider-backed EmbeddingFn here when it lands.
+    const codeIndex = new IndexStore(createCodeIndexAdapter(this.db), hashEmbedding);
+    this.register('index.reindex', async (_e, args) => {
+      const { workspaceRoot } = args as { workspaceRoot: string };
+      const res = await reindexWorkspace(codeIndex, workspaceRoot);
+      return { ok: true, ...res };
+    });
+    this.register('index.search', (_e, args) => {
+      const { query, limit } = args as { query: string; limit?: number };
+      return codeIndex.search(query, limit ?? 5);
+    });
     this.register(IpcChannel.dialogOpenFile, async () => {
       const { dialog } = await import('electron');
       const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });

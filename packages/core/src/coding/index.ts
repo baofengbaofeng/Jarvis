@@ -4,5 +4,8 @@ export * from './mention';
 export * from './plan';
 export * from './snapshot';
 export * from './structured';
+export * from './index/chunker';
+export * from './index/IndexStore';
+export * from './index/searchTool';
 export * from './lsp/LspClient';
 export * from './lsp/runTests';

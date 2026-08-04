@@ -20,3 +20,4 @@ export * from './mcp/register';
 export * from './tools';
 export * from './skills/SkillsLoader';
 export * from './plugins/PluginHost';
+export * from './util/debounce';

@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -13,7 +13,7 @@ import type { SettingsStore } from './settings';
 import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
-import { createSnapshotStore, snapshotBeforeTask, createSnapshotGit, createSnapshotFs } from './coding';
+import { createSnapshotStore, snapshotBeforeTask, createSnapshotGit, createSnapshotFs, createCodeIndexAdapter } from './coding';
 
 // In-memory per-task log buffer. Streaming to the renderer is the sole
 // responsibility of the orchestrator's cb.onLog (IpcEvent.taskLog), so task
@@ -98,6 +98,12 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // readonly whitelist.
   const testPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: ['npm test', 'pnpm test', 'yarn test'] };
   registerRunTestsTool(toolRegistry, testPolicy);
+  // M4 Task 6 (E1/L27): search_code tool. Backed by the SAME code_chunks table
+  // as the index.reindex IPC, so it searches whichever workspace was last
+  // reindexed (single-active-index assumption, documented). embeddingFn defaults
+  // to the deterministic local hashEmbedding; production Provider embedding (M1
+  // ModelRouter extension) is a later swap at construction.
+  registerSearchCodeTool(toolRegistry, new IndexStore(createCodeIndexAdapter(db), hashEmbedding));
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
   const engine = new AgentEngine({

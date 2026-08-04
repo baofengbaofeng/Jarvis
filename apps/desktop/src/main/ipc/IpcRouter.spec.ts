@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { applyMigrations } from '../db/migrations';
 import { IpcRouter } from './IpcRouter';
 import { createProviderStore } from './providers';
@@ -44,5 +47,35 @@ describe('IpcRouter provider model channels', () => {
     const models = await listModels({}, p.id) as Array<{ modelId: string }>;
     expect(models).toHaveLength(1);
     expect(models[0].modelId).toBe('m1');
+  });
+});
+
+// M4 Task 6 (E1/L27): index.reindex walks a real workspace and index.search
+// answers against the reindexed code_chunks table — both registered on the router.
+describe('IpcRouter code index channels (E1/L27)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers index.reindex and index.search and searches a temp workspace', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const reindex = handlers.get('index.reindex')!;
+    const search = handlers.get('index.search')!;
+    expect(reindex).toBeTruthy();
+    expect(search).toBeTruthy();
+
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-ipc-idx-'));
+    try {
+      writeFileSync(join(ws, 'add.ts'), 'export function add(a: number, b: number) { return a + b; }');
+      const r = await reindex({}, { workspaceRoot: ws }) as { ok: boolean; indexed: number };
+      expect(r.ok).toBe(true);
+      expect(r.indexed).toBe(1);
+      const rows = await search({}, { query: 'export function add a b', limit: 1 }) as Array<{ path: string }>;
+      expect(rows[0].path).toBe('add.ts');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
   });
 });
