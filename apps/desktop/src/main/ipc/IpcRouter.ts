@@ -7,6 +7,7 @@ import { createProviderStore, type ProviderInput, type ModelInput } from './prov
 import { createAgentStore, type AgentInput } from './agents';
 import { createWorkspaceService } from './workspace';
 import { registerChatHandlers } from './chat';
+import { registerTaskHandlers } from './tasks';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
@@ -51,6 +52,12 @@ export class IpcRouter {
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
+    const tasks = registerTaskHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow());
+    this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string }));
+    this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
+    this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));
+    this.register('task.resume', (_e, id) => tasks.resume(_e, id as string));
+    this.register(IpcChannel.taskRetry, (_e, id) => tasks.retry(_e, id as string));
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });

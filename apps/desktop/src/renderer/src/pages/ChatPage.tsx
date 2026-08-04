@@ -6,6 +6,7 @@ import { ChatInput } from '../components/chat/ChatInput';
 import { MarkdownView } from '../components/chat/MarkdownView';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { AgentSwitcher } from '../components/agents/AgentSwitcher';
+import { TaskControlBar } from '../components/tasks/TaskControlBar';
 
 export function ChatPage() {
   const { t } = useTranslation('common');
@@ -51,6 +52,7 @@ export function ChatPage() {
           {streamingText && <div data-testid="streaming-text"><MarkdownView content={streamingText} /></div>}
         </div>
         <ChatInput />
+        <TaskControlBar />
       </main>
     </div>
   );
