@@ -18,35 +18,35 @@ const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_POLICY: ProviderPolicy = { timeoutMs: 60_000, maxRetries: 2, circuitBreaker: false };
 
 export class ModelRouter {
-  private adapter: ProviderAdapter;
-  private failures = 0;
+  private failures = new Map<string, number>();
   private deps: RouterDeps;
 
   constructor(deps: RouterDeps = {}) {
     this.deps = deps;
-    this.adapter = (deps.createAdapter ?? createAdapter)('openai-compatible');
-    this.adapter = null as unknown as ProviderAdapter;
-    // 真实适配器在 chat() 内按 provider.type 创建
   }
 
   async chat(req: ChatRequest, opts: RouterChatOpts): Promise<{ text: string; usage: Usage | null }> {
     const policy = { ...DEFAULT_POLICY, ...opts.policy };
-    if (policy.circuitBreaker && this.failures > 5) throw new Error('circuit open');
+    if (policy.circuitBreaker && (this.failures.get(req.provider.id) ?? 0) > 5) throw new Error('circuit open');
+    // Resolve the API key before creating an adapter: interleaved chat() calls
+    // must never read a shared adapter field after an await.
+    const apiKey = await opts.apiKeyResolver(req.provider.apiKeyRef);
+    if (!apiKey) throw new Error(`missing api key for provider ${req.provider.name}`);
     const models = [req.modelId, ...(opts.fallbackModelIds ?? [])];
     let lastError: Error | null = null;
     for (const modelId of models) {
       for (let attempt = 0; attempt <= policy.maxRetries; attempt++) {
-        this.adapter = (this.deps.createAdapter ?? createAdapter)(req.provider.type);
-        const apiKey = await opts.apiKeyResolver(req.provider.apiKeyRef);
-        if (!apiKey) throw new Error(`missing api key for provider ${req.provider.name}`);
+        const adapter = (this.deps.createAdapter ?? createAdapter)(req.provider.type);
         try {
-          const text = await this.runOnce(this.adapter, { ...req, modelId }, apiKey, policy, opts.onChunk);
-          this.failures = 0;
+          const text = await this.runOnce(adapter, { ...req, modelId }, apiKey, policy, opts.onChunk);
+          this.failures.delete(req.provider.id);
           return text;
         } catch (e) {
           lastError = e as Error;
-          if (e instanceof RetryableError) { this.failures++; continue; }
-          if (e instanceof TimeoutError) { this.failures++; continue; }
+          if (e instanceof RetryableError || e instanceof TimeoutError) {
+            this.failures.set(req.provider.id, (this.failures.get(req.provider.id) ?? 0) + 1);
+            continue;
+          }
           break;
         }
       }
