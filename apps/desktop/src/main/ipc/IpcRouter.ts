@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
 import { createSettingsStore } from './settings';
+import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
@@ -20,6 +21,8 @@ export class IpcRouter {
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register(IpcChannel.daemonStatus, () => daemon.status());
     this.register(IpcChannel.daemonRestart, () => { daemon.restart(); return { ok: true }; });
+    this.register(IpcChannel.envInfo, () => collectEnvInfo());
+    this.register(IpcChannel.diagnosticsRun, () => collectEnvInfo());
   }
 
   listen(): void {
