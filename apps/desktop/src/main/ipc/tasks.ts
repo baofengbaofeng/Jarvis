@@ -9,14 +9,21 @@ import { createWorkspaceService } from './workspace';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
 
+// In-memory per-task log buffer. Streaming to the renderer is the sole
+// responsibility of the orchestrator's cb.onLog (IpcEvent.taskLog), so task
+// deltas are emitted exactly once; this buffer preserves them for later reads.
+const taskLogs = new Map<string, string[]>();
+
 export function registerTaskHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, agentStore = createAgentStore(db)) {
   const workspace = createWorkspaceService(db);
   // The model adapters stream deltas via onChunk and return void, while
   // EngineChatFn must RETURN { text, usage } (the AgentEngine destructures it).
   // Wrap the adapter so delta text is accumulated, the usage chunk is captured,
   // every chunk is forwarded to opts.onChunk, and opts.signal is passed through.
-  const adapter = createAdapter('openai-compatible');
+  // The adapter is selected per-request from req.provider.type so an
+  // anthropic-compatible provider gets the Anthropic adapter, not OpenAI.
   const chatFn: EngineChatFn = async (req, opts) => {
+    const adapter = createAdapter(req.provider.type);
     let text = '';
     let usage: Usage | null = null;
     await adapter.chat(req, {
@@ -36,7 +43,14 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run(id, agentId, 'queued', '{}', new Date().toISOString());
     },
     async updateState(id: string, state: string) { db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(state, id); },
-    async appendLog(id: string, line: string) { getWindow()?.webContents.send(IpcEvent.taskLog, { id, line }); }
+    // Keep logs in an in-memory buffer. The streaming path to the renderer is
+    // the orchestrator's cb.onLog -> IpcEvent.taskLog (see below); persisting
+    // here would emit each line a second time.
+    async appendLog(id: string, line: string) {
+      const buf = taskLogs.get(id) ?? [];
+      buf.push(line);
+      taskLogs.set(id, buf);
+    }
   };
 
   const orchestrator = new TaskOrchestrator(engine, store, {
