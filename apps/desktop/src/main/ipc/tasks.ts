@@ -8,6 +8,7 @@ import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
+import type { SettingsStore } from './settings';
 import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
@@ -20,6 +21,10 @@ const taskLogs = new Map<string, string[]>();
 export interface TaskHandlerDeps {
   chatFn?: EngineChatFn;
   maxSteps?: number;
+  // M3 Task 9 (C6/J6): settings store used to resolve the per-agent sandbox
+  // policy saved by the PermissionsSettingsPage. Falls back to the default
+  // readwrite policy when absent.
+  settings?: SettingsStore;
 }
 
 export function registerTaskHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, agentStore = createAgentStore(db), deps: TaskHandlerDeps = {}) {
@@ -142,6 +147,15 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const agentRow = db.prepare('SELECT env_vars_json FROM agents WHERE id = ?').get(agentId) as { env_vars_json: string } | undefined;
       const agentEnv = agentRow ? (JSON.parse(agentRow.env_vars_json ?? '{}') as Record<string, string>) : {};
       const env = mergeEnv({}, {}, agentEnv, {});
+      // C6/J6: read the per-agent sandbox policy the PermissionsSettingsPage
+      // saved under settings.permissions.{agentId}; fall back to the shared
+      // default readwrite policy (the one the tool registry was built with).
+      const savedPolicy = deps.settings?.get(`permissions.${agentId}`) as { level?: 'readonly' | 'readwrite' | 'system'; allowCommands?: string[]; allowDomains?: string[] } | undefined;
+      const policy: SandboxPolicy = {
+        level: savedPolicy?.level ?? 'readwrite',
+        allowCommands: savedPolicy?.allowCommands ?? [],
+        allowDomains: savedPolicy?.allowDomains ?? []
+      };
       await store.create(id, agentId);
       // G6: register the agent's bound MCP servers' tools into the shared
       // engine registry (filtered by config_json.agentIds). Clients are cached
@@ -153,7 +167,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);
       }
-      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot: agent.workspaceId ?? '.' });
+      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot: agent.workspaceId ?? '.', policy });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),

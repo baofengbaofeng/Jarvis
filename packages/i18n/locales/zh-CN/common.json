@@ -12,7 +12,7 @@
   },
   "settings": {
     "title": "设置",
-    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能", "daemon": "Daemon" },
+    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能", "daemon": "Daemon", "permissions": "权限", "env": "环境", "concurrency": "并发" },
     "mcp": {
       "title": "MCP 服务",
       "name": "名称",
@@ -24,6 +24,9 @@
       "testFail": "测试失败"
     },
     "skills": { "import": "导入" },
+    "permissions": { "agent": "Agent", "level": "沙箱级别", "readonly": "只读", "readwrite": "读写", "system": "系统" },
+    "env": { "agent": "Agent", "envVars": "环境变量", "cliArgs": "CLI 参数", "placeholder": "KEY=value", "cliPlaceholder": "-flag arg" },
+    "concurrency": { "perAgent": "每 Agent", "machine": "机器" },
     "provider": {
       "title": "Provider 管理",
       "add": "添加 Provider",

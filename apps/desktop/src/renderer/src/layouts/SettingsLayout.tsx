@@ -12,6 +12,9 @@ export function SettingsLayout() {
         <NavLink to="/settings/skills">{t('settings.nav.skills')}</NavLink>
         <NavLink to="/settings/daemon">{t('settings.nav.daemon')}</NavLink>
         <NavLink to="/settings/logs">{t('settings.nav.logs')}</NavLink>
+        <NavLink to="/settings/permissions">{t('settings.nav.permissions')}</NavLink>
+        <NavLink to="/settings/env">{t('settings.nav.env')}</NavLink>
+        <NavLink to="/settings/concurrency">{t('settings.nav.concurrency')}</NavLink>
         <LanguageSwitcher />
       </nav>
       <main style={{ flex: 1, padding: 16 }}>

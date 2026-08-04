@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { EngineChatFn } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
 import { registerTaskHandlers, type TaskHandlerDeps } from './tasks';
 import { createAgentStore } from './agents';
+import { createSettingsStore } from './settings';
 import { createChatService } from '@jarvis/core';
 import { createChatDbAdapter } from './chat';
 import type { SecureStorage } from '../secrets/SecureStorage';
@@ -79,6 +83,58 @@ describe('task handlers', () => {
     await expect(tasks.create(fakeEvent, { agentId: a.id, prompt: 'hi', sessionId: session.id }))
       .rejects.toThrow('agent has no valid model binding');
     expect(await chatService.loadMessages(session.id)).toHaveLength(0);
+  });
+
+  it('enforces the per-agent permission policy saved by the permissions UI (C6/J6)', async () => {
+    // Seed a readonly policy for the agent via the settings store — the same
+    // shape PermissionsSettingsPage writes under settings.permissions.{agentId}.
+    const settings = createSettingsStore(db);
+    const agentId = seedAgent();
+    settings.set(`permissions.${agentId}`, { level: 'readonly', allowCommands: [], allowDomains: [] });
+
+    // The model emits one write_file call; the readonly policy must make the
+    // file tool's sandbox reject the write and fail the task.
+    let step = 0;
+    const fn: EngineChatFn = async (_req, opts) => {
+      step++;
+      if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'write_file', arguments: { path: 'x.txt', content: 'hi' } }] });
+      else opts.onChunk?.({ kind: 'done' });
+      return { text: '', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn, settings });
+    await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status, result_json FROM tasks').all() as Array<{ status: string; result_json: string }>;
+      expect(row[0].status).toBe('failed');
+      expect(JSON.parse(row[0].result_json).text).toContain('readonly sandbox');
+    });
+  });
+
+  it('a readwrite policy saved in settings lets commands a readonly policy rejects', async () => {
+    // Contrast with the readonly case: the same settings key carrying level
+    // 'readwrite' lets `mkdir` (readwrite-only whitelist) run and the task
+    // complete. Uses a temp dir so the command has no repo side effects.
+    const settings = createSettingsStore(db);
+    const agentId = seedAgent();
+    settings.set(`permissions.${agentId}`, { level: 'readwrite', allowCommands: [], allowDomains: [] });
+    const target = mkdtempSync(join(tmpdir(), 'jarvis-mk-'));
+    try {
+      let step = 0;
+      const fn: EngineChatFn = async (_req, opts) => {
+        step++;
+        if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'run_shell', arguments: { command: `mkdir -p ${join(target, 'sub')}` } }] });
+        else opts.onChunk?.({ kind: 'done' });
+        return { text: 'done', usage: null };
+      };
+      const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn, settings });
+      await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+      await vi.waitFor(() => {
+        const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
+        expect(row[0].status).toBe('completed');
+      });
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
   });
 });
 

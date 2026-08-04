@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { openDatabase } from './db/connection';
 import { runMigrations } from './db/migrations';
 import { IpcRouter } from './ipc/IpcRouter';
+import { createSettingsStore } from './ipc/settings';
 import { closeAllMcpClients } from './ipc/mcp';
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
@@ -14,6 +15,10 @@ const daemon = new DaemonSupervisor();
 export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
+  const settings = createSettingsStore(db);
+  // C10: the daemon is sized from the saved settings.concurrency value on every
+  // (re)start; the provider reads live so a save + daemon.restart picks it up.
+  daemon.setConcurrencyProvider(() => (settings.get('concurrency') ?? {}) as { perAgent?: number; machine?: number });
   const ipc = new IpcRouter(db);
   ipc.registerAll(daemon);
   ipc.listen();

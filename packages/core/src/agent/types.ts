@@ -1,4 +1,5 @@
 import type { ToolCall, Usage } from '../model/types';
+import type { SandboxPolicy } from '../sandbox/Sandbox';
 
 export interface ToolDef {
   name: string;
@@ -14,6 +15,10 @@ export interface ToolContext {
   // tools build their Sandbox per-execution from this so a shared engine can
   // enforce each task's own workspace.
   workspaceRoot?: string;
+  // Per-task sandbox policy (M3 Task 9, C6/J6). When absent, tools fall back
+  // to the policy captured at registration time, so a shared engine can still
+  // run agents with different permission levels.
+  policy?: SandboxPolicy;
 }
 
 export interface ToolResult {

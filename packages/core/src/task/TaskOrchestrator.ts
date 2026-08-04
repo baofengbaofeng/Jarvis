@@ -1,5 +1,6 @@
 import type { AgentConfig } from '@jarvis/protocol';
 import type { AgentEngine, EngineRunInput } from '../agent/AgentEngine';
+import type { SandboxPolicy } from '../sandbox/Sandbox';
 import { transition, type TaskState } from './TaskStateMachine';
 
 export interface TaskStoreAdapter {
@@ -19,6 +20,9 @@ export interface SubmitInput {
   modelId: string;
   // Per-task sandbox root forwarded to tool contexts via EngineRunInput.
   workspaceRoot?: string;
+  // Per-task sandbox policy forwarded to tool contexts via EngineRunInput
+  // (C6/J6: the permissions UI's saved per-agent policy is enforced here).
+  policy?: SandboxPolicy;
 }
 
 export interface TaskOrchestratorCallbacks {

@@ -2,6 +2,27 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 
 const DEFAULT_PORT = 17890;
+// Fallbacks mirror daemon/cmd/jarvis-daemon/main.go getenvInt defaults.
+const DEFAULT_CONCURRENCY_PER_AGENT = 6;
+const DEFAULT_CONCURRENCY_MACHINE = 20;
+
+export interface ConcurrencyConfig {
+  perAgent?: number;
+  machine?: number;
+}
+
+// Pure helper so the env wiring is unit-testable without spawning a process.
+// The daemon reads JARVIS_CONCURRENCY_PER_AGENT / JARVIS_CONCURRENCY_MACHINE
+// to size its queue (M3 Task 9, C10: closes the Task 8 deferral so the
+// ConcurrencySettingsPage's save + daemon.restart actually takes effect).
+export function buildDaemonEnv(base: NodeJS.ProcessEnv, port: number, concurrency: ConcurrencyConfig): NodeJS.ProcessEnv {
+  return {
+    ...base,
+    JARVIS_DAEMON_PORT: String(port),
+    JARVIS_CONCURRENCY_PER_AGENT: String(concurrency.perAgent ?? DEFAULT_CONCURRENCY_PER_AGENT),
+    JARVIS_CONCURRENCY_MACHINE: String(concurrency.machine ?? DEFAULT_CONCURRENCY_MACHINE)
+  };
+}
 
 export interface DaemonStatus {
   running: boolean;
@@ -46,12 +67,20 @@ export class DaemonSupervisor {
   private poller: ReturnType<typeof createHealthPoller> | null = null;
   private port = Number(process.env.JARVIS_DAEMON_PORT ?? DEFAULT_PORT);
   private healthy = false;
+  private concurrencyProvider: (() => ConcurrencyConfig) | null = null;
 
   constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
 
+  // C10: lets the main process hand the supervisor a live reader for the saved
+  // settings.concurrency value, so every spawn/restart injects the current
+  // limits into the daemon's env.
+  setConcurrencyProvider(fn: () => ConcurrencyConfig): void {
+    this.concurrencyProvider = fn;
+  }
+
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
-    this.child = spawn(this.binaryPath, [], { env: { ...process.env, JARVIS_DAEMON_PORT: String(this.port) } });
+    this.child = spawn(this.binaryPath, [], { env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}) });
     this.child.on('error', () => { this.healthy = false; this.child = null; });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
     void this.poller.start(() => { this.healthy = true; onReady?.(); });

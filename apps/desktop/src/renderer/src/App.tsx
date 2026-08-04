@@ -7,6 +7,9 @@ import { ProviderSettingsPage } from './pages/settings/ProviderSettingsPage';
 import { LogPanelPage } from './pages/settings/LogPanelPage';
 import { McpSettingsPage } from './pages/settings/McpSettingsPage';
 import { SkillsSettingsPage } from './pages/settings/SkillsSettingsPage';
+import { PermissionsSettingsPage } from './pages/settings/PermissionsSettingsPage';
+import { EnvSettingsPage } from './pages/settings/EnvSettingsPage';
+import { ConcurrencySettingsPage } from './pages/settings/ConcurrencySettingsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { AgentListView } from './pages/AgentListView';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
@@ -26,6 +29,9 @@ export default function App() {
             <Route path="skills" element={<SkillsSettingsPage />} />
             <Route path="daemon" element={<DaemonManagementPage />} />
             <Route path="logs" element={<LogPanelPage />} />
+            <Route path="permissions" element={<PermissionsSettingsPage />} />
+            <Route path="env" element={<EnvSettingsPage />} />
+            <Route path="concurrency" element={<ConcurrencySettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

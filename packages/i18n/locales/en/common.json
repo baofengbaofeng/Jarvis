@@ -12,7 +12,7 @@
   },
   "settings": {
     "title": "Settings",
-    "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills", "daemon": "Daemon" },
+    "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills", "daemon": "Daemon", "permissions": "Permissions", "env": "Environment", "concurrency": "Concurrency" },
     "mcp": {
       "title": "MCP Servers",
       "name": "Name",
@@ -24,6 +24,9 @@
       "testFail": "Test failed"
     },
     "skills": { "import": "Import" },
+    "permissions": { "agent": "Agent", "level": "Sandbox level", "readonly": "Read-only", "readwrite": "Read/write", "system": "System" },
+    "env": { "agent": "Agent", "envVars": "Environment variables", "cliArgs": "CLI arguments", "placeholder": "KEY=value", "cliPlaceholder": "-flag arg" },
+    "concurrency": { "perAgent": "Per Agent", "machine": "Machine" },
     "provider": {
       "title": "Provider Management",
       "add": "Add Provider",

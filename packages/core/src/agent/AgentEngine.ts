@@ -2,6 +2,7 @@ import type { AgentConfig } from '@jarvis/protocol';
 import type { ChatChunk, ChatRequest, Usage } from '../model/types';
 import type { ToolRegistry } from './ToolRegistry';
 import type { ApprovalRequest, TaskResult, ToolCall, ToolResult } from './types';
+import type { SandboxPolicy } from '../sandbox/Sandbox';
 
 export interface EngineChatFn {
   (req: ChatRequest, opts: { apiKey: string; signal?: AbortSignal; onChunk?: (c: ChatChunk) => void }): Promise<{ text: string; usage: Usage | null }>;
@@ -28,6 +29,9 @@ export interface EngineRunInput {
   modelId: string;
   // Sandbox root forwarded to tool contexts (tools default to cwd when absent).
   workspaceRoot?: string;
+  // Per-task sandbox policy forwarded to tool contexts (C6/J6). Tools fall back
+  // to their registration-time policy when absent.
+  policy?: SandboxPolicy;
 }
 
 export class AgentEngine {
@@ -35,7 +39,7 @@ export class AgentEngine {
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
 
   async run(input: EngineRunInput): Promise<TaskResult> {
-    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot } = input;
+    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy } = input;
     let working: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> = [...messages];
     let toolCalls = 0;
     let totalUsage: Usage | null = null;
@@ -77,7 +81,7 @@ export class AgentEngine {
             continue;
           }
         }
-        const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal, workspaceRoot });
+        const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal, workspaceRoot, policy });
         onTool?.(call, result);
         working.push({ role: 'tool', content: result.output });
       }
