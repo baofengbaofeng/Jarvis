@@ -84,12 +84,17 @@ export async function registerAgentMcpTools(db: Database.Database, toolRegistry:
     const cfg = JSON.parse(s.config_json ?? '{}') as { command?: string; args?: string[]; agentIds?: string[] };
     if (s.transport !== 'stdio' || !cfg.command || !cfg.agentIds?.includes(agentId)) continue;
     if (mcpClientCache.has(s.id)) continue; // already spawned + registered
+    let client: McpClient | undefined;
     try {
-      const client = createMcpClient(cfg.command, cfg.args ?? [], s.name, deps);
+      client = createMcpClient(cfg.command, cfg.args ?? [], s.name, deps);
       await client.initialize();
       await registerMcpTools(toolRegistry, client, s.name);
       mcpClientCache.set(s.id, { client, serverName: s.name });
     } catch (e) {
+      // M3 final review (J2): a client that failed to initialize/register was
+      // never closed, leaking an orphaned child process (and the cache entry
+      // wasn't set, so the next task would spawn yet another). Close it here.
+      if (client) { try { client.close(); } catch { /* ignore */ } }
       console.error(`mcp: failed to register server ${s.name}`, e);
     }
   }
