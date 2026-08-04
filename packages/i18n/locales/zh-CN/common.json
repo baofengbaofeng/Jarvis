@@ -7,11 +7,12 @@
     "workspace": "工作区",
     "quit": "退出",
     "open": "打开 JARVIS",
-    "daemonStatus": "Daemon 状态"
+    "daemonStatus": "Daemon 状态",
+    "restart": "重启 Daemon"
   },
   "settings": {
     "title": "设置",
-    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能" },
+    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能", "daemon": "Daemon" },
     "mcp": {
       "title": "MCP 服务",
       "name": "名称",
@@ -43,5 +44,14 @@
   "onboarding": { "title": "欢迎使用 JARVIS", "start": "开始配置", "step1": "Provider", "step2": "Agent", "step3": "工作区" },
   "chat": { "placeholder": "输入消息…", "sessions": "会话列表", "newSession": "新对话" },
   "agent": { "bindWorkspace": "绑定工作区", "systemPrompt": "系统提示词", "modelId": "模型 ID" },
+  "daemon": {
+    "running": "运行中",
+    "stopped": "已停止",
+    "version": "版本",
+    "active": "活跃",
+    "queued": "排队",
+    "perAgent": "每 Agent",
+    "concurrency": "机器并发"
+  },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

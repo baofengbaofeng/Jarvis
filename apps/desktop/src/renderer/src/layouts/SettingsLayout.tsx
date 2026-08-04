@@ -10,6 +10,7 @@ export function SettingsLayout() {
         <NavLink to="/settings/providers">{t('settings.nav.providers')}</NavLink>
         <NavLink to="/settings/mcp">{t('settings.nav.mcp')}</NavLink>
         <NavLink to="/settings/skills">{t('settings.nav.skills')}</NavLink>
+        <NavLink to="/settings/daemon">{t('settings.nav.daemon')}</NavLink>
         <NavLink to="/settings/logs">{t('settings.nav.logs')}</NavLink>
         <LanguageSwitcher />
       </nav>

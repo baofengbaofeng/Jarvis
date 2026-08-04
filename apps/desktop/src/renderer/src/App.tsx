@@ -9,6 +9,7 @@ import { McpSettingsPage } from './pages/settings/McpSettingsPage';
 import { SkillsSettingsPage } from './pages/settings/SkillsSettingsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { AgentListView } from './pages/AgentListView';
+import { DaemonManagementPage } from './pages/DaemonManagementPage';
 
 export default function App() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />
             <Route path="skills" element={<SkillsSettingsPage />} />
+            <Route path="daemon" element={<DaemonManagementPage />} />
             <Route path="logs" element={<LogPanelPage />} />
           </Route>
         </Routes>

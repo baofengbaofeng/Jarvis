@@ -3,6 +3,17 @@ import { join } from 'node:path';
 
 const DEFAULT_PORT = 17890;
 
+export interface DaemonStatus {
+  running: boolean;
+  version: string;
+  activeTasks: number;
+  queued: number;
+  perAgent: number;
+  concurrency: number;
+}
+
+const UNKNOWN_STATUS: DaemonStatus = { running: false, version: 'unknown', activeTasks: 0, queued: 0, perAgent: 0, concurrency: 0 };
+
 export interface HealthPollerOptions {
   port: number;
   intervalMs: number;
@@ -47,13 +58,13 @@ export class DaemonSupervisor {
     this.child.on('exit', () => { this.healthy = false; onExit?.(); });
   }
 
-  async status(): Promise<{ running: boolean; version: string; activeTasks: number }> {
-    if (!this.healthy) return { running: false, version: 'unknown', activeTasks: 0 };
+  async status(): Promise<DaemonStatus> {
+    if (!this.healthy) return UNKNOWN_STATUS;
     try {
       const res = await fetch(`http://127.0.0.1:${this.port}/status`);
-      return await res.json() as { running: boolean; version: string; activeTasks: number };
+      return await res.json() as DaemonStatus;
     } catch {
-      return { running: false, version: 'unknown', activeTasks: 0 };
+      return UNKNOWN_STATUS;
     }
   }
 
