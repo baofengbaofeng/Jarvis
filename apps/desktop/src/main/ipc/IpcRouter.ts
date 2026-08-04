@@ -35,7 +35,9 @@ export class IpcRouter {
     this.register(IpcChannel.agentUpdate, (_e, id, patch) => agents.update(id as string, patch as Partial<AgentInput>));
     this.register(IpcChannel.agentDelete, (_e, id) => agents.remove(id as string));
     const mcpStore = createMcpStore(this.db);
-    const skillsStore = createSkillsStore(this.db);
+    // Pass the agents store so skills.import can copy SKILL.md into every bound
+    // workspace's .jarvis/skills/ (the runtime injection surface), J2 fix.
+    const skillsStore = createSkillsStore(this.db, agents);
     this.register('mcp.list', () => mcpStore.list());
     this.register('mcp.create', (_e, input) => mcpStore.create(input as McpServerInput));
     this.register('mcp.delete', (_e, id) => mcpStore.remove(id as string));
