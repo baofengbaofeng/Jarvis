@@ -1,11 +1,22 @@
-/* Minimal placeholder reset — replaced by Task 7 (real theme system). */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --border: #e5e5e5;
+  --accent: #3b82f6;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #171717;
+  --fg: #f5f5f5;
+  --border: #333333;
+  --accent: #60a5fa;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--fg);
 }

@@ -6,6 +6,21 @@ import { getResources } from '@jarvis/i18n';
 import App from './App';
 
 beforeAll(async () => {
+  // jsdom does not implement window.matchMedia; the real ThemeProvider
+  // (Task 7) reads it to resolve the 'system' theme, so stub it to "light".
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false
+    })
+  });
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
 });
 
