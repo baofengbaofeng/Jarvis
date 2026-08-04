@@ -15,6 +15,7 @@ beforeAll(async () => {
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
   (window as unknown as { jarvis: unknown }).jarvis = {
     invoke: async (method: string, ..._a: unknown[]) => {
+      if (method === 'agent.list') return [{ id: 'a1', name: 'Coder', slug: 'coder', description: '', systemPrompt: '', modelId: null, workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' }];
       if (method === 'chat.listSessions') return SESSIONS;
       if (method === 'chat.createSession') return { id: 's3', title: '', createdAt: '', updatedAt: '' };
       if (method === 'chat.loadMessages') {

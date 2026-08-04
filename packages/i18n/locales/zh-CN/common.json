@@ -31,5 +31,6 @@
   "theme": { "light": "浅色", "dark": "深色", "system": "跟随系统" },
   "onboarding": { "title": "欢迎使用 JARVIS", "start": "开始配置", "step1": "Provider", "step2": "Agent", "step3": "工作区" },
   "chat": { "placeholder": "输入消息…", "sessions": "会话列表", "newSession": "新对话" },
-  "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…" }
+  "agent": { "bindWorkspace": "绑定工作区", "systemPrompt": "系统提示词", "modelId": "模型 ID" },
+  "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

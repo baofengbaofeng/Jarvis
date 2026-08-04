@@ -6,6 +6,7 @@ import { SettingsLayout } from './layouts/SettingsLayout';
 import { ProviderSettingsPage } from './pages/settings/ProviderSettingsPage';
 import { LogPanelPage } from './pages/settings/LogPanelPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { AgentListView } from './pages/AgentListView';
 
 export default function App() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
@@ -15,6 +16,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/agents" element={<AgentListView />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="logs" element={<LogPanelPage />} />

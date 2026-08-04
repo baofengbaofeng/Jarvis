@@ -5,6 +5,7 @@ import { MessageBubble } from '../components/chat/MessageBubble';
 import { ChatInput } from '../components/chat/ChatInput';
 import { MarkdownView } from '../components/chat/MarkdownView';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { AgentSwitcher } from '../components/agents/AgentSwitcher';
 
 export function ChatPage() {
   const { t } = useTranslation('common');
@@ -15,6 +16,7 @@ export function ChatPage() {
   return (
     <div data-testid="chat-page" style={{ display: 'flex', height: '100vh' }}>
       <aside style={{ width: 220, borderRight: '1px solid var(--border)', padding: 8 }}>
+        <AgentSwitcher />
         <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
           <button data-testid="chat-new" title={t('chat.newSession')} onClick={() => void useChatStore.getState().newSession()}>+</button>
           <button data-testid="chat-to-settings" onClick={() => (window.location.href = '/settings')}>{t('settings.title')}</button>

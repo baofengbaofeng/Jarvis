@@ -28,6 +28,7 @@ beforeAll(async () => {
   // "renders chat page when onboarding is done" case regresses.
   (window as unknown as { jarvis: unknown }).jarvis = {
     invoke: async (method: string, ..._args: unknown[]) => {
+      if (method === 'agent.list') return [];
       if (method === 'chat.listSessions') return [];
       if (method === 'chat.createSession') return { id: 's1', title: '', createdAt: '', updatedAt: '' };
       if (method === 'chat.loadMessages') return [];

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ChatMessage, ChatSession } from '@jarvis/protocol';
+import { useAgentStore } from './agent-store';
 
 interface ChatState {
   sessionId: string | null;
@@ -49,10 +50,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   async send(text: string) {
     const { sessionId } = get();
     if (!sessionId || get().streaming) return;
+    const agentId = useAgentStore.getState().current?.id;
+    if (!agentId) return; // 无选中 Agent 时不发起 chat.send
     const userMsg: ChatMessage = { id: crypto.randomUUID(), sessionId, role: 'user', content: text, createdAt: new Date().toISOString() };
     set({ streaming: true, streamingText: '', messages: [...get().messages, userMsg] });
     try {
-      await window.jarvis.invoke('chat.send', { sessionId, text, agentId: 'placeholder-agent' });
+      await window.jarvis.invoke('chat.send', { sessionId, text, agentId });
     } catch (e) { get().finishStream(e instanceof Error ? e.message : String(e)); }
   },
 
