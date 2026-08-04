@@ -55,6 +55,14 @@ export async function createTaskSnapshot(opts: CreateSnapshotOpts): Promise<void
     ]);
     const rels = new Set([...modified.split('\n'), ...untracked.split('\n')].filter(Boolean));
     for (const rel of rels) {
+      // `workspace.bind` creates .jarvis/ WITHOUT adding it to .gitignore, so
+      // our OWN snapshot output (.jarvis/snapshots/{taskId}.patch and
+      // .jarvis/snapshots/{taskId}/<file>) shows up in `git ls-files --others`
+      // and must NOT be re-captured — otherwise each later task re-snapshots
+      // the previous task's snapshot dir and the capture grows unboundedly
+      // (M4 final-review follow-up finding). Mirror the copy-mode filter so the
+      // capture stays bounded to the user's actual files.
+      if (rel.startsWith('.jarvis/') || rel.startsWith('node_modules/')) continue;
       const content = fs.read(`${workspaceRoot}/${rel}`);
       if (content === null) continue; // deleted pre-task: nothing to restore
       files.push(rel);

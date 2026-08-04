@@ -65,6 +65,34 @@ describe('TaskSnapshot', () => {
     }
   });
 
+  it('git snapshots do not self-capture their own .jarvis/snapshots output', async () => {
+    // workspace.bind creates .jarvis/ without a .gitignore, so git ls-files
+    // --others lists our OWN snapshot output. The capture must skip .jarvis/
+    // (mirroring copy mode) so later tasks never re-snapshot earlier ones.
+    const git: SnapshotGit = {
+      exec: async (args) => {
+        if (args[0] === 'diff' && args[1] === '--name-only') return { stdout: '', stderr: '' };
+        if (args[0] === 'ls-files') return { stdout: '.jarvis/JARVIS.md\n.jarvis/snapshots/t4.patch\nsrc/a.ts\n', stderr: '' };
+        return { stdout: 'patch-data', stderr: '' }; // ['diff'] and ['apply','-R',...]
+      }
+    };
+    const fs = new MemFs();
+    fs.write('/ws/.jarvis/JARVIS.md', 'context');
+    fs.write('/ws/.jarvis/snapshots/t4.patch', 'patch-data');
+    fs.write('/ws/src/a.ts', 'v1');
+    await createTaskSnapshot({ taskId: 't4', workspaceRoot: '/ws', git, fs, store, isGitRepo: true });
+    const meta = store.get('t4')!;
+    expect(meta.kind).toBe('git');
+    if (meta.kind === 'git') {
+      // Only the user's file is captured; .jarvis paths are filtered out.
+      expect(meta.files).toEqual(['src/a.ts']);
+      expect(fs.read(`${meta.dir}/src/a.ts`)).toBe('v1');
+      // The .jarvis paths must NOT be written into the snapshot dir.
+      expect(fs.read(`${meta.dir}/.jarvis/JARVIS.md`)).toBeNull();
+      expect(fs.read(`${meta.dir}/.jarvis/snapshots/t4.patch`)).toBeNull();
+    }
+  });
+
   it('copy-on-write snapshots non-git workspaces and skips node_modules (paths only, content in dir)', async () => {
     const git: SnapshotGit = { exec: async () => ({ stdout: '', stderr: '' }) };
     const fs = new MemFs();
