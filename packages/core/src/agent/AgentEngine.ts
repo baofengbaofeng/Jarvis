@@ -26,6 +26,8 @@ export interface EngineRunInput {
   onTool?: (call: ToolCall, result: ToolResult) => void;
   provider: { type: 'openai-compatible' | 'anthropic-compatible'; baseUrl: string };
   modelId: string;
+  // Sandbox root forwarded to tool contexts (tools default to cwd when absent).
+  workspaceRoot?: string;
 }
 
 export class AgentEngine {
@@ -33,7 +35,7 @@ export class AgentEngine {
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
 
   async run(input: EngineRunInput): Promise<TaskResult> {
-    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool } = input;
+    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot } = input;
     let working: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> = [...messages];
     let toolCalls = 0;
     let totalUsage: Usage | null = null;
@@ -75,7 +77,7 @@ export class AgentEngine {
             continue;
           }
         }
-        const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal });
+        const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal, workspaceRoot });
         onTool?.(call, result);
         working.push({ role: 'tool', content: result.output });
       }

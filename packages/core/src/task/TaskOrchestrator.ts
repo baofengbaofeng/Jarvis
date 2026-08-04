@@ -17,6 +17,8 @@ export interface SubmitInput {
   apiKey: string;
   provider: EngineRunInput['provider'];
   modelId: string;
+  // Per-task sandbox root forwarded to tool contexts via EngineRunInput.
+  workspaceRoot?: string;
 }
 
 export interface TaskOrchestratorCallbacks {

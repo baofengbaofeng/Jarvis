@@ -2,8 +2,8 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService } from '@jarvis/core';
-import type { EngineChatFn, Usage } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool } from '@jarvis/core';
+import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
@@ -50,7 +50,16 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     return { text, usage };
   };
   const chatFn = deps.chatFn ?? defaultChatFn;
-  const engine = new AgentEngine({ modelRouter: { chat: chatFn }, toolRegistry: new ToolRegistry(), maxSteps: deps.maxSteps ?? 10 });
+  // The engine is shared across tasks while each agent has its own workspace.
+  // Tools therefore build a Sandbox per-execution from ctx.workspaceRoot (set
+  // per-submit from the agent's workspaceId), not from a fixed registration-time
+  // sandbox. An empty allowCommands list falls back to the sandbox default
+  // whitelist at readwrite level.
+  const toolRegistry = new ToolRegistry();
+  const toolPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: [] };
+  createFileTools(toolRegistry, toolPolicy);
+  createShellTool(toolRegistry, toolPolicy);
+  const engine = new AgentEngine({ modelRouter: { chat: chatFn }, toolRegistry, maxSteps: deps.maxSteps ?? 10 });
   const store = {
     async create(id: string, agentId: string) {
       db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run(id, agentId, 'queued', '{}', new Date().toISOString());
@@ -98,7 +107,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);
       }
-      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id });
+      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot: agent.workspaceId ?? '.' });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),
