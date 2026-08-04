@@ -1,5 +1,3 @@
-import { resolve, relative, isAbsolute } from 'node:path';
-
 export interface Mention { raw: string; query: string; index: number }
 export type MentionKind = 'file' | 'folder' | 'symbol' | 'doc' | 'agent';
 export interface MentionCandidate { id: string; label: string; kind: MentionKind; path?: string }
@@ -10,6 +8,46 @@ export interface MentionResolver {
 }
 
 export class MentionError extends Error {}
+
+// Path operations needed for the workspace-containment check. Callers in the
+// Electron main process inject `node:path` for full platform correctness; the
+// pure default below keeps this module free of `node:*` imports so the renderer
+// can bundle it (DiffPanel value-imports `{ diffLines, groupHunks }` from the
+// `@jarvis/core` barrel, which re-exports this module into the browser graph).
+export interface PathOps {
+  resolve(...paths: string[]): string;
+  relative(from: string, to: string): string;
+  isAbsolute(p: string): boolean;
+}
+
+function normalizeSegments(p: string): string[] {
+  const out: string[] = [];
+  for (const seg of p.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') out.pop();
+    else out.push(seg);
+  }
+  return out;
+}
+
+const posixLike: PathOps = {
+  resolve(...paths) {
+    // Join first, then normalize the combined path, so a `..` in a later part
+    // pops segments contributed by earlier parts (e.g. `/ws` + `../../etc/passwd`).
+    return '/' + normalizeSegments(paths.join('/')).join('/');
+  },
+  relative(from, to) {
+    const a = normalizeSegments(from);
+    const b = normalizeSegments(to);
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    const ups = Array.from({ length: a.length - i }, () => '..');
+    return ups.concat(b.slice(i)).join('/') || '.';
+  },
+  isAbsolute(p) {
+    return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p);
+  },
+};
 
 export function parseMentions(text: string): Mention[] {
   const out: Mention[] = [];
@@ -24,14 +62,19 @@ export function parseMentions(text: string): Mention[] {
   return out;
 }
 
-export function resolveFileMention(query: string, workspaceRoot: string, readImpl: (p: string) => string | null): ContextAttachment {
+export function resolveFileMention(
+  query: string,
+  workspaceRoot: string,
+  readImpl: (p: string) => string | null,
+  pathImpl: PathOps = posixLike,
+): ContextAttachment {
   // Containment check before any fs read: normalize the workspace root and the
   // resolved target, then reject anything that escapes the root (e.g.
   // `@../../etc/passwd`). Same pattern as Sandbox.ts.
-  const root = resolve(workspaceRoot);
-  const resolved = resolve(root, query);
-  const rel = relative(root, resolved);
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new MentionError(`outside workspace: ${query}`);
+  const root = pathImpl.resolve(workspaceRoot);
+  const resolved = pathImpl.resolve(root, query);
+  const rel = pathImpl.relative(root, resolved);
+  if (rel.startsWith('..') || pathImpl.isAbsolute(rel)) throw new MentionError(`outside workspace: ${query}`);
   const content = readImpl(resolved);
   if (content === null) throw new MentionError(`not found: ${query}`);
   return { type: 'file', source: query, content };

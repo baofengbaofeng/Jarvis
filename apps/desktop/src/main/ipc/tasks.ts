@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
 import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type SessionStoreAdapter, type SessionMessage } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
@@ -301,7 +302,7 @@ function attachMentions(userInput: string, wsRoot: string, db: Database.Database
   const refs: ContextAttachment[] = [];
   for (const m of mentions) {
     try {
-      refs.push(resolveFileMention(m.query, wsRoot, readImpl));
+      refs.push(resolveFileMention(m.query, wsRoot, readImpl, { resolve, relative, isAbsolute }));
     } catch (err) {
       appendAudit(db, { agentId, kind: 'mention', detail: { query: m.query, error: err instanceof Error ? err.message : String(err) } });
     }

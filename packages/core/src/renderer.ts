@@ -1,0 +1,22 @@
+// Renderer-safe entry for `@jarvis/core`.
+//
+// The desktop renderer bundles core as source (`main: ./src/index.ts`), and the
+// full barrel re-exports Node-dependent modules (LspClient, runTests, Sandbox,
+// mcp transport, tools, plugins) whose `node:*` imports cannot be bundled for
+// the browser. Renderer components must import from this entry
+// (`@jarvis/core/renderer`) instead of the full barrel. Every module re-exported
+// here is dependency-free (pure logic), so it is safe to bundle.
+//
+// Keep this list in sync with the pure modules under `src/coding/`; anything
+// that imports `node:*` (transitively or not) does NOT belong here.
+export * from './coding/diff';
+export * from './coding/mention';
+export * from './coding/filetree';
+export * from './coding/plan';
+export * from './coding/structured';
+export * from './coding/session';
+export * from './coding/parallel';
+export * from './coding/snapshot';
+export * from './coding/fixloop';
+export * from './coding/index/chunker';
+export * from './coding/index/IndexStore';

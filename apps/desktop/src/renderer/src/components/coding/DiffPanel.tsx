@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { diffLines, groupHunks } from '@jarvis/core';
+// Import from the renderer-safe entry: the full @jarvis/core barrel re-exports
+// Node-dependent modules (LSP, sandbox, mcp) that cannot be browser-bundled.
+import { diffLines, groupHunks } from '@jarvis/core/renderer';
 
 export function DiffPanel({ taskId, path, base, modified }: { taskId: string; path: string; base: string; modified: string }) {
   const { t } = useTranslation('common');
