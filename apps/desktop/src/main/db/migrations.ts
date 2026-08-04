@@ -147,6 +147,20 @@ export const MIGRATIONS: Migration[] = [
         created_at TEXT NOT NULL
       );
     `
+  },
+  {
+    version: 2,
+    sql: `CREATE TABLE IF NOT EXISTS task_snapshots (
+      id TEXT PRIMARY KEY, task_id TEXT NOT NULL, kind TEXT NOT NULL,
+      meta_json TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_snapshots_task ON task_snapshots(task_id);
+    CREATE TABLE IF NOT EXISTS code_chunks (
+      id TEXT PRIMARY KEY, path TEXT NOT NULL, start_line INTEGER NOT NULL,
+      end_line INTEGER NOT NULL, text TEXT NOT NULL, embedding_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_code_chunks_path ON code_chunks(path);`
   }
 ];
 

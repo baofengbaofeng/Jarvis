@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -12,6 +12,7 @@ import type { SettingsStore } from './settings';
 import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
+import { createSnapshotStore, snapshotBeforeTask, createSnapshotGit, createSnapshotFs } from './coding';
 
 // In-memory per-task log buffer. Streaming to the renderer is the sole
 // responsibility of the orchestrator's cb.onLog (IpcEvent.taskLog), so task
@@ -131,6 +132,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     }
   };
 
+  // M4 Task 2 (L26): per-task pre-run snapshot store (task_snapshots table).
+  // snapshotBeforeTask is called right before the engine runs a task so
+  // task.rollback can restore the workspace to its pre-task state.
+  const snapshotStore = createSnapshotStore(db);
+
   const orchestrator = new TaskOrchestrator(engine, store, {
     onStateChange: (id, state) => { getWindow()?.webContents.send(IpcEvent.taskState, { id, state }); },
     onLog: (id, line) => { getWindow()?.webContents.send(IpcEvent.taskLog, { id, line }); },
@@ -183,13 +189,38 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);
       }
+      // M4 Task 2 (L26): snapshot the workspace BEFORE the engine runs, so
+      // task.rollback can restore the exact pre-task state. The snapshot uses
+      // the agent's REAL workspace root (same root the engine will operate in).
+      // Agents without a bound workspace are skipped: snapshotting the app's own
+      // cwd ('?? "."') would copy-on-write-mirror the entire app tree into
+      // .jarvis/snapshots and is meaningless for rollback anyway (rollback
+      // itself throws "no bound workspace" for these agents).
+      if (agent.workspaceId) {
+        await snapshotBeforeTask(agent.workspaceId, id, snapshotStore);
+      }
       orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot: agent.workspaceId ?? '.', policy });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),
     pause: (_e: unknown, id: string) => orchestrator.pause(id),
     resume: (_e: unknown, id: string) => orchestrator.resume(id),
-    retry: (_e: unknown, id: string) => orchestrator.retry(id)
+    retry: (_e: unknown, id: string) => orchestrator.retry(id),
+    // M4 Task 2 (L26): restore the pre-task snapshot and mark the task failed.
+    // The tasks table has no workspace_id column — the workspace lives on the
+    // AGENT (agent.workspaceId) — so resolve task -> agent_id -> agent ->
+    // workspaceId, and restore against that workspace root.
+    async rollback(_e: unknown, id: string) {
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as { agent_id: string } | undefined;
+      if (!task) throw new Error(`task not found: ${id}`);
+      const agent = agentStore.get(task.agent_id); // throws 'agent not found: ...' when missing
+      const wsRoot = agent.workspaceId;
+      if (!wsRoot) throw new Error(`agent ${agent.id} has no bound workspace; cannot roll back task ${id}`);
+      await restoreSnapshot({ taskId: id, workspaceRoot: wsRoot, git: createSnapshotGit(), fs: createSnapshotFs(), store: snapshotStore });
+      db.prepare('UPDATE tasks SET status = ?, result_json = ? WHERE id = ?').run('failed', JSON.stringify({ reason: 'rolled_back' }), id);
+      getWindow()?.webContents.send(IpcEvent.taskState, { id, state: 'failed' });
+      return { ok: true };
+    }
   };
 }
 

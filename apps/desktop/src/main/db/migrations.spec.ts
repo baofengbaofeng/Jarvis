@@ -17,8 +17,12 @@ describe('db migrations', () => {
     applyMigrations(db);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
     const names = tables.map(t => t.name);
-    for (const t of ['settings','providers','models','agents','chat_sessions','chat_messages','mcp_servers','skills','prompt_templates','tasks','audit_logs']) {
+    for (const t of ['settings','providers','models','agents','chat_sessions','chat_messages','mcp_servers','skills','prompt_templates','tasks','audit_logs','task_snapshots','code_chunks']) {
       expect(names).toContain(t);
     }
+  });
+
+  it('reports latestVersion as 2 (schema v2 adds task_snapshots + code_chunks)', () => {
+    expect(latestVersion()).toBe(2);
   });
 });
