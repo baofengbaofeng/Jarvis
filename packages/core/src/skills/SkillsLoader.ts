@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface SkillMeta { name: string; description: string; triggers: string[]; path: string }
@@ -46,6 +46,9 @@ export async function importSkillFromUrl(url: string, destDir: string, deps: { f
   if (!res.ok) throw new Error(`import skill http ${res.status}`);
   const text = await res.text();
   const meta = { ...parseSkillFrontmatter(text), path: join(destDir, 'SKILL.md') };
+  // J2 (M3 final review): ensure destDir exists before writing so a URL import
+  // into a fresh directory doesn't throw ENOENT.
+  mkdirSync(destDir, { recursive: true });
   writeFileSync(meta.path, text, 'utf8');
   return meta;
 }
