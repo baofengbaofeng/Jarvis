@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
 import App from './App';
+import { useSettings } from './stores/settings-store';
 
 beforeAll(async () => {
   // jsdom does not implement window.matchMedia; the real ThemeProvider
@@ -25,9 +26,19 @@ beforeAll(async () => {
 });
 
 describe('App', () => {
-  it('renders app title', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('redirects to onboarding when onboarding is not done', () => {
+    useSettings.setState({ onboardingDone: false });
     render(<App />);
-    expect(screen.getByTestId('app-root')).toBeTruthy();
-    expect(screen.getByText('JARVIS')).toBeTruthy();
+    expect(screen.getByTestId('onboarding')).toBeTruthy();
+  });
+
+  it('renders chat page when onboarding is done', () => {
+    useSettings.setState({ onboardingDone: true });
+    render(<App />);
+    expect(screen.getByTestId('chat-page')).toBeTruthy();
   });
 });

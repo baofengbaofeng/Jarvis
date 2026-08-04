@@ -1,14 +1,26 @@
-import { useTranslation } from 'react-i18next';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './components/theme/ThemeProvider';
+import { useSettings } from './stores/settings-store';
+import { ChatPage } from './pages/ChatPage';
+import { SettingsLayout } from './layouts/SettingsLayout';
+import { ProviderSettingsPage } from './pages/settings/ProviderSettingsPage';
+import { LogPanelPage } from './pages/settings/LogPanelPage';
+import { OnboardingPage } from './pages/OnboardingPage';
 
 export default function App() {
-  const { t } = useTranslation('common');
+  const onboardingDone = useSettings((s) => s.onboardingDone);
   return (
     <ThemeProvider>
-      <div data-testid="app-root">
-        <h1>{t('app.title')}</h1>
-        <p>{t('app.subtitle')}</p>
-      </div>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/settings" element={<SettingsLayout />}>
+            <Route path="providers" element={<ProviderSettingsPage />} />
+            <Route path="logs" element={<LogPanelPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     </ThemeProvider>
   );
 }
