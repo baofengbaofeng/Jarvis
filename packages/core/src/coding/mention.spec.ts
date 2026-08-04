@@ -18,6 +18,16 @@ describe('mention', () => {
     expect(() => resolveFileMention('nope.ts', '/ws', () => null)).toThrow('not found');
   });
 
+  it('rejects path traversal outside the workspace', () => {
+    let readCalled = false;
+    expect(() => resolveFileMention('../../etc/passwd', '/ws', () => { readCalled = true; return 'hax'; })).toThrow('outside workspace');
+    expect(readCalled).toBe(false);
+  });
+
+  it('does not parse mid-word @ as a mention', () => {
+    expect(parseMentions('email foo@bar.com or a@b')).toEqual([]);
+  });
+
   it('builds an injection block with sources', () => {
     const block = buildMentionBlock([{ type: 'file', source: 'src/a.ts', content: 'export const x = 1;' }]);
     expect(block).toContain('<referenced>');

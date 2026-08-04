@@ -1,4 +1,6 @@
-export interface Mention { raw: string; query: string }
+import { resolve, relative, isAbsolute } from 'node:path';
+
+export interface Mention { raw: string; query: string; index: number }
 export type MentionKind = 'file' | 'folder' | 'symbol' | 'doc' | 'agent';
 export interface MentionCandidate { id: string; label: string; kind: MentionKind; path?: string }
 export interface ContextAttachment { type: MentionKind | 'text'; source: string; content: string }
@@ -13,13 +15,24 @@ export function parseMentions(text: string): Mention[] {
   const out: Mention[] = [];
   const re = /(?:^|\s)@([^\s@#]+)/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) out.push({ raw: m[0].trim(), query: m[1] });
+  while ((m = re.exec(text))) {
+    const raw = m[0].trim();
+    // index is the position of the '@' in the original text, so callers can
+    // strip exactly the parsed raw token range (not a fresh unanchored match).
+    out.push({ raw, query: m[1], index: m.index + (m[0].length - raw.length) });
+  }
   return out;
 }
 
 export function resolveFileMention(query: string, workspaceRoot: string, readImpl: (p: string) => string | null): ContextAttachment {
-  const path = `${workspaceRoot}/${query}`;
-  const content = readImpl(path);
+  // Containment check before any fs read: normalize the workspace root and the
+  // resolved target, then reject anything that escapes the root (e.g.
+  // `@../../etc/passwd`). Same pattern as Sandbox.ts.
+  const root = resolve(workspaceRoot);
+  const resolved = resolve(root, query);
+  const rel = relative(root, resolved);
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new MentionError(`outside workspace: ${query}`);
+  const content = readImpl(resolved);
   if (content === null) throw new MentionError(`not found: ${query}`);
   return { type: 'file', source: query, content };
 }

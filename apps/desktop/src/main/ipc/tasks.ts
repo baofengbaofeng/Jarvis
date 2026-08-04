@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { IpcEvent } from '@jarvis/protocol';
 import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
-import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
+import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
@@ -160,7 +160,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const id = randomUUID();
       const agent = agentStore.get(agentId);
       const ctx = workspace.loadContext(agentId);
-      const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.');
+      const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.', db, currentAgentId);
       const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
       if (!modelRow) throw new Error('agent has no valid model binding');
       const apiKey = await secrets.get(modelRow.api_key_ref);
@@ -232,20 +232,37 @@ function readImpl(p: string): string | null {
   try { return readFileSync(p, 'utf8'); } catch { return null; }
 }
 
-// Extracts @file mentions from the user prompt, resolves each to a content
-// attachment, and strips the mention tokens from the prompt. The assembled user
-// message becomes `${input}${block}` so referenced file contents are injected
-// verbatim into the model context (E6).
-function attachMentions(userInput: string, wsRoot: string): { input: string; block: string } {
-  const refs = parseMentions(userInput).map(m => resolveFileMention(m.query, wsRoot, readImpl));
-  return { input: userInput.replace(/@([^\s@#]+)/g, '').replace(/\s+/g, ' ').trim(), block: buildMentionBlock(refs) };
+// E6 (review fix): strip ONLY the parsed raw token ranges (via the index
+// recorded by parseMentions), never a fresh unanchored regex — so mid-word `@`
+// (e.g. foo@bar.com) survives untouched. No global whitespace collapse, so
+// indented/pasted code is preserved. Unresolved or out-of-workspace mentions
+// are SKIPPED and audited, never fatal: a bad mention must not kill task
+// creation. The assembled user message becomes `${input}${block}` so resolved
+// file contents are injected verbatim into the model context.
+function attachMentions(userInput: string, wsRoot: string, db: Database.Database, agentId: string | null): { input: string; block: string } {
+  const mentions = parseMentions(userInput);
+  const refs: ContextAttachment[] = [];
+  for (const m of mentions) {
+    try {
+      refs.push(resolveFileMention(m.query, wsRoot, readImpl));
+    } catch (err) {
+      appendAudit(db, { agentId, kind: 'mention', detail: { query: m.query, error: err instanceof Error ? err.message : String(err) } });
+    }
+  }
+  // Remove parsed token ranges in reverse order so earlier indices stay valid.
+  let input = userInput;
+  for (let i = mentions.length - 1; i >= 0; i--) {
+    const m = mentions[i];
+    input = input.slice(0, m.index) + input.slice(m.index + m.raw.length);
+  }
+  return { input, block: buildMentionBlock(refs) };
 }
 
-function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string, workspaceRoot: string): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
+function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string, workspaceRoot: string, db: Database.Database, agentId: string | null): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
   const skills = scanSkillsDir(`${workspaceRoot}/.jarvis/skills`);
   const injection = buildSkillInjection(skills);
   const system = `${agent.systemPrompt}${injection}`;
-  const { input, block } = attachMentions(prompt, workspaceRoot);
+  const { input, block } = attachMentions(prompt, workspaceRoot, db, agentId);
   return buildContextMessages(ctx, system, [{ role: 'user', content: `${input}${block}` }]);
 }
 

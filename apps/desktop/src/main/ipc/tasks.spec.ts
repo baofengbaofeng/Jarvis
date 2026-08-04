@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -134,6 +134,41 @@ describe('task handlers', () => {
       });
     } finally {
       rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  it('strips parsed @mentions, injects resolved context, skips unresolved with an audit warning (E6)', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-mention-'));
+    try {
+      writeFileSync(join(ws, 'notes.txt'), 'hello from notes');
+      let userContent = '';
+      const fn: EngineChatFn = async (req, opts) => {
+        userContent = req.messages.find(m => m.role === 'user')?.content ?? '';
+        opts.onChunk?.({ kind: 'delta', delta: 'ok' });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: 'ok', usage: null };
+      };
+      const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+      const agentId = seedAgent();
+      db.prepare('UPDATE agents SET workspace_id = ? WHERE id = ?').run(ws, agentId);
+      const { id } = await tasks.create(fakeEvent, { agentId, prompt: 'read @notes.txt and @nope.ts plus foo@bar.com please' });
+      // Resolved mention context is injected into the model message.
+      await vi.waitFor(() => expect(userContent).toContain('hello from notes'));
+      expect(userContent).toContain('[file] notes.txt');
+      expect(userContent).toContain('<referenced>');
+      // Mid-word @ survives untouched; the parsed-but-unresolved mention is
+      // stripped and skipped (never fatal).
+      expect(userContent).toContain('foo@bar.com');
+      expect(userContent).not.toContain('@nope.ts');
+      // The skip is audited under kind 'mention'.
+      const audit = db.prepare('SELECT detail_json FROM audit_logs WHERE kind = ?').all('mention') as Array<{ detail_json: string }>;
+      expect(audit.map(a => (JSON.parse(a.detail_json) as { query: string }).query)).toContain('nope.ts');
+      await vi.waitFor(async () => {
+        const r = db.prepare('SELECT status FROM tasks WHERE id = ?').get(id) as { status: string };
+        expect(r.status).toBe('completed');
+      });
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
     }
   });
 });
