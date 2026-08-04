@@ -12,7 +12,16 @@
   "settings": {
     "title": "Settings",
     "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills" },
-    "mcp": { "command": "Command" },
+    "mcp": {
+      "title": "MCP Servers",
+      "name": "Name",
+      "command": "Command",
+      "args": "Args",
+      "agents": "Bound Agents",
+      "test": "Test",
+      "testOk": "{{count}} tools available",
+      "testFail": "Test failed"
+    },
     "skills": { "import": "Import" },
     "provider": {
       "title": "Provider Management",

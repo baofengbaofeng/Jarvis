@@ -5,7 +5,7 @@ import { exportSessionMarkdown } from '@jarvis/core';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
-import { createMcpStore, type McpServerInput } from './mcp';
+import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceService } from './workspace';
 import { registerChatHandlers } from './chat';
@@ -39,6 +39,7 @@ export class IpcRouter {
     this.register('mcp.list', () => mcpStore.list());
     this.register('mcp.create', (_e, input) => mcpStore.create(input as McpServerInput));
     this.register('mcp.delete', (_e, id) => mcpStore.remove(id as string));
+    this.register('mcp.test', (_e, input) => testMcpServer(input as McpServerInput));
     this.register('skills.list', () => skillsStore.list());
     this.register('skills.import', (_e, dir) => skillsStore.importFromDir(dir as string));
     this.register('skills.delete', (_e, id) => skillsStore.remove(id as string));

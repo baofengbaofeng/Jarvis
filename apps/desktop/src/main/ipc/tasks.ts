@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, Sandbox, createMcpClient, registerMcpTools, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
@@ -60,6 +60,12 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   const toolPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: [] };
   createFileTools(toolRegistry, toolPolicy);
   createShellTool(toolRegistry, toolPolicy);
+  // M3 Task 7 (E4): git tools. The brief's createGitTools captures a fixed
+  // Sandbox root at registration, while the engine forwards a per-task
+  // workspaceRoot — so the git sandbox is rooted at the process cwd (the
+  // default '.' workspace). Workspaces bound outside the app directory won't
+  // pass the assert; a per-task git sandbox is deferred (see task-7-report).
+  createGitTools(toolRegistry, new Sandbox(process.cwd(), toolPolicy));
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
   const engine = new AgentEngine({
@@ -67,10 +73,28 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     toolRegistry,
     maxSteps: deps.maxSteps ?? 10,
     approvalGate: async (req) => {
-      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways: ['read_file', 'list_dir'], sensitiveCommands: [] });
-      if (decision === 'allow') return true;
+      // G8: previously-approved mcp:{server}:{tool} calls are auto-allowed by
+      // folding the grants rows into allowAlways (granted=1 rows).
+      const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1').all() as Array<{ server_id: string; tool_name: string }>;
+      const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
+      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] });
+      // M3 Task 7 gap fix: git_commit is a mutating git tool that the
+      // ApprovalGate's shell-command regexes can never see (it has no
+      // args.command), so force it through interactive approval.
+      if (decision === 'allow' && req.toolName !== 'git_commit') return true;
       const ok = await approval.request(req);
       appendAudit(db, { agentId: null, kind: 'approval', detail: { toolName: req.toolName, ok } });
+      // G8/J7: a denied-then-approved mcp call writes a grant so the next call
+      // hits allowAlways and skips approval. agent_id is left '' (unbound): the
+      // schema is NOT NULL and ApprovalRequest carries no agent id today, so
+      // grants are server-wide rather than per-agent (documented).
+      if (ok && req.toolName.startsWith('mcp:')) {
+        const seg = req.toolName.slice('mcp:'.length).split(':');
+        if (seg.length >= 2) {
+          db.prepare('INSERT INTO mcp_grants (id, agent_id, server_id, tool_name, granted, created_at) VALUES (?,?,?,?,?,?)')
+            .run(randomUUID(), '', seg[0], seg.slice(1).join(':'), 1, new Date().toISOString());
+        }
+      }
       return ok;
     }
   });
@@ -118,6 +142,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const agentEnv = agentRow ? (JSON.parse(agentRow.env_vars_json ?? '{}') as Record<string, string>) : {};
       const env = mergeEnv({}, {}, agentEnv, {});
       await store.create(id, agentId);
+      // G6: register the agent's bound MCP servers' tools into the shared
+      // engine registry (filtered by config_json.agentIds). Real processes are
+      // spawned lazily by createMcpClient on first use; failures are logged and
+      // skipped so a bad server never blocks task creation.
+      await registerAgentMcpTools(db, toolRegistry, agentId);
       if (sessionId) {
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);
@@ -137,6 +166,25 @@ function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, ag
   const injection = buildSkillInjection(skills);
   const system = `${agent.systemPrompt}${injection}`;
   return buildContextMessages(ctx, system, [{ role: 'user', content: prompt }]);
+}
+
+// G6: spawn each MCP server bound to the agent (config_json.agentIds) and
+// register its tools into the engine registry under mcp:{server}:{tool}.
+// stdio is the only transport createMcpClient supports today; sse/http are
+// deferred. Clients are kept alive for the app lifetime (documented).
+async function registerAgentMcpTools(db: Database.Database, toolRegistry: ToolRegistry, agentId: string): Promise<void> {
+  const rows = db.prepare('SELECT id, name, transport, config_json FROM mcp_servers').all() as Array<{ id: string; name: string; transport: string; config_json: string }>;
+  for (const s of rows) {
+    const cfg = JSON.parse(s.config_json ?? '{}') as { command?: string; args?: string[]; agentIds?: string[] };
+    if (s.transport !== 'stdio' || !cfg.command || !cfg.agentIds?.includes(agentId)) continue;
+    try {
+      const client = createMcpClient(cfg.command, cfg.args ?? [], s.name);
+      await client.initialize();
+      await registerMcpTools(toolRegistry, client, s.name);
+    } catch (e) {
+      console.error(`mcp: failed to register server ${s.name}`, e);
+    }
+  }
 }
 
 // J5 base: audit trail for approval decisions (and other lifecycle events).

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import type { BrowserWindow } from 'electron';
 import type { EngineChatFn } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
 import { registerTaskHandlers, type TaskHandlerDeps } from './tasks';
@@ -78,5 +79,98 @@ describe('task handlers', () => {
     await expect(tasks.create(fakeEvent, { agentId: a.id, prompt: 'hi', sessionId: session.id }))
       .rejects.toThrow('agent has no valid model binding');
     expect(await chatService.loadMessages(session.id)).toHaveLength(0);
+  });
+});
+
+describe('approval gate wiring (M3 Task 7)', () => {
+  let db: Database.Database;
+  const secrets = { set: async () => {}, get: async () => 'sk-test', delete: async () => {} } as unknown as SecureStorage;
+
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  function seedAgent(): string {
+    const now = new Date().toISOString();
+    const providerId = randomUUID();
+    const modelId = randomUUID();
+    const agentId = randomUUID();
+    db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+      .run(providerId, 'P', 'openai-compatible', 'https://x.com', `provider:${providerId}:key`, now, now);
+    db.prepare('INSERT INTO models (id, provider_id, model_id, name, created_at) VALUES (?,?,?,?,?)')
+      .run(modelId, providerId, 'm-1', 'M1', now);
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(agentId, 'A', `a-${agentId}`, '', 'sys', modelId, null, 128000, 0, JSON.stringify({}), JSON.stringify([]), now, now);
+    return agentId;
+  }
+
+  function captureApprovals() {
+    const approvals: Array<{ id: string; toolName: string }> = [];
+    const getWindow = () => ({ webContents: { send: (ch: string, p: unknown) => { if (ch === 'approval:request') approvals.push(p as { id: string; toolName: string }); } } }) as unknown as BrowserWindow;
+    return { approvals, getWindow };
+  }
+
+  it('routes git_commit through interactive approval', async () => {
+    const { approvals, getWindow } = captureApprovals();
+    let step = 0;
+    const fn: EngineChatFn = async (_req, opts) => {
+      step++;
+      if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'git_commit', arguments: { message: 'x' } }] });
+      else opts.onChunk?.({ kind: 'done' });
+      return { text: '', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const agentId = seedAgent();
+    await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    // git_commit is not in allowAlways, so it must be flagged for approval.
+    await vi.waitFor(() => expect(approvals.length).toBe(1));
+    expect(approvals[0].toolName).toBe('git_commit');
+    // Deny: the engine records a denied tool turn; the task still completes.
+    tasks.approvalCenter.resolve(approvals[0].id, false);
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
+      expect(row[0].status).toBe('completed');
+    });
+  });
+
+  it('writes an mcp_grants row when an mcp tool call is approved', async () => {
+    const { approvals, getWindow } = captureApprovals();
+    const fn: EngineChatFn = async (_req, opts) => {
+      opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'mcp:fs:read', arguments: { path: '/' } }] });
+      return { text: '', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const agentId = seedAgent();
+    await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    await vi.waitFor(() => expect(approvals.length).toBe(1));
+    expect(approvals[0].toolName).toBe('mcp:fs:read');
+    tasks.approvalCenter.resolve(approvals[0].id, true);
+    // The grant is written inside the approval gate even though the tool is not
+    // registered in this test (the task then fails on execution — irrelevant).
+    await vi.waitFor(() => {
+      const g = db.prepare('SELECT server_id, tool_name, granted FROM mcp_grants').all() as Array<{ server_id: string; tool_name: string; granted: number }>;
+      expect(g).toHaveLength(1);
+      expect(g[0]).toEqual({ server_id: 'fs', tool_name: 'read', granted: 1 });
+    });
+  });
+
+  it('auto-allows a previously granted mcp tool without a new approval', async () => {
+    // Seed a grant so the next mcp:fs:read call hits allowAlways.
+    db.prepare('INSERT INTO mcp_grants (id, agent_id, server_id, tool_name, granted, created_at) VALUES (?,?,?,?,?,?)')
+      .run(randomUUID(), '', 'fs', 'read', 1, new Date().toISOString());
+    const { approvals, getWindow } = captureApprovals();
+    const fn: EngineChatFn = async (_req, opts) => {
+      opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'mcp:fs:read', arguments: { path: '/' } }] });
+      return { text: '', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const agentId = seedAgent();
+    await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    // The tool is unregistered in this test, so execution throws and the task
+    // fails — but it must fail WITHOUT any approval:request (the grant short-
+    // circuits the gate straight to execution).
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
+      expect(row[0].status).toBe('failed');
+    });
+    expect(approvals.length).toBe(0);
   });
 });
