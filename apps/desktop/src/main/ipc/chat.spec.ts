@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { IpcEvent } from '@jarvis/protocol';
+import { ModelRouter } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
 import { registerChatHandlers } from './chat';
 import type { SecureStorage } from '../secrets/SecureStorage';
+import type { BrowserWindow } from 'electron';
 
 const fakeEvent = {} as Electron.IpcMainInvokeEvent;
 
@@ -64,5 +67,52 @@ describe('chat handlers', () => {
 
     await expect(chat.send(fakeEvent, { sessionId: s.id, text: 'hi', agentId }))
       .rejects.toThrow('agent has no valid model/provider binding');
+  });
+
+  it('streams a success path: user persisted first, assistant text accumulated, chatDelta/chatDone forwarded', async () => {
+    const send = vi.fn();
+    const getWindow = () => ({ webContents: { send } }) as unknown as BrowserWindow;
+    const fakeRouter = {
+      chat: async (_req: unknown, opts: { onChunk?: (c: { kind: string; delta?: string }) => void }) => {
+        opts.onChunk?.({ kind: 'delta', delta: 'Hello' });
+        opts.onChunk?.({ kind: 'delta', delta: ' world' });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: 'Hello world', usage: null };
+      }
+    } as unknown as ModelRouter;
+
+    const chat = registerChatHandlers(db, secrets, getWindow, { router: fakeRouter });
+    const s = await chat.createSession('Test');
+
+    const now = new Date().toISOString();
+    const providerId = randomUUID();
+    const modelId = randomUUID();
+    const agentId = randomUUID();
+    db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+      .run(providerId, 'P', 'openai-compatible', 'https://x.com', `provider:${providerId}:key`, now, now);
+    db.prepare('INSERT INTO models (id, provider_id, model_id, name, created_at) VALUES (?,?,?,?,?)')
+      .run(modelId, providerId, 'm-1', 'M1', now);
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      .run(agentId, 'A', `a-${agentId}`, '', 'sys', modelId, null, 128000, 0, now, now);
+
+    await chat.send(fakeEvent, { sessionId: s.id, text: 'hi', agentId });
+
+    // User message persisted before streaming; assistant message (accumulated full text) after.
+    const loaded = await chat.loadMessages(s.id);
+    expect(loaded).toHaveLength(2);
+    expect(loaded[0].role).toBe('user');
+    expect(loaded[0].content).toBe('hi');
+    expect(loaded[1].role).toBe('assistant');
+    expect(loaded[1].content).toBe('Hello world');
+
+    // chatDelta events forwarded for each delta chunk.
+    const deltaChunks = send.mock.calls
+      .filter(c => c[0] === IpcEvent.chatDelta && (c[1] as { chunk?: { kind?: string; delta?: string } }).chunk?.kind === 'delta')
+      .map(c => (c[1] as { chunk: { delta: string } }).chunk.delta);
+    expect(deltaChunks).toEqual(['Hello', ' world']);
+
+    const doneCalls = send.mock.calls.filter(c => c[0] === IpcEvent.chatDone);
+    expect(doneCalls).toHaveLength(1);
+    expect(doneCalls[0][1]).toEqual({ sessionId: s.id });
   });
 });

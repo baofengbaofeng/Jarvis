@@ -28,12 +28,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   async newSession() {
     const s = (await window.jarvis.invoke('chat.createSession')) as { id: string };
-    set({ sessionId: s.id, messages: [], streamingText: '' });
+    set({ sessionId: s.id, messages: [], streaming: false, streamingText: '' });
   },
 
   async loadSession(sessionId: string) {
     const msgs = (await window.jarvis.invoke('chat.loadMessages', sessionId)) as ChatMessage[];
-    set({ sessionId, messages: msgs, streamingText: '' });
+    set({ sessionId, messages: msgs, streaming: false, streamingText: '' });
   },
 
   async send(text: string) {
@@ -58,8 +58,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
 if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
   window.jarvis.onDidReceive('chat:delta', (payload) => {
-    const { chunk } = payload as { sessionId: string; chunk: { kind: string; delta?: string } };
+    const { sessionId, chunk } = payload as { sessionId: string; chunk: { kind: string; delta?: string } };
+    if (sessionId !== useChatStore.getState().sessionId) return;
     if (chunk.kind === 'delta') useChatStore.getState().appendDelta(chunk.delta ?? '');
   });
-  window.jarvis.onDidReceive('chat:done', (p) => useChatStore.getState().finishStream((p as { error?: string }).error));
+  window.jarvis.onDidReceive('chat:done', (p) => {
+    const { sessionId, error } = p as { sessionId: string; error?: string };
+    if (sessionId !== useChatStore.getState().sessionId) return;
+    useChatStore.getState().finishStream(error);
+  });
 }

@@ -7,7 +7,7 @@ import { ModelRouter } from '@jarvis/core';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig, ChatRole } from '@jarvis/protocol';
 
-export function registerChatHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null) {
+export function registerChatHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, deps: { router?: ModelRouter } = {}) {
   const now = () => new Date().toISOString();
 
   const dbAdapter = {
@@ -43,7 +43,7 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
   };
 
   const chatService = createChatService(dbAdapter);
-  const router = new ModelRouter();
+  const router = deps.router ?? new ModelRouter();
 
   return {
     async listSessions() { return chatService.listSessions(); },
@@ -75,7 +75,7 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
           apiKeyResolver: async (ref) => secrets.get(ref),
           onChunk: (c) => { if (c.kind === 'delta') full += c.delta; sendChunk(c); }
         });
-        await chatService.appendMessage(sessionId, 'assistant', full);
+        if (full) await chatService.appendMessage(sessionId, 'assistant', full);
         getWindow()?.webContents.send(IpcEvent.chatDone, { sessionId });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
