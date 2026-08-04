@@ -4,6 +4,7 @@ import { IpcChannel } from '@jarvis/protocol';
 import { createSettingsStore } from './settings';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
+import { SecureStorage } from '../secrets/SecureStorage';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
@@ -17,8 +18,12 @@ export class IpcRouter {
 
   registerAll(daemon: DaemonSupervisor): void {
     const settings = createSettingsStore(this.db);
+    const secrets = new SecureStorage();
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
+    this.register(IpcChannel.secretsSet, async (_e, key, value) => { await secrets.set(key as string, value as string); return { ok: true }; });
+    this.register(IpcChannel.secretsGet, async (_e, key) => secrets.get(key as string));
+    this.register(IpcChannel.secretsDelete, async (_e, key) => { await secrets.delete(key as string); return { ok: true }; });
     this.register(IpcChannel.daemonStatus, () => daemon.status());
     this.register(IpcChannel.daemonRestart, () => { daemon.restart(); return { ok: true }; });
     const collectEnv = () => collectEnvInfo({ daemonRunning: async () => (await daemon.status()).running });
