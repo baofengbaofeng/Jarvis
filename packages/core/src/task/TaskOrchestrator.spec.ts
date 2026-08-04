@@ -44,6 +44,65 @@ describe('TaskOrchestrator', () => {
     expect(finished).toBe(5);
   });
 
+  it('persists pause to the store and still completes a paused task that finishes', async () => {
+    const reg = new ToolRegistry();
+    let releaseChat!: () => void;
+    const chatGate = new Promise<void>((res) => { releaseChat = res; });
+    const engine = new AgentEngine({ modelRouter: { chat: async (_r, o) => { await chatGate; o.onChunk?.({ kind: 'done' }); return { text: 'ok', usage: null }; } }, toolRegistry: reg });
+    const { store, states } = makeStore();
+    let doneRes!: () => void;
+    const done = new Promise<void>((res) => { doneRes = res; });
+    const orb = new TaskOrchestrator(engine, store, { onDone: () => doneRes() }, 1);
+    orb.submit({ id: 't1', agent, messages: [{ role: 'user', content: 'x' }], cwd: '/', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    await new Promise(r => setTimeout(r, 0)); // let the engine enter the running state
+    await orb.pause('t1');
+    expect(states).toContain('paused');
+    releaseChat();
+    await done;
+    expect(states).toContain('completed');
+  });
+
+  it('cancel applies the store write to a paused task', async () => {
+    const reg = new ToolRegistry();
+    // A never-resolving chat keeps the task in 'running' so pause is observed.
+    const never = new Promise<void>(() => {});
+    const engine = new AgentEngine({ modelRouter: { chat: async () => { await never; return { text: '', usage: null }; } }, toolRegistry: reg });
+    const { store, states } = makeStore();
+    const orb = new TaskOrchestrator(engine, store, {}, 1);
+    orb.submit({ id: 't1', agent, messages: [], cwd: '/', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    await new Promise(r => setTimeout(r, 0));
+    await orb.pause('t1');
+    await orb.cancel('t1');
+    expect(states).toContain('cancelled');
+  });
+
+  it('does not clobber a cancel that lands during the queued->running store write', async () => {
+    const reg = new ToolRegistry();
+    let resolveStart!: () => void;
+    const startGate = new Promise<void>((res) => { resolveStart = res; });
+    const states: string[] = [];
+    const store = {
+      async create() {},
+      async updateState(_id: string, state: string) { if (state === 'running') await startGate; states.push(state); },
+      async appendLog() {}
+    } as TaskStoreAdapter;
+    let chatCalls = 0;
+    let cancelled = 0;
+    const engine = new AgentEngine({ modelRouter: { chat: async () => { chatCalls++; return { text: '', usage: null }; } }, toolRegistry: reg });
+    const orb = new TaskOrchestrator(engine, store, {
+      onStateChange: (_id, st) => { if (st === 'cancelled') cancelled++; }
+    }, 1);
+    orb.submit({ id: 't1', agent, messages: [], cwd: '/', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    await new Promise(r => setTimeout(r, 0)); // runOne is awaiting the held 'running' store write
+    await orb.cancel('t1');
+    resolveStart();
+    await new Promise(r => setTimeout(r, 10));
+    expect(cancelled).toBe(1);
+    expect(chatCalls).toBe(0); // the aborted engine never started
+    expect(states).not.toContain('failed');
+    expect(states).not.toContain('completed');
+  });
+
   it('retries a failed task and runs it to completion', async () => {
     let calls = 0;
     const reg = new ToolRegistry();

@@ -55,14 +55,18 @@ export class TaskOrchestrator {
     if (!controller) return;
     controller.abort();
     const st = this.states.get(id);
-    if (st === 'running') await this.store.updateState(id, transition(st, 'cancel'));
+    if (st === 'running' || st === 'paused') await this.store.updateState(id, transition(st, 'cancel'));
     this.states.set(id, 'cancelled');
     this.cb.onStateChange?.(id, 'cancelled');
   }
 
-  pause(id: string): void {
+  async pause(id: string): Promise<void> {
     const st = this.states.get(id);
-    if (st === 'running') { this.states.set(id, 'paused'); this.cb.onStateChange?.(id, 'paused'); }
+    if (st === 'running') {
+      this.states.set(id, 'paused');
+      await this.store.updateState(id, 'paused');
+      this.cb.onStateChange?.(id, 'paused');
+    }
   }
 
   resume(id: string): void {
@@ -102,29 +106,40 @@ export class TaskOrchestrator {
     const { input, controller } = item;
     const agentRunning = (this.active.get(input.agent.id) ?? 0) + 1;
     this.active.set(input.agent.id, agentRunning);
-    await this.store.updateState(input.id, transition('queued', 'start'));
-    this.states.set(input.id, 'running');
-    this.cb.onStateChange?.(input.id, 'running');
-
     try {
-      const result = await this.engine.run({ ...input, signal: controller.signal, onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); } });
-      if (this.states.get(input.id) === 'running') {
-        await this.store.updateState(input.id, transition('running', 'complete'));
-        this.states.set(input.id, 'completed');
-        this.cb.onStateChange?.(input.id, 'completed');
-        this.cb.onDone?.(input.id, true, result.text);
-      }
-    } catch (e) {
-      // A prior cancel() sets the state to 'cancelled'; never overwrite that
-      // with a fail/complete transition (e.g. the AbortError from the signal).
-      if (this.states.get(input.id) === 'running') {
-        const msg = e instanceof Error ? e.message : String(e);
-        await this.store.updateState(input.id, transition('running', 'fail'));
-        this.states.set(input.id, 'failed');
-        this.cb.onStateChange?.(input.id, 'failed');
-        this.cb.onDone?.(input.id, false, msg);
+      await this.store.updateState(input.id, transition('queued', 'start'));
+      // A cancel() that lands while the store write above was in flight set the
+      // in-memory state to 'cancelled'. Bail out instead of overwriting it with
+      // 'running' (which would then let the aborted engine run and fail).
+      if (this.states.get(input.id) !== 'queued') return;
+      this.states.set(input.id, 'running');
+      this.cb.onStateChange?.(input.id, 'running');
+
+      try {
+        const result = await this.engine.run({ ...input, signal: controller.signal, onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); } });
+        // A paused task that nevertheless finishes must still transition to a
+        // terminal state and fire onDone, or it would hang forever.
+        if (this.states.get(input.id) === 'running' || this.states.get(input.id) === 'paused') {
+          const st = this.states.get(input.id) as 'running' | 'paused';
+          await this.store.updateState(input.id, transition(st, 'complete'));
+          this.states.set(input.id, 'completed');
+          this.cb.onStateChange?.(input.id, 'completed');
+          this.cb.onDone?.(input.id, true, result.text);
+        }
+      } catch (e) {
+        // A prior cancel() sets the state to 'cancelled'; never overwrite that
+        // with a fail/complete transition (e.g. the AbortError from the signal).
+        if (this.states.get(input.id) === 'running' || this.states.get(input.id) === 'paused') {
+          const st = this.states.get(input.id) as 'running' | 'paused';
+          const msg = e instanceof Error ? e.message : String(e);
+          await this.store.updateState(input.id, transition(st, 'fail'));
+          this.states.set(input.id, 'failed');
+          this.cb.onStateChange?.(input.id, 'failed');
+          this.cb.onDone?.(input.id, false, msg);
+        }
       }
     } finally {
+      // Decrements even when we bailed out early on a queued-cancel race.
       this.active.set(input.agent.id, Math.max(0, (this.active.get(input.agent.id) ?? 0) - 1));
       void this.pump();
     }

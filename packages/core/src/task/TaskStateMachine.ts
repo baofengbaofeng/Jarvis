@@ -7,7 +7,7 @@ const TABLE: Record<TaskState, Partial<Record<TaskEvent, TaskState>>> = {
   completed: { retry: 'queued' },
   failed: { retry: 'queued', cancel: 'cancelled' },
   cancelled: { retry: 'queued' },
-  paused: { resume: 'running', cancel: 'cancelled' }
+  paused: { resume: 'running', cancel: 'cancelled', complete: 'completed', fail: 'failed' }
 };
 
 export function transition(from: TaskState, event: TaskEvent): TaskState {

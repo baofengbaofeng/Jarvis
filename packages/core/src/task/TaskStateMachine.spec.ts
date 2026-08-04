@@ -9,6 +9,11 @@ describe('TaskStateMachine', () => {
   it('allows retry from failed', () => {
     expect(transition('failed', 'retry')).toBe('queued');
   });
+  it('allows a paused task to cancel, complete, or fail', () => {
+    expect(transition('paused', 'cancel')).toBe('cancelled');
+    expect(transition('paused', 'complete')).toBe('completed');
+    expect(transition('paused', 'fail')).toBe('failed');
+  });
   it('rejects illegal transition', () => {
     expect(() => transition('completed', 'start')).toThrow('invalid transition');
   });
