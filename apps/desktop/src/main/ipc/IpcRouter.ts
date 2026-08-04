@@ -8,7 +8,7 @@ import { createProviderStore, type ProviderInput, type ModelInput } from './prov
 import { createAgentStore, type AgentInput } from './agents';
 import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
-import { createWorkspaceService } from './workspace';
+import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
@@ -50,6 +50,13 @@ export class IpcRouter {
     this.register('workspace.bind', (_e, agentId, path) => { workspace.bind(agentId as string, path as string); return { ok: true }; });
     this.register('workspace.listBound', () => workspace.listBound());
     this.register('workspace.loadContext', (_e, agentId) => workspace.loadContext(agentId as string));
+    // M4 Task 7 (E11/K3): code-panel tree/read IPC. Single-active assumption: the
+    // code panel targets ONE workspace — the first agent that has one bound. This
+    // mirrors the renderer agent-store, where `current` falls back to agents[0].
+    const getWorkspace = (): string | null => agents.list().find(a => a.workspaceId)?.workspaceId ?? null;
+    const workspaceIpc = createWorkspaceIpc(getWorkspace);
+    this.register('workspace.tree', () => workspaceIpc.tree());
+    this.register('workspace.read', (_e, rel) => workspaceIpc.read(rel as string));
     // M4 Task 6 (E1/L27): code index IPC. The embeddingFn defaults to the
     // deterministic local hashEmbedding; production Provider embedding (M1
     // ModelRouter extension) is a later swap — construct IndexStore with a

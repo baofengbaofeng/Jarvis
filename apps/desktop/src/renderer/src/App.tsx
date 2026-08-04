@@ -11,6 +11,7 @@ import { PermissionsSettingsPage } from './pages/settings/PermissionsSettingsPag
 import { EnvSettingsPage } from './pages/settings/EnvSettingsPage';
 import { ConcurrencySettingsPage } from './pages/settings/ConcurrencySettingsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { CodingPanelPage } from './pages/CodingPanelPage';
 import { AgentListView } from './pages/AgentListView';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
 import { ApprovalModal } from './components/approval/ApprovalModal';
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/agents" element={<AgentListView />} />
+          <Route path="/coding" element={<CodingPanelPage />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />

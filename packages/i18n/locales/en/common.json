@@ -5,6 +5,7 @@
     "skills": "Skills",
     "settings": "Settings",
     "workspace": "Workspace",
+    "coding": "Code Panel",
     "quit": "Quit",
     "open": "Open JARVIS",
     "daemonStatus": "Daemon Status",
@@ -57,5 +58,6 @@
     "perAgent": "Per-agent",
     "concurrency": "Machine concurrency"
   },
+  "coding": { "selectFile": "Select a file from the left to preview" },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { buildTree, isIgnored, parseIgnorePatterns, Sandbox } from '@jarvis/core';
 import { createAgentStore } from './agents';
 
 const JARVIS_MD_TEMPLATE = `# JARVIS 工作区上下文
@@ -31,4 +32,30 @@ export function createWorkspaceService(db: Database.Database) {
       return { jarvisMd, agentMd };
     }
   };
+}
+
+// M4 Task 7 (E11/K3): lightweight code panel IPC. buildTree walks the current
+// agent's workspace; read returns file contents after a Sandbox.assertRead gate
+// so paths outside the workspace (or inside node_modules/.git/dist) are refused.
+// The brief's `statSync` import was dropped: createWorkspaceIpc derives isDir
+// from Dirent flags, so it would be an unused import under strict noUnusedLocals.
+const IGNORE_DEFAULT = ['node_modules/', '.git/', 'dist/', 'build/'];
+
+export function createWorkspaceIpc(getWorkspace: () => string | null) {
+  const tree = () => {
+    const ws = getWorkspace();
+    if (!ws) return [];
+    const rx = parseIgnorePatterns(IGNORE_DEFAULT);
+    const ignored = (rel: string) => isIgnored('/' + rel, rx);
+    return buildTree(ws, { listDir: (p) => readdirSync(p, { withFileTypes: true }).map(e => ({ name: e.name, isDir: e.isDirectory() })) }, ignored);
+  };
+  const read = (rel: string) => {
+    const ws = getWorkspace();
+    if (!ws) return { ok: false as const, error: 'no workspace' };
+    const sb = new Sandbox(ws, { level: 'readwrite', allowDomains: [], allowCommands: [] });
+    const abs = join(ws, rel);
+    try { sb.assertRead(abs); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
+    return { ok: true as const, content: readFileSync(abs, 'utf8') };
+  };
+  return { tree, read };
 }

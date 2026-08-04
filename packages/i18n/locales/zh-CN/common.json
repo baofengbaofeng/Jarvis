@@ -5,6 +5,7 @@
     "skills": "Skills",
     "settings": "设置",
     "workspace": "工作区",
+    "coding": "代码面板",
     "quit": "退出",
     "open": "打开 JARVIS",
     "daemonStatus": "Daemon 状态",
@@ -57,5 +58,6 @@
     "perAgent": "每 Agent",
     "concurrency": "机器并发"
   },
+  "coding": { "selectFile": "从左侧选择文件预览" },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }
