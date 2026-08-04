@@ -1,14 +1,16 @@
 import { create } from 'zustand';
-import type { ChatMessage } from '@jarvis/protocol';
+import type { ChatMessage, ChatSession } from '@jarvis/protocol';
 
 interface ChatState {
   sessionId: string | null;
+  sessions: ChatSession[];
   messages: ChatMessage[];
   streaming: boolean;
   streamingText: string;
   init: () => Promise<void>;
   newSession: () => Promise<void>;
   loadSession: (sessionId: string) => Promise<void>;
+  loadSessions: () => Promise<void>;
   send: (text: string) => Promise<void>;
   appendDelta: (delta: string) => void;
   finishStream: (error?: string) => void;
@@ -16,30 +18,39 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sessionId: null,
+  sessions: [],
   messages: [],
   streaming: false,
   streamingText: '',
 
   async init() {
-    const sessions = (await window.jarvis.invoke('chat.listSessions')) as Array<{ id: string }>;
-    if (sessions.length > 0) await get().loadSession(sessions[0].id);
+    await get().loadSessions();
+    if (get().sessions.length > 0) await get().loadSession(get().sessions[0].id);
     else await get().newSession();
+  },
+
+  async loadSessions() {
+    const sessions = (await window.jarvis.invoke('chat.listSessions')) as ChatSession[];
+    set({ sessions });
   },
 
   async newSession() {
     const s = (await window.jarvis.invoke('chat.createSession')) as { id: string };
     set({ sessionId: s.id, messages: [], streaming: false, streamingText: '' });
+    await get().loadSessions();
   },
 
   async loadSession(sessionId: string) {
     const msgs = (await window.jarvis.invoke('chat.loadMessages', sessionId)) as ChatMessage[];
     set({ sessionId, messages: msgs, streaming: false, streamingText: '' });
+    await get().loadSessions();
   },
 
   async send(text: string) {
     const { sessionId } = get();
     if (!sessionId || get().streaming) return;
-    set({ streaming: true, streamingText: '' });
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), sessionId, role: 'user', content: text, createdAt: new Date().toISOString() };
+    set({ streaming: true, streamingText: '', messages: [...get().messages, userMsg] });
     try {
       await window.jarvis.invoke('chat.send', { sessionId, text, agentId: 'placeholder-agent' });
     } catch (e) { get().finishStream(e instanceof Error ? e.message : String(e)); }

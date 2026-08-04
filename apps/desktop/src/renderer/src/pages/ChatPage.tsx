@@ -8,16 +8,40 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 export function ChatPage() {
   const { t } = useTranslation('common');
-  const { messages, streamingText, init } = useChatStore();
+  const { messages, streamingText, sessions, sessionId, init } = useChatStore();
 
   useEffect(() => { void init(); }, [init]);
 
   return (
     <div data-testid="chat-page" style={{ display: 'flex', height: '100vh' }}>
       <aside style={{ width: 220, borderRight: '1px solid var(--border)', padding: 8 }}>
-        <button data-testid="chat-new" onClick={() => void useChatStore.getState().newSession()}>+</button>
-        <button data-testid="chat-to-settings" onClick={() => (window.location.href = '/settings')}>{t('settings.title')}</button>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          <button data-testid="chat-new" title={t('chat.newSession')} onClick={() => void useChatStore.getState().newSession()}>+</button>
+          <button data-testid="chat-to-settings" onClick={() => (window.location.href = '/settings')}>{t('settings.title')}</button>
+        </div>
         <LanguageSwitcher />
+        <h3 data-testid="chat-sessions-title" style={{ margin: '12px 0 4px', fontSize: 12 }}>{t('chat.sessions')}</h3>
+        <ul data-testid="chat-sessions" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {sessions.map((s) => (
+            <li key={s.id} style={{ marginBottom: 4 }}>
+              <button
+                data-testid={`chat-session-${s.id}`}
+                onClick={() => void useChatStore.getState().loadSession(s.id)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '4px 8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: s.id === sessionId ? 600 : 400,
+                  background: s.id === sessionId ? 'var(--border, #ddd)' : 'transparent'
+                }}
+              >
+                {s.title || s.id}
+              </button>
+            </li>
+          ))}
+        </ul>
       </aside>
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
