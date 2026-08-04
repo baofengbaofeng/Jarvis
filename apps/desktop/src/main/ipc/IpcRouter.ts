@@ -1,9 +1,11 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
+import { exportSessionMarkdown } from '@jarvis/core';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput } from './providers';
 import { registerChatHandlers } from './chat';
+import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 import { SecureStorage } from '../secrets/SecureStorage';
@@ -40,7 +42,12 @@ export class IpcRouter {
     this.register(IpcChannel.daemonRestart, () => { daemon.restart(); return { ok: true }; });
     const collectEnv = () => collectEnvInfo({ daemonRunning: async () => (await daemon.status()).running });
     this.register(IpcChannel.envInfo, collectEnv);
-    this.register(IpcChannel.diagnosticsRun, collectEnv);
+    this.register(IpcChannel.diagnosticsRun, () => runDiagnostics(this.db, secrets));
+    this.register('provider.test', (_e, providerId, modelId) => testProviderConnectivity(this.db, secrets, providerId as string, modelId as string));
+    this.register('export.session', async (_e, sessionId) => {
+      const rows = this.db.prepare('SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY created_at').all(sessionId as string) as Array<{ role: string; content: string }>;
+      return exportSessionMarkdown(rows);
+    });
   }
 
   listen(): void {
