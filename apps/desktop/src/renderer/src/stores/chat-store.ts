@@ -61,5 +61,5 @@ if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
     const { chunk } = payload as { sessionId: string; chunk: { kind: string; delta?: string } };
     if (chunk.kind === 'delta') useChatStore.getState().appendDelta(chunk.delta ?? '');
   });
-  window.jarvis.onDidReceive('chat:done', () => useChatStore.getState().finishStream());
+  window.jarvis.onDidReceive('chat:done', (p) => useChatStore.getState().finishStream((p as { error?: string }).error));
 }

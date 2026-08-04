@@ -22,7 +22,9 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
       return { id, title: title ?? '新对话', createdAt: now(), updatedAt: now() };
     },
     async loadMessages(sessionId: string) {
-      return (db.prepare('SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY created_at').all(sessionId) as Array<{ role: ChatRole; content: string }>);
+      return (db.prepare('SELECT id, session_id, role, content, created_at FROM chat_messages WHERE session_id = ? ORDER BY created_at').all(sessionId) as Array<{ id: string; session_id: string; role: ChatRole; content: string; created_at: string }>).map(r => ({
+        id: r.id, sessionId: r.session_id, role: r.role, content: r.content, createdAt: r.created_at
+      }));
     },
     async appendMessage(sessionId: string, role: string, content: string) {
       db.prepare('INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES (?,?,?,?,?)').run(randomUUID(), sessionId, role, content, now());

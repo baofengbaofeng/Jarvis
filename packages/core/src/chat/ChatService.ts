@@ -4,7 +4,7 @@ import type { ModelMessage } from '../model/types';
 export interface ChatDbAdapter {
   listSessions(): Promise<ChatSession[]>;
   createSession(title?: string): Promise<ChatSession>;
-  loadMessages(sessionId: string): Promise<Array<Omit<ChatMessage, 'id' | 'sessionId' | 'createdAt'>>>;
+  loadMessages(sessionId: string): Promise<ChatMessage[]>;
   appendMessage(sessionId: string, role: string, content: string): Promise<void>;
   loadAgent(agentId: string): Promise<AgentConfig>;
 }

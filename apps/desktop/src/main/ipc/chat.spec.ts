@@ -45,7 +45,13 @@ describe('chat handlers', () => {
       .rejects.toThrow('agent not found: nope');
 
     // The user turn is appended before the agent lookup throws.
-    expect(await chat.loadMessages(s.id)).toEqual([{ role: 'user', content: 'hello' }]);
+    const loaded = await chat.loadMessages(s.id);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].id).toBeTruthy();
+    expect(loaded[0].sessionId).toBe(s.id);
+    expect(loaded[0].role).toBe('user');
+    expect(loaded[0].content).toBe('hello');
+    expect(loaded[0].createdAt).toBeTruthy();
   });
 
   it('send fails deterministically when the agent has no model/provider binding', async () => {
