@@ -18,6 +18,16 @@ import type { AgentConfig } from '@jarvis/protocol';
 // deltas are emitted exactly once; this buffer preserves them for later reads.
 const taskLogs = new Map<string, string[]>();
 
+// M3 final review (J2): per-agent MCP grant isolation. The engine is shared
+// across tasks, so the approval gate (which runs inside the engine) has no
+// notion of "the current agent". tasks.create sets this module-level id before
+// submitting a task and the approval gate reads it to scope mcp_grants writes
+// and lookups. Documented single-active-task assumption for M3: with a shared
+// engine, the grant consult/write reflects the agent of the most recently
+// submitted task, so agent A's grant is never auto-allowed for agent B (the
+// cheap isolation gap-fix; a full multi-agent rework is out of scope).
+let currentAgentId: string | null = null;
+
 export interface TaskHandlerDeps {
   chatFn?: EngineChatFn;
   maxSteps?: number;
@@ -79,8 +89,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     maxSteps: deps.maxSteps ?? 10,
     approvalGate: async (req) => {
       // G8: previously-approved mcp:{server}:{tool} calls are auto-allowed by
-      // folding the grants rows into allowAlways (granted=1 rows).
-      const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1').all() as Array<{ server_id: string; tool_name: string }>;
+      // folding the grants rows into allowAlways (granted=1 rows). M3 final
+      // review (J2): grants are consulted per-agent (the id set by
+      // tasks.create), falling back to server-wide rows (agent_id = '') so
+      // grants written before per-agent scoping still auto-allow.
+      const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(currentAgentId, '') as Array<{ server_id: string; tool_name: string }>;
       const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
       const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] });
       // M3 Task 7 gap fix: git_commit is a mutating git tool that the
@@ -88,16 +101,16 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // args.command), so force it through interactive approval.
       if (decision === 'allow' && req.toolName !== 'git_commit') return true;
       const ok = await approval.request(req);
-      appendAudit(db, { agentId: null, kind: 'approval', detail: { toolName: req.toolName, ok } });
+      appendAudit(db, { agentId: currentAgentId, kind: 'approval', detail: { toolName: req.toolName, ok } });
       // G8/J7: a denied-then-approved mcp call writes a grant so the next call
-      // hits allowAlways and skips approval. agent_id is left '' (unbound): the
-      // schema is NOT NULL and ApprovalRequest carries no agent id today, so
-      // grants are server-wide rather than per-agent (documented).
+      // hits allowAlways and skips approval. The grant is scoped to the current
+      // agent id (J2 per-agent isolation) rather than the old server-wide ''
+      // sentinel, so another agent cannot inherit this approval.
       if (ok && req.toolName.startsWith('mcp:')) {
         const seg = req.toolName.slice('mcp:'.length).split(':');
         if (seg.length >= 2) {
           db.prepare('INSERT INTO mcp_grants (id, agent_id, server_id, tool_name, granted, created_at) VALUES (?,?,?,?,?,?)')
-            .run(randomUUID(), '', seg[0], seg.slice(1).join(':'), 1, new Date().toISOString());
+            .run(randomUUID(), currentAgentId ?? '', seg[0], seg.slice(1).join(':'), 1, new Date().toISOString());
         }
       }
       return ok;
@@ -133,6 +146,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     approvalCenter: approval,
     async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string; sessionId?: string }) {
       const { agentId, prompt, sessionId } = args;
+      // J2 per-agent MCP grants: scope the shared engine's approval gate to the
+      // agent submitting this task (single-active-task assumption, documented
+      // at the module-level currentAgentId declaration).
+      currentAgentId = agentId;
       const id = randomUUID();
       const agent = agentStore.get(agentId);
       const ctx = workspace.loadContext(agentId);
