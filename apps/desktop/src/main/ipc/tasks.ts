@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, Sandbox, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -66,12 +66,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   const toolPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: [] };
   createFileTools(toolRegistry, toolPolicy);
   createShellTool(toolRegistry, toolPolicy);
-  // M3 Task 7 (E4): git tools. The brief's createGitTools captures a fixed
-  // Sandbox root at registration, while the engine forwards a per-task
-  // workspaceRoot — so the git sandbox is rooted at the process cwd (the
-  // default '.' workspace). Workspaces bound outside the app directory won't
-  // pass the assert; a per-task git sandbox is deferred (see task-7-report).
-  createGitTools(toolRegistry, new Sandbox(process.cwd(), toolPolicy));
+  // M3 Task 7 (E4) + final review (J2): git tools build a per-execution
+  // Sandbox from ctx.workspaceRoot (set per-submit from the agent's
+  // workspaceId), so real bound workspaces outside process.cwd() pass the
+  // assert. toolPolicy is the fallback policy (tools read ctx.policy first).
+  createGitTools(toolRegistry, toolPolicy);
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
   const engine = new AgentEngine({

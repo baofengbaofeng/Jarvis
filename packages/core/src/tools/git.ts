@@ -1,9 +1,16 @@
 import type { ToolRegistry } from '../agent/ToolRegistry';
-import type { Sandbox } from '../sandbox/Sandbox';
+import type { SandboxPolicy } from '../sandbox/Sandbox';
+import { Sandbox } from '../sandbox/Sandbox';
 
 export interface GitDeps { execImpl?: (cmd: string, args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }> }
 
-export function createGitTools(registry: ToolRegistry, sandbox: Sandbox, deps: GitDeps = {}): void {
+// M3 final review (J2): git tools no longer capture a fixed Sandbox root at
+// registration time. The engine is shared across tasks while each agent has
+// its own workspace, so the sandbox is built per-execution from the tool
+// context's workspaceRoot (falling back to cwd), mirroring file/shell tools.
+// A fixed registration-time root (e.g. process.cwd()) rejected every real
+// bound workspace with "outside workspace".
+export function createGitTools(registry: ToolRegistry, policy: SandboxPolicy, deps: GitDeps = {}, ignorePatterns?: string[]): void {
   const run = deps.execImpl ?? (async (cmd, args, cwd) => {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
@@ -19,6 +26,7 @@ export function createGitTools(registry: ToolRegistry, sandbox: Sandbox, deps: G
 
   const mk = (name: string, description: string, build: (a: Record<string, unknown>) => string[]) =>
     registry.register(def(name, description, build({}), build), async (args, ctx) => {
+      const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
       sandbox.assertRead(ctx.cwd); // repo 须在 workspace 内
       const { stdout, stderr } = await run('git', build(args), ctx.cwd);
       return { ok: !stderr, output: `${stdout}${stderr ? '\n' + stderr : ''}`.trim() };
