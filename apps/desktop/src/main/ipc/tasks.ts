@@ -2,9 +2,10 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService } from '@jarvis/core';
 import type { EngineChatFn, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
+import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
@@ -14,15 +15,26 @@ import type { AgentConfig } from '@jarvis/protocol';
 // deltas are emitted exactly once; this buffer preserves them for later reads.
 const taskLogs = new Map<string, string[]>();
 
-export function registerTaskHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, agentStore = createAgentStore(db)) {
+export interface TaskHandlerDeps {
+  chatFn?: EngineChatFn;
+  maxSteps?: number;
+}
+
+export function registerTaskHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, agentStore = createAgentStore(db), deps: TaskHandlerDeps = {}) {
   const workspace = createWorkspaceService(db);
+  const chatService = createChatService(createChatDbAdapter(db));
+  // Map task id -> chat session id so task completion can persist the assistant
+  // turn into the same session that launched it (M1 session list + reload stays
+  // working while M2 executes the task through the task path).
+  const taskSessions = new Map<string, string>();
+
   // The model adapters stream deltas via onChunk and return void, while
   // EngineChatFn must RETURN { text, usage } (the AgentEngine destructures it).
   // Wrap the adapter so delta text is accumulated, the usage chunk is captured,
   // every chunk is forwarded to opts.onChunk, and opts.signal is passed through.
   // The adapter is selected per-request from req.provider.type so an
   // anthropic-compatible provider gets the Anthropic adapter, not OpenAI.
-  const chatFn: EngineChatFn = async (req, opts) => {
+  const defaultChatFn: EngineChatFn = async (req, opts) => {
     const adapter = createAdapter(req.provider.type);
     let text = '';
     let usage: Usage | null = null;
@@ -37,7 +49,8 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     });
     return { text, usage };
   };
-  const engine = new AgentEngine({ modelRouter: { chat: chatFn }, toolRegistry: new ToolRegistry(), maxSteps: 10 });
+  const chatFn = deps.chatFn ?? defaultChatFn;
+  const engine = new AgentEngine({ modelRouter: { chat: chatFn }, toolRegistry: new ToolRegistry(), maxSteps: deps.maxSteps ?? 10 });
   const store = {
     async create(id: string, agentId: string) {
       db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run(id, agentId, 'queued', '{}', new Date().toISOString());
@@ -59,12 +72,14 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     onDone: (id, ok, text) => {
       db.prepare('UPDATE tasks SET status = ?, result_json = ?, completed_at = ? WHERE id = ?').run(ok ? 'completed' : 'failed', JSON.stringify({ text }), new Date().toISOString(), id);
       getWindow()?.webContents.send(ok ? IpcEvent.taskComplete : IpcEvent.taskFailed, { id, text });
+      const sessionId = taskSessions.get(id);
+      if (sessionId) void chatService.appendMessage(sessionId, 'assistant', text);
     }
   }, 6);
 
   return {
-    async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string }) {
-      const { agentId, prompt } = args;
+    async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string; sessionId?: string }) {
+      const { agentId, prompt, sessionId } = args;
       const id = randomUUID();
       const agent = agentStore.get(agentId);
       const ctx = workspace.loadContext(agentId);
@@ -73,8 +88,17 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (!modelRow) throw new Error('agent has no valid model binding');
       const apiKey = await secrets.get(modelRow.api_key_ref);
       if (!apiKey) throw new Error('missing api key');
+      // AgentConfig does not expose env_vars_json, so read the raw row to feed
+      // the agent's env vars into the engine (I1).
+      const agentRow = db.prepare('SELECT env_vars_json FROM agents WHERE id = ?').get(agentId) as { env_vars_json: string } | undefined;
+      const agentEnv = agentRow ? (JSON.parse(agentRow.env_vars_json ?? '{}') as Record<string, string>) : {};
+      const env = mergeEnv({}, {}, agentEnv, {});
       await store.create(id, agentId);
-      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env: {}, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id });
+      if (sessionId) {
+        taskSessions.set(id, sessionId);
+        await chatService.appendMessage(sessionId, 'user', prompt);
+      }
+      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),

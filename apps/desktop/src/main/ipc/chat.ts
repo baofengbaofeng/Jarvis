@@ -7,10 +7,9 @@ import { ModelRouter } from '@jarvis/core';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig, ChatRole } from '@jarvis/protocol';
 
-export function registerChatHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, deps: { router?: ModelRouter } = {}) {
+export function createChatDbAdapter(db: Database.Database): Parameters<typeof createChatService>[0] {
   const now = () => new Date().toISOString();
-
-  const dbAdapter = {
+  return {
     async listSessions() {
       return (db.prepare('SELECT * FROM chat_sessions ORDER BY updated_at DESC').all() as Record<string, unknown>[]).map(r => ({
         id: r.id as string, title: r.title as string, createdAt: r.created_at as string, updatedAt: r.updated_at as string
@@ -41,7 +40,10 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
       } as AgentConfig;
     }
   };
+}
 
+export function registerChatHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, deps: { router?: ModelRouter } = {}) {
+  const dbAdapter = createChatDbAdapter(db);
   const chatService = createChatService(dbAdapter);
   const router = deps.router ?? new ModelRouter();
 

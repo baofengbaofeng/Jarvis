@@ -53,7 +53,7 @@ export class IpcRouter {
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
     const tasks = registerTaskHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow());
-    this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string }));
+    this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string; sessionId?: string }));
     this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
     this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));
     this.register('task.resume', (_e, id) => tasks.resume(_e, id as string));
