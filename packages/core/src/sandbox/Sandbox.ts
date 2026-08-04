@@ -13,6 +13,32 @@ export class SandboxError extends Error {}
 
 const DEFAULT_COMMAND_WHITELIST = ['ls', 'cat', 'echo', 'pwd', 'mkdir', 'cp', 'mv', 'touch', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'uniq', 'git status', 'git diff', 'git log', 'git add', 'git commit'];
 
+const READONLY_COMMAND_WHITELIST = ['ls', 'cat', 'echo', 'pwd', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'uniq', 'git status', 'git diff', 'git log'];
+
+// Shell metacharacters that would allow chaining or injection if the line were interpreted by a shell.
+const SHELL_METACHARACTERS = /[;&|`\n]/;
+
+function baseCommand(cmdline: string): string {
+  const tokens = cmdline.trim().split(/\s+/).filter(t => t.length > 0);
+  if (tokens.length === 0) return '';
+  return tokens[0].includes('/') ? tokens[0].split('/').pop() ?? tokens[0] : tokens[0];
+}
+
+function isCommandAllowed(cmdline: string, allowlist: string[]): boolean {
+  const tokens = cmdline.trim().split(/\s+/).filter(t => t.length > 0);
+  if (tokens.length === 0) return false;
+  const base = tokens[0].includes('/') ? tokens[0].split('/').pop() ?? tokens[0] : tokens[0];
+  const norm = [base, ...tokens.slice(1)];
+  return allowlist.some(entry => {
+    const et = entry.trim().split(/\s+/).filter(t => t.length > 0);
+    if (norm.length < et.length) return false;
+    for (let i = 0; i < et.length; i++) {
+      if (norm[i] !== et[i]) return false;
+    }
+    return true;
+  });
+}
+
 export class Sandbox {
   private ignorePatterns: RegExp[];
 
@@ -33,11 +59,11 @@ export class Sandbox {
 
   assertCommand(cmdline: string): void {
     if (this.policy.level === 'system') return;
-    const first = cmdline.trim().split(/\s+/, 2).join(' ');
-    const ok = this.policy.allowCommands.length > 0
-      ? this.policy.allowCommands.some(c => cmdline.startsWith(c))
-      : DEFAULT_COMMAND_WHITELIST.some(c => cmdline.startsWith(c));
-    if (!ok) throw new SandboxError(`command not allowed: ${first}`);
+    if (SHELL_METACHARACTERS.test(cmdline)) throw new SandboxError(`shell metacharacters not allowed: ${cmdline}`);
+    const allowlist = this.policy.level === 'readonly'
+      ? READONLY_COMMAND_WHITELIST
+      : (this.policy.allowCommands.length > 0 ? this.policy.allowCommands : DEFAULT_COMMAND_WHITELIST);
+    if (!isCommandAllowed(cmdline, allowlist)) throw new SandboxError(`command not allowed: ${baseCommand(cmdline)}`);
   }
 
   assertUrl(url: string): void {

@@ -34,4 +34,28 @@ describe('Sandbox', () => {
     const sys = new Sandbox('/ws', { level: 'system', allowDomains: [], allowCommands: [] });
     expect(() => sys.assertCommand('rm -rf /')).not.toThrow();
   });
+  it('rejects shell metacharacters at non-system levels', () => {
+    expect(() => sb.assertCommand('ls; rm -rf /')).toThrow('not allowed');
+    expect(() => sb.assertCommand('ls && rm -rf /')).toThrow('not allowed');
+    expect(() => sb.assertCommand('ls\nrm -rf /')).toThrow('not allowed');
+    expect(() => sb.assertCommand('git status; rm -rf /')).toThrow('not allowed');
+  });
+  it('matches the exact base command, not a string prefix', () => {
+    expect(() => sb.assertCommand('cat')).not.toThrow();
+    expect(() => sb.assertCommand('cat foo')).not.toThrow();
+    expect(() => sb.assertCommand('catfoo')).toThrow('not allowed');
+    expect(() => sb.assertCommand('/bin/ls -la')).not.toThrow();
+  });
+  it('blocks mutating commands in readonly level', () => {
+    const ro = new Sandbox('/ws', { ...policy, level: 'readonly' });
+    expect(() => ro.assertCommand('touch x')).toThrow('not allowed');
+    expect(() => ro.assertCommand('mkdir d')).toThrow('not allowed');
+    expect(() => ro.assertCommand('git add x')).toThrow('not allowed');
+    expect(() => ro.assertCommand('ls -la')).not.toThrow();
+  });
+  it('anchors dir/ ignore patterns', () => {
+    const rx = parseIgnorePatterns(['dist/']);
+    expect(isIgnored('/ws/dist/x', rx)).toBe(true);
+    expect(isIgnored('/ws/mydist/x', rx)).toBe(false);
+  });
 });
