@@ -30,7 +30,9 @@ export function createMainWindow(): BrowserWindow {
   if (rendererUrl) {
     void win.loadURL(rendererUrl);
   } else {
-    void win.loadURL('file://' + rendererIndex);
+    // loadFile handles the file URL (including the Windows drive-letter form),
+    // avoiding the invalid `file://C:\...` that string concatenation would produce.
+    void win.loadFile(rendererIndex);
   }
 
   return win;
