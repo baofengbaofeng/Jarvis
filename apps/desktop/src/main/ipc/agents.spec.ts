@@ -26,7 +26,8 @@ describe('agent store', () => {
     const a = store.create({ name: 'Env Agent', systemPrompt: '', modelId: null, workspaceId: null });
 
     const updated = store.update(a.id, { envVars: { FOO: 'bar', BAZ: '1' }, cliArgs: ['--verbose', 'run'] });
-    // AgentConfig does not expose envVars/cliArgs, so assert via the raw row.
+    // Assert via the raw row so the DB columns are covered directly; the
+    // store also maps them onto AgentConfig.envVars/cliArgs for the renderer.
     let row = db.prepare('SELECT env_vars_json, cli_args_json FROM agents WHERE id = ?').get(a.id) as { env_vars_json: string; cli_args_json: string };
     expect(JSON.parse(row.env_vars_json)).toEqual({ FOO: 'bar', BAZ: '1' });
     expect(JSON.parse(row.cli_args_json)).toEqual(['--verbose', 'run']);

@@ -10,6 +10,21 @@ export function EnvSettingsPage() {
   const [cliText, setCliText] = useState('');
   useEffect(() => { void refresh(); }, [refresh]);
 
+  // Pre-load the agent's saved env_vars_json / cli_args_json when selected
+  // (C8/C9 data-loss guard): agent.update REPLACES both columns when the patch
+  // field is present, so a blank textarea would otherwise wipe them on save.
+  const selectAgent = (id: string) => {
+    setAgentId(id);
+    const agent = agents.find(a => a.id === id);
+    if (agent) {
+      setEnvText(Object.entries(agent.envVars ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'));
+      setCliText((agent.cliArgs ?? []).join(' '));
+    } else {
+      setEnvText('');
+      setCliText('');
+    }
+  };
+
   // Each line "KEY=value"; the first '=' splits key from value so values may
   // contain '=' (e.g. base64 or URLs).
   const parse = (): Record<string, string> => {
@@ -30,7 +45,7 @@ export function EnvSettingsPage() {
       <h2>{t('settings.title')}</h2>
       <label>
         {t('settings.env.agent')}
-        <select data-testid="env-agent" value={agentId} onChange={e => setAgentId(e.target.value)}>
+        <select data-testid="env-agent" value={agentId} onChange={e => selectAgent(e.target.value)}>
           <option value="">—</option>
           {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>

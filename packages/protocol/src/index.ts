@@ -63,6 +63,11 @@ export interface AgentConfig {
   workspaceId: string | null;   // C7
   contextBudgetTokens: number;  // L17
   planOnly: boolean;            // E10
+  // Parsed from env_vars_json / cli_args_json (I1, C9). Not persisted columns
+  // themselves; exposed so the EnvSettingsPage can pre-load and round-trip them
+  // instead of wiping on a blank save.
+  envVars?: Record<string, string>;
+  cliArgs?: string[];
   createdAt: string;
   updatedAt: string;
 }

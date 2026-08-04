@@ -10,12 +10,22 @@ export function slugify(name: string): string {
 
 export function createAgentStore(db: Database.Database) {
   const now = () => new Date().toISOString();
-  const rowToAgent = (r: Record<string, unknown>): AgentConfig => ({
-    id: r.id as string, name: r.name as string, slug: r.slug as string, description: (r.description as string) ?? '',
-    systemPrompt: (r.system_prompt as string) ?? '', modelId: (r.model_id as string) ?? null, workspaceId: (r.workspace_id as string) ?? null,
-    contextBudgetTokens: (r.context_budget_tokens as number) ?? 128000, planOnly: Boolean(r.plan_only),
-    createdAt: r.created_at as string, updatedAt: r.updated_at as string
-  });
+  const rowToAgent = (r: Record<string, unknown>): AgentConfig => {
+    // env_vars_json / cli_args_json are not first-class AgentConfig columns, but
+    // they ARE read back here so the renderer can pre-load (and round-trip) them
+    // instead of blanking them on a save (M3 Task 9 fix, C8/C9 data-loss guard).
+    let envVars: Record<string, string> = {};
+    let cliArgs: string[] = [];
+    try { envVars = JSON.parse((r.env_vars_json as string) ?? '{}') as Record<string, string>; } catch { /* malformed -> empty */ }
+    try { cliArgs = JSON.parse((r.cli_args_json as string) ?? '[]') as string[]; } catch { /* malformed -> empty */ }
+    return {
+      id: r.id as string, name: r.name as string, slug: r.slug as string, description: (r.description as string) ?? '',
+      systemPrompt: (r.system_prompt as string) ?? '', modelId: (r.model_id as string) ?? null, workspaceId: (r.workspace_id as string) ?? null,
+      contextBudgetTokens: (r.context_budget_tokens as number) ?? 128000, planOnly: Boolean(r.plan_only),
+      envVars, cliArgs,
+      createdAt: r.created_at as string, updatedAt: r.updated_at as string
+    };
+  };
 
   return {
     list(): AgentConfig[] {
