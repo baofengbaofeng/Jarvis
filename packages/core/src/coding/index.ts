@@ -3,6 +3,7 @@ export * from './filetree';
 export * from './session';
 export * from './fixloop';
 export * from './mention';
+export * from './parallel';
 export * from './plan';
 export * from './snapshot';
 export * from './structured';

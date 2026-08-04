@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { createTaskSnapshot, parseIgnorePatterns, isIgnored, diffLines, groupHunks, applyHunks, type SnapshotGit, type SnapshotFs, type SnapshotMeta, type SnapshotStore, type IndexStore, type IndexRow } from '@jarvis/core';
+import { createTaskSnapshot, parseIgnorePatterns, isIgnored, diffLines, groupHunks, applyHunks, toUnified, type SnapshotGit, type SnapshotFs, type SnapshotMeta, type SnapshotStore, type IndexStore, type IndexRow } from '@jarvis/core';
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
@@ -207,4 +207,29 @@ export function readDiffFile(wsRoot: string, path: string, taskId: string, snaps
   const modifiedText = modified.join('\n');
   return { ok: true, base: baseText, modified: modifiedText, changed: baseText !== modifiedText };
 }
+
+// M4 Task 9 (E12): external IDE bridge /diff support. The bridge only receives a
+// taskId, so this walks the (single-active) workspace and returns the FIRST file
+// whose current content differs from the task's base (git HEAD first, then the
+// task snapshot copy — the same resolveDiffBase contract as diff.applyAll). It
+// is best-effort: multi-file tasks return the first changed file, and a task
+// with no resolvable base change returns null (the bridge 404s). The walk
+// reuses walkWorkspaceFiles, so hidden dirs (.git/.jarvis) and node_modules are
+// never compared.
+export function loadTaskDiff(wsRoot: string | null, taskId: string, snapshotStore: SnapshotStore): { path: string; diff: string } | null {
+  if (!wsRoot) return null;
+  const root = wsRoot.replace(/[\\/]+$/, '');
+  for (const abs of walkWorkspaceFiles(root)) {
+    const rel = abs.slice(root.length + 1);
+    const baseRes = resolveDiffBase(root, rel, taskId, snapshotStore);
+    if ('error' in baseRes) continue;
+    let modified: string;
+    try { modified = readFileSync(abs, 'utf8'); } catch { continue; }
+    const modifiedLines = toLines(modified);
+    if (baseRes.base.join('\n') === modifiedLines.join('\n')) continue;
+    return { path: rel, diff: toUnified(groupHunks(diffLines(baseRes.base, modifiedLines))) };
+  }
+  return null;
+}
+
 
