@@ -16,7 +16,15 @@ export function createShellTool(registry: ToolRegistry, policy: SandboxPolicy, d
     try {
       const argv = cmd.trim().split(/\s+/).filter(t => t.length > 0);
       if (argv.length === 0) return { stdout: '', stderr: '' };
-      return await exec(argv[0], argv.slice(1), { cwd: opts.cwd, env: opts.env, timeout: opts.timeout ?? 30_000 });
+      // execFile's env option REPLACES the process environment (it is not a
+      // merge). The agent env vars (which typically lack PATH) must therefore
+      // be layered over the parent process env, or commands outside libc's
+      // default search path (e.g. git at /opt/homebrew/bin, npm, node shims)
+      // would fail with ENOENT. Only string values are kept.
+      const env: Record<string, string> = {};
+      for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
+      Object.assign(env, opts.env);
+      return await exec(argv[0], argv.slice(1), { cwd: opts.cwd, env, timeout: opts.timeout ?? 30_000 });
     } catch (e) { const err = e as { stdout?: string; stderr?: string }; return { stdout: err.stdout ?? '', stderr: err.stderr ?? String(e) }; }
   });
 
