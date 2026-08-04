@@ -18,7 +18,8 @@ describe('IndexStore', () => {
     return {
       upsert(r) { rows = r; },
       all() { return rows; },
-      remove(path) { rows = rows.filter(r => r.path !== path); }
+      remove(path) { rows = rows.filter(r => r.path !== path); },
+      clear() { rows = []; }
     };
   };
 

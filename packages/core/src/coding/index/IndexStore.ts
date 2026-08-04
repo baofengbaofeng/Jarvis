@@ -7,7 +7,7 @@ import { chunkFile, type Chunk } from './chunker';
 // return a Promise without changing call sites.
 export type EmbeddingFn = (text: string) => number[] | Promise<number[]>;
 export interface IndexRow { chunkId: string; path: string; startLine: number; endLine: number; text: string; embedding: number[] }
-export interface IndexStoreAdapter { upsert(rows: IndexRow[]): void; all(): IndexRow[]; remove(path: string): void }
+export interface IndexStoreAdapter { upsert(rows: IndexRow[]): void; all(): IndexRow[]; remove(path: string): void; clear(): void }
 export interface IndexableFile { path: string; text: string }
 
 export function cosine(a: number[], b: number[]): number {
@@ -18,6 +18,12 @@ export function cosine(a: number[], b: number[]): number {
 
 export class IndexStore {
   constructor(private adapter: IndexStoreAdapter, private embed: EmbeddingFn) {}
+
+  // Full-reindex support: wipe EVERY row (not just one path) so a reindex
+  // represents exactly the current workspace — stale chunks for files that no
+  // longer exist, and rows from a previously reindexed workspace whose relative
+  // paths don't collide, must not survive. (M4 Task 6 review fix)
+  clear(): void { this.adapter.clear(); }
 
   async indexFiles(files: IndexableFile[]): Promise<void> {
     const rows: IndexRow[] = [];

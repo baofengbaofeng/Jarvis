@@ -56,7 +56,8 @@ export function createCodeIndexAdapter(db: Database.Database) {
   return {
     upsert(rows: IndexRow[]) { for (const r of rows) ins.run(r.chunkId, r.path, r.startLine, r.endLine, r.text, JSON.stringify(r.embedding), new Date().toISOString()); },
     all(): IndexRow[] { return (db.prepare('SELECT * FROM code_chunks').all() as Array<Record<string, unknown>>).map(r => ({ chunkId: r.id as string, path: r.path as string, startLine: r.start_line as number, endLine: r.end_line as number, text: r.text as string, embedding: JSON.parse(r.embedding_json as string) as number[] })); },
-    remove(path: string) { del.run(path); }
+    remove(path: string) { del.run(path); },
+    clear() { db.prepare('DELETE FROM code_chunks').run(); }
   };
 }
 
@@ -73,6 +74,12 @@ function readJarvisignore(wsRoot: string): string[] {
   } catch { return []; }
 }
 
+// Directory names pruned DURING traversal (never descended into), so a typical
+// project's node_modules/ (tens of thousands of dependency files) is not walked.
+// Hidden entries are already skipped above, so .git/.jarvis are covered by the
+// `.` check as well — kept here for clarity/defense-in-depth.
+const PRUNE_DIRS = new Set(['node_modules', 'dist', '.git', '.jarvis']);
+
 // Depth-first walk of a workspace directory, reusing the createSnapshotFs.walk
 // pattern (snapshot.ts). Hidden entries (leading `.`) are never indexed — that
 // keeps .git/.jarvis internals AND meta files like .jarvisignore/.env out of the
@@ -86,8 +93,10 @@ function walkWorkspaceFiles(root: string): string[] {
     for (const e of entries) {
       if (e.name.startsWith('.')) continue;
       const f = join(d, e.name);
-      if (e.isDirectory()) walk(f);
-      else out.push(f);
+      if (e.isDirectory()) {
+        if (PRUNE_DIRS.has(e.name)) continue; // prune dep/VCS dirs during traversal
+        walk(f);
+      } else out.push(f);
     }
   };
   walk(root);
@@ -100,12 +109,21 @@ function walkWorkspaceFiles(root: string): string[] {
 // ("src/add.ts:1-3"), while the ignore filter is applied on ABSOLUTE paths (the
 // same contract index.spec's isIgnored test asserts).
 export async function reindexWorkspace(index: IndexStore, wsRoot: string): Promise<{ indexed: number; skipped: number }> {
-  const ignorePatterns = parseIgnorePatterns([...DEFAULT_IGNORE, ...readJarvisignore(wsRoot)]);
-  const files = walkWorkspaceFiles(wsRoot);
+  // Normalize a trailing-separator wsRoot so `abs.slice(root.length + 1)` below
+  // slices exactly the leading separator (never one char into the first path
+  // segment). (review fix)
+  const root = wsRoot.replace(/[\\/]+$/, '');
+  // A full reindex represents EXACTLY the current workspace: clear every row
+  // first so chunks for files deleted since the last index, and rows from a
+  // previously reindexed workspace whose relative paths don't collide, do not
+  // survive. (review fix)
+  index.clear();
+  const ignorePatterns = parseIgnorePatterns([...DEFAULT_IGNORE, ...readJarvisignore(root)]);
+  const files = walkWorkspaceFiles(root);
   const indexable: Array<{ path: string; text: string }> = [];
   let skipped = 0;
   for (const abs of files) {
-    const rel = abs.slice(wsRoot.length + 1);
+    const rel = abs.slice(root.length + 1);
     if (isIgnored(abs, ignorePatterns)) { skipped++; continue; }
     let text: string;
     try { text = readFileSync(abs, 'utf8'); } catch { skipped++; continue; }

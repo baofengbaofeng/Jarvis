@@ -41,14 +41,18 @@ describe('code index adapter (E1/L27)', () => {
 
       const adapter = createCodeIndexAdapter(db);
       const index = new IndexStore(adapter, hashEmbedding);
-      const res = await reindexWorkspace(index, ws);
+      // Trailing slash: reindexWorkspace must normalize it so relative paths are
+      // still computed correctly. (review fix)
+      const res = await reindexWorkspace(index, ws + '/');
       expect(res.indexed).toBeGreaterThanOrEqual(1);
-      expect(res.skipped).toBeGreaterThanOrEqual(2);
+      // node_modules is now pruned during traversal (never walked), so only
+      // src/skip.ts is counted as "skipped" via the jarvisignore filter.
+      expect(res.skipped).toBeGreaterThanOrEqual(1);
 
       const paths = adapter.all().map(r => r.path);
       expect(paths).toContain('src/add.ts');
       expect(paths).not.toContain('src/skip.ts'); // jarvisignore filter (L28)
-      expect(paths).not.toContain('node_modules/dep.ts'); // node_modules skip
+      expect(paths).not.toContain('node_modules/dep.ts'); // node_modules pruned during traversal
       expect(paths).not.toContain('.jarvisignore'); // hidden files not indexed
 
       // The reindexed store answers semantic queries against real file content.
@@ -56,6 +60,36 @@ describe('code index adapter (E1/L27)', () => {
       expect(found[0].path).toBe('src/add.ts');
     } finally {
       rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('clears rows for files absent from the current workspace (stale chunks do not survive a reindex)', async () => {
+    const wsA = mkdtempSync(join(tmpdir(), 'jarvis-idx-a-'));
+    const wsB = mkdtempSync(join(tmpdir(), 'jarvis-idx-b-'));
+    try {
+      writeFileSync(join(wsA, 'add.ts'), 'export function add(a: number, b: number) { return a + b; }');
+      const adapter = createCodeIndexAdapter(db);
+      const index = new IndexStore(adapter, hashEmbedding);
+
+      await reindexWorkspace(index, wsA);
+      expect(adapter.all().map(r => r.path)).toContain('add.ts');
+
+      // Reindex a DIFFERENT workspace that does not contain add.ts: the full
+      // reindex must clear A's rows so the index is exactly workspace B, not a
+      // union of every workspace ever reindexed.
+      writeFileSync(join(wsB, 'other.ts'), 'export const other = 1;');
+      await reindexWorkspace(index, wsB);
+      const paths = adapter.all().map(r => r.path);
+      expect(paths).not.toContain('add.ts');
+      expect(paths).toContain('other.ts');
+      // search returns up to k rows even at low similarity, so the proof that A's
+      // stale chunks are gone is that add.ts no longer appears in the results.
+      const found = await index.search('export function add', 5);
+      expect(found.length).toBeGreaterThan(0);
+      expect(found.map(r => r.path)).not.toContain('add.ts');
+    } finally {
+      rmSync(wsA, { recursive: true, force: true });
+      rmSync(wsB, { recursive: true, force: true });
     }
   });
 });
