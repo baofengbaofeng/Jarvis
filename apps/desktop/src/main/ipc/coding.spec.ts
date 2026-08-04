@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { IndexStore, hashEmbedding } from '@jarvis/core';
+import { IndexStore, hashEmbedding, type SnapshotMeta } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
 import { createCodeIndexAdapter, reindexWorkspace, createSnapshotStore, applyDiffToFile } from './coding';
 
@@ -95,10 +95,14 @@ describe('code index adapter (E1/L27)', () => {
   });
 });
 
-// M4 Task 8 (E9): applyDiffToFile resolves the diff base from the TASK SNAPSHOT
-// copy files (or git HEAD), never from the current file — otherwise a non-git /
-// untracked file would have base == modified and the apply would be a silent
-// no-op (controller gap #2).
+// M4 Task 8 (E9): applyDiffToFile resolves the diff base snapshot-first (the
+// exact pre-task state captured by snapshotBeforeTask), then git HEAD (only for
+// files that were UNMODIFIED pre-task), then an EMPTY base for task-created
+// files — never from the current file, which would make the diff a silent no-op
+// (controller gap #2). The snapshot-first rule (M4 review finding 4) is what
+// prevents rejecting a hunk from writing HEAD back over pre-task uncommitted
+// work; the empty base (finding 3) is what makes accept/reject usable for new
+// files.
 describe('applyDiffToFile (E9)', () => {
   let db: Database.Database;
   beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
@@ -108,8 +112,12 @@ describe('applyDiffToFile (E9)', () => {
     try {
       const taskId = 't1';
       const store = createSnapshotStore(db);
-      // Simulate snapshotBeforeTask's copy snapshot: pre-task state is x = 1.
-      store.save(taskId, { kind: 'copy', dir: `${ws}/.jarvis/snapshots/t1`, files: { 'a.ts': 'const x = 1;\nconst y = 2;' } });
+      // New copy snapshot shape: meta.files holds RELATIVE PATHS; the pre-task
+      // content lives in the snapshot dir under {dir}/{rel}.
+      const dir = join(ws, '.jarvis', 'snapshots', taskId);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'a.ts'), 'const x = 1;\nconst y = 2;');
+      store.save(taskId, { kind: 'copy', dir, files: ['a.ts'] });
       // The task changed the file to x = 2.
       writeFileSync(join(ws, 'a.ts'), 'const x = 2;\nconst y = 2;');
 
@@ -123,7 +131,24 @@ describe('applyDiffToFile (E9)', () => {
     }
   });
 
-  it('uses git HEAD as the base for a tracked file in a git repo', () => {
+  it('reads a legacy snapshot whose meta.files inlines content as Record<string,string>', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-legacy-'));
+    try {
+      const taskId = 't1';
+      const store = createSnapshotStore(db);
+      // Pre-M4-review rows stored path -> content inline in meta.files (a shape
+      // the new string[] union member no longer accepts, so cast explicitly).
+      store.save(taskId, { kind: 'copy', dir: `${ws}/.jarvis/snapshots/t1`, files: { 'a.ts': 'const x = 1;\nconst y = 2;' } } as unknown as SnapshotMeta);
+      writeFileSync(join(ws, 'a.ts'), 'const x = 2;\nconst y = 2;');
+      const r = applyDiffToFile(ws, 'a.ts', [false], taskId, store);
+      expect(r.ok).toBe(true);
+      expect(readFileSync(join(ws, 'a.ts'), 'utf8')).toBe('const x = 1;\nconst y = 2;');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('uses git HEAD as the base for a clean tracked file in a git repo', () => {
     const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-git-'));
     try {
       execFileSync('git', ['init', '-q'], { cwd: ws });
@@ -135,6 +160,7 @@ describe('applyDiffToFile (E9)', () => {
       writeFileSync(join(ws, 'a.ts'), 'const x = 2;\n');
 
       const store = createSnapshotStore(db);
+      // No snapshot, file clean pre-task: HEAD == pre-task, so HEAD is the base.
       // Reject the working-tree change -> revert to HEAD (x = 1).
       const r = applyDiffToFile(ws, 'a.ts', [false], 't1', store);
       expect(r.ok).toBe(true);
@@ -144,14 +170,54 @@ describe('applyDiffToFile (E9)', () => {
     }
   });
 
-  it('returns an error when neither git HEAD nor a snapshot base exists (no silent no-op)', () => {
-    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-nobase-'));
+  it('uses the git snapshot base (pre-task content) ahead of HEAD for a dirty tracked file', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-dirty-'));
     try {
-      writeFileSync(join(ws, 'a.ts'), 'const x = 2;');
+      execFileSync('git', ['init', '-q'], { cwd: ws });
+      execFileSync('git', ['config', 'user.email', 't@example.com'], { cwd: ws });
+      execFileSync('git', ['config', 'user.name', 't'], { cwd: ws });
+      writeFileSync(join(ws, 'a.ts'), 'HEAD\n');
+      execFileSync('git', ['add', 'a.ts'], { cwd: ws });
+      execFileSync('git', ['commit', '-qm', 'init'], { cwd: ws });
+      // Pre-task UNCOMMITTED state — the git snapshot captures this, NOT HEAD.
+      writeFileSync(join(ws, 'a.ts'), 'PRETASK\n');
+      const taskId = 't-dirty';
       const store = createSnapshotStore(db);
-      const r = applyDiffToFile(ws, 'a.ts', [false], 't1', store);
-      expect(r.ok).toBe(false);
-      expect(r.error).toBe('no base for diff');
+      const dir = join(ws, '.jarvis', 'snapshots', taskId);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'a.ts'), 'PRETASK\n');
+      store.save(taskId, { kind: 'git', patchFile: `${dir}/t-dirty.patch`, dir, files: ['a.ts'] });
+      // The task changes the file further.
+      writeFileSync(join(ws, 'a.ts'), 'PRETASK + task\n');
+      // Rejecting the task hunk must restore PRE-TASK content, never write HEAD
+      // (the 'HEAD\n' line) back over the user's uncommitted work. (finding 4)
+      const r = applyDiffToFile(ws, 'a.ts', [false], taskId, store);
+      expect(r.ok).toBe(true);
+      // The diff pipeline normalizes away the trailing newline (toLines strips
+      // it); the restored content is the pre-task 'PRETASK', not 'HEAD'.
+      expect(readFileSync(join(ws, 'a.ts'), 'utf8')).toBe('PRETASK');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('treats a task-created file as a full add (empty base): accept keeps it, reject removes it', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-newfile-'));
+    try {
+      const taskId = 't-new';
+      const store = createSnapshotStore(db);
+      writeFileSync(join(ws, 'a.ts'), 'line1\nline2\n');
+      // Rejecting the only (add) hunk -> pre-task state is ABSENT, so the file
+      // is REMOVED (not written as an empty file). (finding 3)
+      const r = applyDiffToFile(ws, 'a.ts', [false], taskId, store);
+      expect(r.ok).toBe(true);
+      expect(existsSync(join(ws, 'a.ts'))).toBe(false);
+      // Accepting keeps the file's content.
+      writeFileSync(join(ws, 'a.ts'), 'line1\nline2\n');
+      const r2 = applyDiffToFile(ws, 'a.ts', [true], taskId, store);
+      expect(r2.ok).toBe(true);
+      // Trailing newline normalized away by the diff pipeline; content kept.
+      expect(readFileSync(join(ws, 'a.ts'), 'utf8')).toBe('line1\nline2');
     } finally {
       rmSync(ws, { recursive: true, force: true });
     }
@@ -164,7 +230,10 @@ describe('applyDiffToFile (E9)', () => {
       const store = createSnapshotStore(db);
       const base = Array.from({ length: 10 }, (_, i) => `line ${i}`).join('\n');
       const modified = base.replace('line 1', 'line 1 CHANGED').replace('line 8', 'line 8 CHANGED');
-      store.save(taskId, { kind: 'copy', dir: `${ws}/.jarvis/snapshots/t1`, files: { 'a.ts': base } });
+      const dir = join(ws, '.jarvis', 'snapshots', taskId);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'a.ts'), base);
+      store.save(taskId, { kind: 'copy', dir, files: ['a.ts'] });
       writeFileSync(join(ws, 'a.ts'), modified); // two far-apart changes -> 2 hunks
       // Only 1 accept for 2 hunks: must not silently reject the second hunk.
       const r = applyDiffToFile(ws, 'a.ts', [false], taskId, store);

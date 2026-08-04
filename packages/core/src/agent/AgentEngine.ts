@@ -83,7 +83,10 @@ export class AgentEngine {
       for (const call of callCalls) {
         toolCalls++;
         if (this.cfg.approvalGate) {
-          const ok = await this.cfg.approvalGate({ toolName: call.name, args: call.arguments, prompt: `run ${call.name}` });
+          // Pass the run's own agent through so a shared engine (concurrent
+          // tasks) scopes the gate to THIS task's agent, not a module-level
+          // "current agent" that races across submissions. (M4 review finding 1)
+          const ok = await this.cfg.approvalGate({ toolName: call.name, args: call.arguments, prompt: `run ${call.name}`, agent: input.agent });
           if (!ok) {
             working.push({ role: 'tool', content: `[denied] ${call.name}` });
             continue;

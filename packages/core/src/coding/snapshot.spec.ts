@@ -20,7 +20,12 @@ describe('TaskSnapshot', () => {
   };
 
   it('snapshots a git workspace as a patch and restores via reverse apply', async () => {
-    const git: SnapshotGit = { exec: async (args) => ({ stdout: args[0] === 'diff' ? 'patch-data' : '', stderr: '' }) };
+    const git: SnapshotGit = {
+      exec: async (args) => ({
+        stdout: args[0] === 'diff' && args.length === 1 ? 'patch-data' : '',
+        stderr: ''
+      })
+    };
     const fs = new MemFs();
     fs.write('/ws/a.txt', 'v1');
     await createTaskSnapshot({ taskId: 't1', workspaceRoot: '/ws', git, fs, store, isGitRepo: true });
@@ -32,7 +37,35 @@ describe('TaskSnapshot', () => {
     await expect(restoreSnapshot({ taskId: 't1', workspaceRoot: '/ws', git, fs, store })).resolves.toBeUndefined();
   });
 
-  it('copy-on-write snapshots non-git workspaces and skips node_modules', async () => {
+  it('git snapshots capture pre-task content of modified/untracked files and restore writes it back', async () => {
+    const git: SnapshotGit = {
+      exec: async (args) => {
+        if (args[0] === 'diff' && args[1] === '--name-only') return { stdout: 'mod.ts\n', stderr: '' };
+        if (args[0] === 'ls-files') return { stdout: 'new.ts\n', stderr: '' };
+        return { stdout: 'patch-data', stderr: '' }; // ['diff'] and ['apply','-R',...]
+      }
+    };
+    const fs = new MemFs();
+    fs.write('/ws/mod.ts', 'v1-mod');
+    fs.write('/ws/new.ts', 'v1-new');
+    await createTaskSnapshot({ taskId: 't3', workspaceRoot: '/ws', git, fs, store, isGitRepo: true });
+    const meta = store.get('t3')!;
+    expect(meta.kind).toBe('git');
+    if (meta.kind === 'git') {
+      // meta stores only relative paths; the pre-task content lives in the dir.
+      expect(meta.files).toEqual(['mod.ts', 'new.ts']);
+      expect(fs.read(`${meta.dir}/mod.ts`)).toBe('v1-mod');
+      expect(fs.read(`${meta.dir}/new.ts`)).toBe('v1-new');
+      // The task modifies both files; restore writes the pre-task content back.
+      fs.write('/ws/mod.ts', 'v2-mod');
+      fs.write('/ws/new.ts', 'v2-new');
+      await restoreSnapshot({ taskId: 't3', workspaceRoot: '/ws', git, fs, store });
+      expect(fs.read('/ws/mod.ts')).toBe('v1-mod');
+      expect(fs.read('/ws/new.ts')).toBe('v1-new');
+    }
+  });
+
+  it('copy-on-write snapshots non-git workspaces and skips node_modules (paths only, content in dir)', async () => {
     const git: SnapshotGit = { exec: async () => ({ stdout: '', stderr: '' }) };
     const fs = new MemFs();
     fs.write('/ws/a.txt', 'v1');
@@ -41,12 +74,25 @@ describe('TaskSnapshot', () => {
     const meta = store.get('t2')!;
     expect(meta.kind).toBe('copy');
     if (meta.kind === 'copy') {
-      expect(meta.files['a.txt']).toBe('v1');
-      expect(meta.files['node_modules/x.js']).toBeUndefined();
-      fs.write('/ws/a.txt', 'v2'); // 改动后回滚
+      // meta.files is a bounded list of RELATIVE PATHS, not the file contents.
+      expect(meta.files).toContain('a.txt');
+      expect(meta.files).not.toContain('node_modules/x.js');
+      expect(fs.read(`${meta.dir}/a.txt`)).toBe('v1');
+      // The task changes the file; restore reads the content back from the dir.
+      fs.write('/ws/a.txt', 'v2');
       await restoreSnapshot({ taskId: 't2', workspaceRoot: '/ws', git, fs, store });
       expect(fs.read('/ws/a.txt')).toBe('v1');
     }
+  });
+
+  it('restores a legacy git snapshot (no files/dir fields) via reverse apply only', async () => {
+    // Pre-M4-review git rows were {kind:'git'; patchFile} with NO files list.
+    // restoreSnapshot must not trip on the absent files field — the reverse-apply
+    // patch alone restores the tracked state, and the write-back loop is a no-op.
+    const git: SnapshotGit = { exec: async (args) => ({ stdout: args[0] === 'apply' ? '' : 'patch-data', stderr: '' }) };
+    const fs = new MemFs();
+    store.save('t-legacy', { kind: 'git', patchFile: '/ws/.jarvis/snapshots/t-legacy.patch' } as unknown as SnapshotMeta);
+    await expect(restoreSnapshot({ taskId: 't-legacy', workspaceRoot: '/ws', git, fs, store })).resolves.toBeUndefined();
   });
 
   it('throws when restoring a task with no snapshot', async () => {

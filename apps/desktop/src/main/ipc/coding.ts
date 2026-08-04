@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { createTaskSnapshot, parseIgnorePatterns, isIgnored, diffLines, groupHunks, applyHunks, toUnified, type SnapshotGit, type SnapshotFs, type SnapshotMeta, type SnapshotStore, type IndexStore, type IndexRow } from '@jarvis/core';
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -151,31 +151,58 @@ export async function reindexWorkspace(index: IndexStore, wsRoot: string): Promi
 
 // =============================================================================
 // M4 Task 8 (E9): diff.applyAll + diff.read. The base of a diff is resolved
-// git-HEAD-first, then the task snapshot copy files (Task 2 / L26), and never
-// silently falls back to the CURRENT file — for a non-git workspace or an
-// untracked file, base == modified would make the diff a no-op (controller gap
-// #2). When neither git HEAD nor a snapshot copy exists we return an error
-// instead of applying nothing.
+// snapshot-first, then git HEAD, then an EMPTY base (a task-created file is a
+// full add). The snapshot is authoritative because it holds the exact pre-task
+// content of every dirty/untracked file (git) or the whole workspace (non-git),
+// so the diff shows ONLY the task's changes and never writes HEAD back over
+// pre-task uncommitted work (M4 review findings 3 & 4). git HEAD is only
+// reached for files that were unmodified pre-task (so HEAD == pre-task), and an
+// empty base turns a task-created file into a reviewable full-add diff. The base
+// never silently falls back to the CURRENT file — base == modified would make
+// the diff a no-op (controller gap #2).
 // =============================================================================
 
 function toLines(text: string): string[] {
-  return text.replace(/\n$/, '').split('\n');
+  // Empty text must produce an EMPTY line list: '' .replace(...).split('\n')
+  // yields [''] — one phantom context line that corrupts the diff for a
+  // task-created file (base [] vs a real single-line file must differ). (M4
+  // review finding 3)
+  return text ? text.replace(/\n$/, '').split('\n') : [];
 }
 
 function resolveDiffBase(wsRoot: string, path: string, taskId: string, snapshotStore: SnapshotStore): { base: string[] } | { error: string } {
-  // 1) git HEAD first (tracked files in a git repo).
+  // 1) Task snapshot FIRST (M4 review finding 4): the snapshot holds the exact
+  // pre-task content of every file that differed from HEAD/index at capture
+  // time (dirty tracked files via `git diff --name-only`, untracked files via
+  // `git ls-files --others`) and, for non-git workspaces, the whole workspace
+  // minus ignores. Using it as the base guarantees the E9 diff shows ONLY the
+  // task's changes — rejecting a hunk restores the user's pre-task state and
+  // never writes HEAD back over pre-task uncommitted work.
+  const meta = snapshotStore.get(taskId);
+  // meta.files may be absent (legacy git rows stored only {kind, patchFile}).
+  if (meta && (meta.kind === 'copy' || meta.kind === 'git') && meta.files) {
+    if (Array.isArray(meta.files)) {
+      if (meta.files.includes(path)) {
+        try {
+          const content = readFileSync(join(meta.dir, path), 'utf8');
+          return { base: toLines(content) };
+        } catch { /* snapshot file missing on disk; fall through */ }
+      }
+    } else if (typeof (meta.files as unknown as Record<string, string>)[path] === 'string') {
+      // Legacy row: meta.files[path] IS the pre-task content (pre-M4-review).
+      return { base: toLines((meta.files as unknown as Record<string, string>)[path]) };
+    }
+  }
+  // 2) git HEAD: safe ONLY because reaching it means the file was UNMODIFIED
+  // pre-task (otherwise the snapshot above would hold it), so HEAD == pre-task.
   try {
     const stdout = execFileSync('git', ['show', `HEAD:${path}`], { cwd: wsRoot, encoding: 'utf8' });
     return { base: toLines(stdout) };
   } catch { /* not a git repo, untracked file, or no HEAD yet */ }
-  // 2) Task snapshot copy files (non-git workspaces) — the exact pre-task state
-  // captured by snapshotBeforeTask, so applying a hunk reverses a task change.
-  const meta = snapshotStore.get(taskId);
-  if (meta && meta.kind === 'copy' && meta.files[path] !== undefined) {
-    return { base: toLines(meta.files[path]) };
-  }
-  // 3) Neither a git base nor a snapshot base: refuse rather than silently no-op.
-  return { error: 'no base for diff' };
+  // 3) No base anywhere: the file did not exist pre-task, so it is a full ADD —
+  // the empty base makes the whole current file a reviewable diff, and rejecting
+  // every hunk removes the file (applyDiffToFile unlinks it). (finding 3)
+  return { base: [] };
 }
 
 export function applyDiffToFile(wsRoot: string, path: string, accepts: boolean[], taskId: string, snapshotStore: SnapshotStore): { ok: boolean; error?: string } {
@@ -190,7 +217,13 @@ export function applyDiffToFile(wsRoot: string, path: string, accepts: boolean[]
   // hunks silently. Refuse instead. (review fix)
   if (accepts.length !== hunks.length) return { ok: false, error: 'accepts length mismatch' };
   const result = applyHunks(baseRes.base, hunks, accepts).join('\n');
-  writeFileSync(abs, result);
+  if (result === '' && baseRes.base.length === 0) {
+    // A task-created file (empty base) fully rejected: the pre-task state is
+    // ABSENT, so remove the file rather than write an empty one. (finding 3)
+    unlinkSync(abs);
+  } else {
+    writeFileSync(abs, result);
+  }
   return { ok: true };
 }
 
@@ -210,12 +243,12 @@ export function readDiffFile(wsRoot: string, path: string, taskId: string, snaps
 
 // M4 Task 9 (E12): external IDE bridge /diff support. The bridge only receives a
 // taskId, so this walks the (single-active) workspace and returns the FIRST file
-// whose current content differs from the task's base (git HEAD first, then the
-// task snapshot copy — the same resolveDiffBase contract as diff.applyAll). It
-// is best-effort: multi-file tasks return the first changed file, and a task
-// with no resolvable base change returns null (the bridge 404s). The walk
-// reuses walkWorkspaceFiles, so hidden dirs (.git/.jarvis) and node_modules are
-// never compared.
+// whose current content differs from the task's base (snapshot first, then git
+// HEAD, then empty — the same resolveDiffBase contract as diff.applyAll). It is
+// best-effort: multi-file tasks return the first changed file, and a task with
+// no resolvable base change returns null (the bridge 404s). The walk reuses
+// walkWorkspaceFiles, so hidden dirs (.git/.jarvis) and node_modules are never
+// compared.
 export function loadTaskDiff(wsRoot: string | null, taskId: string, snapshotStore: SnapshotStore): { path: string; diff: string } | null {
   if (!wsRoot) return null;
   const root = wsRoot.replace(/[\\/]+$/, '');

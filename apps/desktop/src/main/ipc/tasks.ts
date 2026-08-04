@@ -21,21 +21,15 @@ import { createSnapshotStore, snapshotBeforeTask, createSnapshotGit, createSnaps
 // deltas are emitted exactly once; this buffer preserves them for later reads.
 const taskLogs = new Map<string, string[]>();
 
-// M3 final review (J2): per-agent MCP grant isolation. The engine is shared
-// across tasks, so the approval gate (which runs inside the engine) has no
-// notion of "the current agent". tasks.create sets this module-level id before
-// submitting a task and the approval gate reads it to scope mcp_grants writes
-// and lookups. Documented single-active-task assumption for M3: with a shared
-// engine, the grant consult/write reflects the agent of the most recently
-// submitted task, so agent A's grant is never auto-allowed for agent B (the
-// cheap isolation gap-fix; a full multi-agent rework is out of scope).
-let currentAgentId: string | null = null;
-
-// E10 (plan mode): plan-only flag for the shared engine's approval gate. The
-// engine has no notion of "the current agent", so tasks.create sets this
-// alongside currentAgentId under the same documented single-active-task
-// assumption; the gate uses it to hard-block mutating tools at execution.
-let currentPlanOnly = false;
+// The engine is SHARED across tasks while TaskOrchestrator runs tasks
+// concurrently (concurrency 6). The approval gate therefore must never rely on
+// module-level state: M4 final review (finding 1) found that a module-level
+// currentAgentId/currentPlanOnly set by tasks.create races when a plan-only
+// task and an edit-mode task overlap — the gate read whichever task submitted
+// last. Instead, the engine passes the RUN's agent through ApprovalRequest.agent
+// (see AgentEngine.run), so plan-only blocking (E10), the mcp_grants consult
+// (J2), and the audit rows are scoped to the agent that actually issued the
+// tool call. No module-level agent identity exists here anymore.
 
 export interface TaskHandlerDeps {
   chatFn?: EngineChatFn;
@@ -115,16 +109,19 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // E10 (plan mode): a plan-only agent's mutating tool calls are blocked at
       // execution regardless of what the model attempts — before the normal
       // approval flow so the block is unconditional (no prompt, no grant write).
-      if (currentPlanOnly && isPlanBlocked(req.toolName)) {
-        appendAudit(db, { agentId: currentAgentId, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'plan_only_blocked' } });
+      // req.agent is the RUN's agent (the engine passes it through per tool
+      // call), so concurrent plan-only and edit-mode tasks cannot leak into
+      // each other's gate. (M4 review finding 1)
+      if (req.agent.planOnly && isPlanBlocked(req.toolName)) {
+        appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'plan_only_blocked' } });
         return false;
       }
       // G8: previously-approved mcp:{server}:{tool} calls are auto-allowed by
       // folding the grants rows into allowAlways (granted=1 rows). M3 final
-      // review (J2): grants are consulted per-agent (the id set by
-      // tasks.create), falling back to server-wide rows (agent_id = '') so
-      // grants written before per-agent scoping still auto-allow.
-      const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(currentAgentId, '') as Array<{ server_id: string; tool_name: string }>;
+      // review (J2): grants are consulted per-agent (the run's agent id),
+      // falling back to server-wide rows (agent_id = '') so grants written
+      // before per-agent scoping still auto-allow.
+      const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(req.agent.id, '') as Array<{ server_id: string; tool_name: string }>;
       const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
       const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] });
       // M3 Task 7 gap fix: git_commit is a mutating git tool that the
@@ -132,16 +129,16 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // args.command), so force it through interactive approval.
       if (decision === 'allow' && req.toolName !== 'git_commit') return true;
       const ok = await approval.request(req);
-      appendAudit(db, { agentId: currentAgentId, kind: 'approval', detail: { toolName: req.toolName, ok } });
+      appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok } });
       // G8/J7: a denied-then-approved mcp call writes a grant so the next call
-      // hits allowAlways and skips approval. The grant is scoped to the current
+      // hits allowAlways and skips approval. The grant is scoped to the run's
       // agent id (J2 per-agent isolation) rather than the old server-wide ''
       // sentinel, so another agent cannot inherit this approval.
       if (ok && req.toolName.startsWith('mcp:')) {
         const seg = req.toolName.slice('mcp:'.length).split(':');
         if (seg.length >= 2) {
           db.prepare('INSERT INTO mcp_grants (id, agent_id, server_id, tool_name, granted, created_at) VALUES (?,?,?,?,?,?)')
-            .run(randomUUID(), currentAgentId ?? '', seg[0], seg.slice(1).join(':'), 1, new Date().toISOString());
+            .run(randomUUID(), req.agent.id, seg[0], seg.slice(1).join(':'), 1, new Date().toISOString());
         }
       }
       return ok;
@@ -182,15 +179,13 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     approvalCenter: approval,
     async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string; sessionId?: string }) {
       const { agentId, prompt, sessionId } = args;
-      // J2 per-agent MCP grants: scope the shared engine's approval gate to the
-      // agent submitting this task (single-active-task assumption, documented
-      // at the module-level currentAgentId declaration).
-      currentAgentId = agentId;
       const id = randomUUID();
       const agent = agentStore.get(agentId);
-      currentPlanOnly = agent.planOnly;
       const ctx = workspace.loadContext(agentId);
-      const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.', db, currentAgentId);
+      // M4 review (finding 1): the agent's identity flows to the shared engine's
+      // approval gate through ApprovalRequest.agent (set per tool call in
+      // AgentEngine.run) — no module-level currentAgentId/currentPlanOnly.
+      const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.', db, agent.id);
       const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
       if (!modelRow) throw new Error('agent has no valid model binding');
       const apiKey = await secrets.get(modelRow.api_key_ref);

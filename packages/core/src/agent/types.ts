@@ -1,5 +1,6 @@
 import type { ToolCall, Usage } from '../model/types';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
+import type { AgentConfig } from '@jarvis/protocol';
 
 export interface ToolDef {
   name: string;
@@ -36,6 +37,12 @@ export interface ApprovalRequest {
   toolName: string;
   args: Record<string, unknown>;
   prompt: string;
+  // M4 final review (finding 1): the agent that owns this tool call. The engine
+  // is SHARED across concurrently-running tasks (TaskOrchestrator concurrency 6),
+  // so the approval gate must scope plan-only blocking and mcp grant consults to
+  // the RUN's agent — a module-level "current agent" would race and let a
+  // plan-only agent's mutating call pass (or wrongly block an edit agent).
+  agent: AgentConfig;
 }
 
 export type { ToolCall };
