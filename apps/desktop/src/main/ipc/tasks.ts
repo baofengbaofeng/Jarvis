@@ -2,7 +2,8 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, Sandbox, createMcpClient, registerMcpTools, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, Sandbox, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
+import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
@@ -143,9 +144,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const env = mergeEnv({}, {}, agentEnv, {});
       await store.create(id, agentId);
       // G6: register the agent's bound MCP servers' tools into the shared
-      // engine registry (filtered by config_json.agentIds). Real processes are
-      // spawned lazily by createMcpClient on first use; failures are logged and
-      // skipped so a bad server never blocks task creation.
+      // engine registry (filtered by config_json.agentIds). Clients are cached
+      // per server id (see ./mcp) so repeated task runs reuse the same child
+      // process instead of leaking one per run; failures are logged and skipped
+      // so a bad server never blocks task creation.
       await registerAgentMcpTools(db, toolRegistry, agentId);
       if (sessionId) {
         taskSessions.set(id, sessionId);
@@ -166,25 +168,6 @@ function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, ag
   const injection = buildSkillInjection(skills);
   const system = `${agent.systemPrompt}${injection}`;
   return buildContextMessages(ctx, system, [{ role: 'user', content: prompt }]);
-}
-
-// G6: spawn each MCP server bound to the agent (config_json.agentIds) and
-// register its tools into the engine registry under mcp:{server}:{tool}.
-// stdio is the only transport createMcpClient supports today; sse/http are
-// deferred. Clients are kept alive for the app lifetime (documented).
-async function registerAgentMcpTools(db: Database.Database, toolRegistry: ToolRegistry, agentId: string): Promise<void> {
-  const rows = db.prepare('SELECT id, name, transport, config_json FROM mcp_servers').all() as Array<{ id: string; name: string; transport: string; config_json: string }>;
-  for (const s of rows) {
-    const cfg = JSON.parse(s.config_json ?? '{}') as { command?: string; args?: string[]; agentIds?: string[] };
-    if (s.transport !== 'stdio' || !cfg.command || !cfg.agentIds?.includes(agentId)) continue;
-    try {
-      const client = createMcpClient(cfg.command, cfg.args ?? [], s.name);
-      await client.initialize();
-      await registerMcpTools(toolRegistry, client, s.name);
-    } catch (e) {
-      console.error(`mcp: failed to register server ${s.name}`, e);
-    }
-  }
 }
 
 // J5 base: audit trail for approval decisions (and other lifecycle events).

@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { openDatabase } from './db/connection';
 import { runMigrations } from './db/migrations';
 import { IpcRouter } from './ipc/IpcRouter';
+import { closeAllMcpClients } from './ipc/mcp';
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
 import { DaemonSupervisor } from './daemon/DaemonSupervisor';
@@ -44,4 +45,7 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', () => daemon.stop());
+app.on('will-quit', () => {
+  daemon.stop();
+  closeAllMcpClients();
+});

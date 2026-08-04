@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { PassThrough } from 'node:stream';
+import { ToolRegistry } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
-import { createMcpStore, testMcpServer } from './mcp';
+import { createMcpStore, testMcpServer, registerAgentMcpTools, closeAllMcpClients } from './mcp';
 
 describe('mcp store', () => {
   let db: Database.Database;
@@ -47,5 +48,44 @@ describe('mcp.test', () => {
     const r = await testMcpServer({ name: 's', transport: 'sse', command: 'x' });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('not supported');
+  });
+});
+
+describe('registerAgentMcpTools client cache', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); closeAllMcpClients(); });
+  afterEach(() => closeAllMcpClients());
+
+  class FakeProc {
+    stdout = new PassThrough();
+    stdin = {
+      write: (d: string) => {
+        const m = JSON.parse(d);
+        if (m.method === 'initialize') this.stdout.write(`{"jsonrpc":"2.0","id":${m.id},"result":{"capabilities":{}}}\n`);
+        if (m.method === 'tools/list') this.stdout.write(`{"jsonrpc":"2.0","id":${m.id},"result":{"tools":[{"name":"read","description":"r","inputSchema":{}}]}}\n`);
+      },
+      end: () => {},
+    };
+    kill = () => {};
+  }
+
+  it('spawns + registers ONCE per server and reuses the cached client on later runs', async () => {
+    db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
+      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [], agentIds: ['a1'] }), new Date().toISOString());
+    const registry = new ToolRegistry();
+    let spawns = 0;
+    const deps = { spawnImpl: () => { spawns++; return new FakeProc() as unknown as import('node:child_process').ChildProcess; } };
+    await registerAgentMcpTools(db, registry, 'a1', deps);
+    await registerAgentMcpTools(db, registry, 'a1', deps);
+    expect(spawns).toBe(1);
+    expect(registry.has('mcp:fs:read')).toBe(true);
+  });
+
+  it('does not register a server bound to a different agent', async () => {
+    db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
+      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [], agentIds: ['a2'] }), new Date().toISOString());
+    const registry = new ToolRegistry();
+    await registerAgentMcpTools(db, registry, 'a1', { spawnImpl: () => new FakeProc() as unknown as import('node:child_process').ChildProcess });
+    expect(registry.has('mcp:fs:read')).toBe(false);
   });
 });
