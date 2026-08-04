@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
 import { exportSessionMarkdown } from '@jarvis/core';
 import { createSettingsStore } from './settings';
-import { createProviderStore, type ProviderInput } from './providers';
+import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { registerChatHandlers } from './chat';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
@@ -28,6 +28,8 @@ export class IpcRouter {
     this.register(IpcChannel.providerCreate, (_e, input) => providers.create(input as ProviderInput));
     this.register(IpcChannel.providerUpdate, (_e, id, patch) => providers.update(id as string, patch as Partial<ProviderInput>));
     this.register(IpcChannel.providerDelete, (_e, id) => providers.remove(id as string));
+    this.register('provider.listModels', (_e, providerId) => providers.listModels(providerId as string));
+    this.register('provider.addModel', (_e, providerId, input) => providers.addModel(providerId as string, input as ModelInput));
     const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow());
     this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as { sessionId: string; text: string; agentId: string }));
     this.register('chat.listSessions', () => chat.listSessions());
