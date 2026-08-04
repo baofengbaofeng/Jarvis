@@ -45,4 +45,22 @@ describe('AgentEngine', () => {
     expect(calls).toBeLessThanOrEqual(2);
     expect(result.toolCalls).toBeLessThanOrEqual(2);
   });
+
+  it('terminates exactly at maxSteps when the model requests a tool call on every step', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    let calls = 0;
+    const maxSteps = 3;
+    const alwaysToolChat = async (_req: unknown, opts: { apiKey: string; signal?: AbortSignal; onChunk?: (c: ChatChunk) => void }) => {
+      calls++;
+      // Every step requests another tool call, so only the loop cap stops it.
+      opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: `t${calls}`, name: 'echo', arguments: { text: 'a' } }] });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: '', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat: alwaysToolChat }, toolRegistry: reg, maxSteps });
+    const result = await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(calls).toBe(maxSteps);
+    expect(result.toolCalls).toBe(maxSteps);
+  });
 });
