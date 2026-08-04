@@ -1,8 +1,9 @@
 import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -224,11 +225,28 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   };
 }
 
+// M4 Task 3 (E6): @mention parsing + context attachment injection. readImpl is
+// a real fs read — same try/readFileSync/null pattern as createSnapshotFs in
+// ./coding — so @file mentions resolve against the agent's workspace root.
+function readImpl(p: string): string | null {
+  try { return readFileSync(p, 'utf8'); } catch { return null; }
+}
+
+// Extracts @file mentions from the user prompt, resolves each to a content
+// attachment, and strips the mention tokens from the prompt. The assembled user
+// message becomes `${input}${block}` so referenced file contents are injected
+// verbatim into the model context (E6).
+function attachMentions(userInput: string, wsRoot: string): { input: string; block: string } {
+  const refs = parseMentions(userInput).map(m => resolveFileMention(m.query, wsRoot, readImpl));
+  return { input: userInput.replace(/@([^\s@#]+)/g, '').replace(/\s+/g, ' ').trim(), block: buildMentionBlock(refs) };
+}
+
 function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string, workspaceRoot: string): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
   const skills = scanSkillsDir(`${workspaceRoot}/.jarvis/skills`);
   const injection = buildSkillInjection(skills);
   const system = `${agent.systemPrompt}${injection}`;
-  return buildContextMessages(ctx, system, [{ role: 'user', content: prompt }]);
+  const { input, block } = attachMentions(prompt, workspaceRoot);
+  return buildContextMessages(ctx, system, [{ role: 'user', content: `${input}${block}` }]);
 }
 
 // J5 base: audit trail for approval decisions (and other lifecycle events).
