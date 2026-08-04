@@ -5,6 +5,7 @@ export * from './chat/ChatService';
 export * from './chat/export';
 export * from './chat/search';
 export * from './agent/types';
+export * from './agent/context';
 export * from './agent/ToolRegistry';
 export * from './agent/AgentEngine';
 export * from './task/TaskStateMachine';

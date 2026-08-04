@@ -5,6 +5,7 @@ import { exportSessionMarkdown } from '@jarvis/core';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
+import { createWorkspaceService } from './workspace';
 import { registerChatHandlers } from './chat';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
@@ -30,6 +31,15 @@ export class IpcRouter {
     this.register(IpcChannel.agentCreate, (_e, input) => agents.create(input as AgentInput));
     this.register(IpcChannel.agentUpdate, (_e, id, patch) => agents.update(id as string, patch as Partial<AgentInput>));
     this.register(IpcChannel.agentDelete, (_e, id) => agents.remove(id as string));
+    const workspace = createWorkspaceService(this.db);
+    this.register('workspace.bind', (_e, agentId, path) => { workspace.bind(agentId as string, path as string); return { ok: true }; });
+    this.register('workspace.listBound', () => workspace.listBound());
+    this.register('workspace.loadContext', (_e, agentId) => workspace.loadContext(agentId as string));
+    this.register(IpcChannel.dialogOpenFile, async () => {
+      const { dialog } = await import('electron');
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+      return r.canceled ? null : r.filePaths[0];
+    });
     this.register(IpcChannel.providerList, () => providers.list());
     this.register(IpcChannel.providerCreate, (_e, input) => providers.create(input as ProviderInput));
     this.register(IpcChannel.providerUpdate, (_e, id, patch) => providers.update(id as string, patch as Partial<ProviderInput>));
