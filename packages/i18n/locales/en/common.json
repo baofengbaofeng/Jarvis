@@ -21,7 +21,7 @@
     }
   },
   "theme": { "light": "Light", "dark": "Dark", "system": "System" },
-  "onboarding": { "title": "Welcome to JARVIS", "start": "Get started" },
+  "onboarding": { "title": "Welcome to JARVIS", "start": "Get started", "step1": "Provider", "step2": "Agent", "step3": "Workspace" },
   "chat": { "placeholder": "Type a message…" },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…" }
 }
