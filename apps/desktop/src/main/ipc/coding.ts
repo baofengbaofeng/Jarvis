@@ -185,6 +185,10 @@ export function applyDiffToFile(wsRoot: string, path: string, accepts: boolean[]
   const baseRes = resolveDiffBase(wsRoot, path, taskId, snapshotStore);
   if ('error' in baseRes) return { ok: false, error: baseRes.error };
   const hunks = groupHunks(diffLines(baseRes.base, modified));
+  // A stale/short decisions array (e.g. decisions computed for a different file)
+  // would make applyHunks treat missing entries as falsy -> reject undecided
+  // hunks silently. Refuse instead. (review fix)
+  if (accepts.length !== hunks.length) return { ok: false, error: 'accepts length mismatch' };
   const result = applyHunks(baseRes.base, hunks, accepts).join('\n');
   writeFileSync(abs, result);
   return { ok: true };

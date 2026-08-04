@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { diffLines, groupHunks } from '@jarvis/core';
 
@@ -6,6 +6,12 @@ export function DiffPanel({ taskId, path, base, modified }: { taskId: string; pa
   const { t } = useTranslation('common');
   const hunks = useMemo(() => groupHunks(diffLines(base.split('\n'), modified.split('\n'))), [base, modified]);
   const [decisions, setDecisions] = useState<Array<'accept' | 'reject' | null>>(hunks.map(() => null));
+  // Reset per-hunk decisions whenever the diff changes. Without this, a mounted
+  // (non-keyed) DiffPanel that switches from file A to file B would carry A's
+  // stale decisions: `allDone` would already be true, the Apply button would
+  // show, and `accepts` (A's length) would silently reject B's undecided hunks.
+  // (review fix)
+  useEffect(() => { setDecisions(hunks.map(() => null)); }, [base, modified, hunks]);
   const allDone = decisions.every(d => d !== null);
 
   const decide = (i: number, d: 'accept' | 'reject') => {

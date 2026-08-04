@@ -48,7 +48,9 @@ export function CodingPanelPage() {
       {diff && (
         <section data-testid="diff-section">
           <h3>{t('diff.title')}</h3>
-          <DiffPanel taskId={diff.taskId} path={diff.path} base={diff.base} modified={diff.modified} />
+          {/* keyed by path so switching files remounts a fresh DiffPanel whose
+              decisions start undecided (review fix). */}
+          <DiffPanel key={diff.path} taskId={diff.taskId} path={diff.path} base={diff.base} modified={diff.modified} />
         </section>
       )}
     </div>

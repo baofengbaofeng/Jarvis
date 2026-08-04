@@ -156,4 +156,22 @@ describe('applyDiffToFile (E9)', () => {
       rmSync(ws, { recursive: true, force: true });
     }
   });
+
+  it('refuses a stale accepts array whose length does not match the hunks', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-len-'));
+    try {
+      const taskId = 't1';
+      const store = createSnapshotStore(db);
+      const base = Array.from({ length: 10 }, (_, i) => `line ${i}`).join('\n');
+      const modified = base.replace('line 1', 'line 1 CHANGED').replace('line 8', 'line 8 CHANGED');
+      store.save(taskId, { kind: 'copy', dir: `${ws}/.jarvis/snapshots/t1`, files: { 'a.ts': base } });
+      writeFileSync(join(ws, 'a.ts'), modified); // two far-apart changes -> 2 hunks
+      // Only 1 accept for 2 hunks: must not silently reject the second hunk.
+      const r = applyDiffToFile(ws, 'a.ts', [false], taskId, store);
+      expect(r.ok).toBe(false);
+      expect(r.error).toBe('accepts length mismatch');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
 });
