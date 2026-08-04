@@ -8,9 +8,9 @@ export function TaskControlBar() {
   return (
     <div data-testid="task-control">
       <span data-testid="task-status">{status}</span>
-      {status === 'running' && <button onClick={() => void cancel()}>{t('common.cancel')}</button>}
-      {status === 'running' && <button onClick={() => void pause()}>⏸</button>}
-      {status === 'paused' && <button onClick={() => void resume()}>▶</button>}
+      {status === 'running' && <button data-testid="task-cancel" onClick={() => void cancel()}>{t('common.cancel')}</button>}
+      {status === 'running' && <button data-testid="task-pause" onClick={() => void pause()}>⏸</button>}
+      {status === 'paused' && <button data-testid="task-resume" onClick={() => void resume()}>▶</button>}
       {status === 'failed' && <button data-testid="task-retry" onClick={() => void retry()}>{t('common.ok')}</button>}
       <pre data-testid="task-logs">{logs.join('\n')}</pre>
     </div>

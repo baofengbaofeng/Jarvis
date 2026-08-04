@@ -4,7 +4,7 @@ interface TaskState {
   activeTaskId: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | null;
   logs: string[];
-  createTask: (agentId: string, prompt: string) => Promise<string>;
+  createTask: (agentId: string, prompt: string, sessionId?: string) => Promise<string>;
   cancel: () => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
@@ -17,8 +17,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   activeTaskId: null,
   status: null,
   logs: [],
-  async createTask(agentId, prompt) {
-    const { id } = (await window.jarvis.invoke('task.create', { agentId, prompt })) as { id: string };
+  async createTask(agentId, prompt, sessionId) {
+    const { id } = (await window.jarvis.invoke('task.create', { agentId, prompt, sessionId })) as { id: string };
     set({ activeTaskId: id, status: 'queued', logs: [] });
     return id;
   },

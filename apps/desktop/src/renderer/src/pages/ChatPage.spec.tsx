@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { getResources } from '@jarvis/i18n';
 import i18n from 'i18next';
@@ -11,8 +11,11 @@ const SESSIONS = [
   { id: 's2', title: 'Session 2', createdAt: '', updatedAt: '' }
 ];
 
+let taskCreateSpy: ReturnType<typeof vi.fn>;
+
 beforeAll(async () => {
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
+  taskCreateSpy = vi.fn(async () => ({ id: 't1' }));
   (window as unknown as { jarvis: unknown }).jarvis = {
     invoke: async (method: string, ..._a: unknown[]) => {
       if (method === 'agent.list') return [{ id: 'a1', name: 'Coder', slug: 'coder', description: '', systemPrompt: '', modelId: null, workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' }];
@@ -23,6 +26,7 @@ beforeAll(async () => {
           ? [{ id: 'm1', sessionId: 's1', role: 'user', content: 'hello from s1', createdAt: '' }]
           : [];
       }
+      if (method === 'task.create') return taskCreateSpy(..._a);
       if (method === 'chat.send') return { ok: true };
       return null;
     },
@@ -44,8 +48,18 @@ describe('ChatPage', () => {
     await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
     fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
     fireEvent.click(screen.getByTestId('chat-send'));
-    // The user prompt is appended to the live view immediately (before chat.send resolves).
+    // The user prompt is appended to the live view immediately (before the task is created).
     await waitFor(() => expect(screen.getByText('hello')).toBeTruthy());
+  });
+
+  it('routes the chat send through the task execution path', async () => {
+    taskCreateSpy.mockClear();
+    render(<ChatPage />);
+    await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
+    // init() loads s1, so the current session is s1 and the current agent is a1.
+    fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(taskCreateSpy).toHaveBeenCalledWith({ agentId: 'a1', prompt: 'hello', sessionId: 's1' }));
   });
 
   it('renders the session list and loads the first session', async () => {
