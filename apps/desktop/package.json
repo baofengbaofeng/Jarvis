@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@jarvis/core": "workspace:*",
     "@jarvis/i18n": "workspace:*",
     "@jarvis/protocol": "workspace:*",
     "@tanstack/react-router": "^1.0.0",
