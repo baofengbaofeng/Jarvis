@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createApprovalGate } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createApprovalGate, scanSkillsDir, buildSkillInjection } from '@jarvis/core';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
@@ -107,7 +107,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const id = randomUUID();
       const agent = agentStore.get(agentId);
       const ctx = workspace.loadContext(agentId);
-      const messages = buildTaskMessages(ctx, agent, prompt);
+      const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.');
       const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
       if (!modelRow) throw new Error('agent has no valid model binding');
       const apiKey = await secrets.get(modelRow.api_key_ref);
@@ -132,8 +132,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   };
 }
 
-function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
-  return buildContextMessages(ctx, agent.systemPrompt, [{ role: 'user', content: prompt }]);
+function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string, workspaceRoot: string): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
+  const skills = scanSkillsDir(`${workspaceRoot}/.jarvis/skills`);
+  const injection = buildSkillInjection(skills);
+  const system = `${agent.systemPrompt}${injection}`;
+  return buildContextMessages(ctx, system, [{ role: 'user', content: prompt }]);
 }
 
 // J5 base: audit trail for approval decisions (and other lifecycle events).
