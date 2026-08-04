@@ -32,6 +32,7 @@ export function createHealthPoller(opts: HealthPollerOptions) {
 
 export class DaemonSupervisor {
   private child: ChildProcess | null = null;
+  private poller: ReturnType<typeof createHealthPoller> | null = null;
   private port = Number(process.env.JARVIS_DAEMON_PORT ?? DEFAULT_PORT);
   private healthy = false;
 
@@ -40,8 +41,9 @@ export class DaemonSupervisor {
   start(onReady?: () => void): void {
     if (this.child && !this.child.killed) return;
     this.child = spawn(this.binaryPath, [], { env: { ...process.env, JARVIS_DAEMON_PORT: String(this.port) } });
-    const poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
-    void poller.start(() => { this.healthy = true; onReady?.(); });
+    this.child.on('error', () => { this.healthy = false; this.child = null; });
+    this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
+    void this.poller.start(() => { this.healthy = true; onReady?.(); });
     this.child.on('exit', () => { this.healthy = false; });
   }
 
@@ -56,5 +58,10 @@ export class DaemonSupervisor {
   }
 
   restart(): void { this.stop(); this.start(); }
-  stop(): void { this.child?.kill(); this.child = null; }
+  stop(): void {
+    this.poller?.stop();
+    this.poller = null;
+    this.child?.kill();
+    this.child = null;
+  }
 }
