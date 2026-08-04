@@ -23,6 +23,19 @@ beforeAll(async () => {
     })
   });
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
+  // The rewritten ChatPage (Task 8) calls window.jarvis.invoke('chat.listSessions')
+  // from its useEffect init(); without a bridge mock it throws and the
+  // "renders chat page when onboarding is done" case regresses.
+  (window as unknown as { jarvis: unknown }).jarvis = {
+    invoke: async (method: string, ..._args: unknown[]) => {
+      if (method === 'chat.listSessions') return [];
+      if (method === 'chat.createSession') return { id: 's1', title: '', createdAt: '', updatedAt: '' };
+      if (method === 'chat.loadMessages') return [];
+      if (method === 'chat.send') return { ok: true };
+      return null;
+    },
+    onDidReceive: () => () => {}
+  };
 });
 
 describe('App', () => {
