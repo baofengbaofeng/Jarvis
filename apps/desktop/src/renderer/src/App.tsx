@@ -13,11 +13,13 @@ import { ConcurrencySettingsPage } from './pages/settings/ConcurrencySettingsPag
 import { OnboardingPage } from './pages/OnboardingPage';
 import { AgentListView } from './pages/AgentListView';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
+import { ApprovalModal } from './components/approval/ApprovalModal';
 
 export default function App() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
   return (
     <ThemeProvider>
+      <ApprovalModal />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />

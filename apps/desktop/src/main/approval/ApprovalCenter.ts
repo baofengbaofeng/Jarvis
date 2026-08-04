@@ -6,6 +6,10 @@ export interface PendingApproval { id: string; toolName: string; args: Record<st
 
 export class ApprovalCenter {
   private pending = new Map<string, PendingApproval>();
+  // J2 (M3 final review): if the renderer never responds (window closed, modal
+  // not mounted, renderer crash), auto-deny after this long so the awaiting
+  // task can never hang forever and wedge the task queue.
+  private static readonly AUTO_DENY_MS = 60_000;
 
   constructor(private getWindow: () => BrowserWindow | null) {}
 
@@ -13,11 +17,24 @@ export class ApprovalCenter {
     const id = randomUUID();
     return new Promise((resolve) => {
       const record: PendingApproval & { resolve: (ok: boolean) => void } = { ...req, id, resolve };
+      const win = this.getWindow();
+      if (!win) {
+        // No renderer is attached (headless task, window closed, tests with a
+        // null window). Resolve false immediately instead of leaving the
+        // promise pending forever — the engine records a denied tool turn and
+        // the task continues rather than wedging the queue.
+        (record as PendingApproval & { resolve: (ok: boolean) => void }).resolve(false);
+        return;
+      }
       this.pending.set(id, record);
-      this.getWindow()?.webContents.send(IpcEvent.taskLog, { id: 'approval', line: `approval: ${req.toolName}` });
-      // 渲染层注册 approval:request 监听;resolve 后清除
-      // 简化:发自定义事件
-      this.getWindow()?.webContents.send('approval:request', { id, toolName: req.toolName, args: req.args, prompt: req.prompt });
+      win.webContents.send(IpcEvent.taskLog, { id: 'approval', line: `approval: ${req.toolName}` });
+      win.webContents.send('approval:request', { id, toolName: req.toolName, args: req.args, prompt: req.prompt });
+      // Safety net: a request with no renderer response must never hang a task.
+      const timer = setTimeout(() => {
+        const r = this.pending.get(id);
+        if (r) { (r as PendingApproval & { resolve: (ok: boolean) => void }).resolve(false); this.pending.delete(id); }
+      }, ApprovalCenter.AUTO_DENY_MS);
+      timer.unref?.();
     });
   }
 
