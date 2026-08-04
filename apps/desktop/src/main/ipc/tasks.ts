@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -89,6 +89,15 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // workspaceId), so real bound workspaces outside process.cwd() pass the
   // assert. toolPolicy is the fallback policy (tools read ctx.policy first).
   createGitTools(toolRegistry, toolPolicy);
+  // M4 Task 5 (E8): run_tests needs its own policy because the default `npm test`
+  // is NOT in the sandbox DEFAULT_COMMAND_WHITELIST (no npm/pnpm/yarn) — without
+  // an allowCommands entry carrying the project test commands, assertCommand
+  // blocks the tool's default before it ever runs. registerRunTestsTool merges
+  // these test commands into the effective per-agent policy so the default works
+  // even under a saved empty allowlist; readonly agents stay blocked by the
+  // readonly whitelist.
+  const testPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: ['npm test', 'pnpm test', 'yarn test'] };
+  registerRunTestsTool(toolRegistry, testPolicy);
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
   const engine = new AgentEngine({
