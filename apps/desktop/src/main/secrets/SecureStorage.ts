@@ -31,7 +31,8 @@ export class SecureStorage {
 
   async set(key: string, value: string): Promise<void> {
     if (this.platform === 'darwin') {
-      await this.run('security', ['add-generic-password', '-U', '-a', SERVICE, '-s', key, '-w', value]);
+      const r = await this.run('security', ['add-generic-password', '-U', '-a', SERVICE, '-s', key, '-w', value]);
+      if (r.stderr) throw new Error('keychain error: ' + r.stderr);
       return;
     }
     throw new Error('secure storage for windows (DPAPI) lands in M8');
@@ -48,7 +49,8 @@ export class SecureStorage {
 
   async delete(key: string): Promise<void> {
     if (this.platform === 'darwin') {
-      await this.run('security', ['delete-generic-password', '-a', SERVICE, '-s', key]);
+      const r = await this.run('security', ['delete-generic-password', '-a', SERVICE, '-s', key]);
+      if (r.stderr) throw new Error('keychain error: ' + r.stderr);
     }
   }
 }

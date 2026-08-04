@@ -21,19 +21,20 @@ export function createProviderStore(db: Database.Database, secrets: Pick<SecureS
     async create(input: ProviderInput): Promise<Provider> {
       const id = randomUUID();
       const ref = `provider:${id}:key`;
+      // Write the keychain entry FIRST so a keychain failure leaves no dangling api_key_ref row.
+      await secrets.set(ref, input.apiKey);
       db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
         .run(id, input.name, input.type, input.baseUrl, ref, now(), now());
-      await secrets.set(ref, input.apiKey);
       return this.list().find(p => p.id === id)!;
     },
     async update(id: string, patch: Partial<ProviderInput>): Promise<Provider> {
       const cur = db.prepare('SELECT * FROM providers WHERE id = ?').get(id) as Record<string, unknown> | undefined;
       if (!cur) throw new Error(`provider not found: ${id}`);
+      if (patch.apiKey !== undefined) await secrets.set(`provider:${id}:key`, patch.apiKey);
       const name = patch.name ?? cur.name as string;
       const type = patch.type ?? cur.type as Provider['type'];
       const baseUrl = patch.baseUrl ?? cur.base_url as string;
       db.prepare('UPDATE providers SET name=?, type=?, base_url=?, updated_at=? WHERE id=?').run(name, type, baseUrl, now(), id);
-      if (patch.apiKey !== undefined) await secrets.set(`provider:${id}:key`, patch.apiKey);
       return rowToProvider(db.prepare('SELECT * FROM providers WHERE id = ?').get(id) as Record<string, unknown>);
     },
     async remove(id: string): Promise<void> {
