@@ -6,3 +6,4 @@ export * from './chat/export';
 export * from './chat/search';
 export * from './agent/types';
 export * from './agent/ToolRegistry';
+export * from './agent/AgentEngine';
