@@ -1,8 +1,9 @@
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput } from './providers';
+import { registerChatHandlers } from './chat';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 import { SecureStorage } from '../secrets/SecureStorage';
@@ -25,6 +26,11 @@ export class IpcRouter {
     this.register(IpcChannel.providerCreate, (_e, input) => providers.create(input as ProviderInput));
     this.register(IpcChannel.providerUpdate, (_e, id, patch) => providers.update(id as string, patch as Partial<ProviderInput>));
     this.register(IpcChannel.providerDelete, (_e, id) => providers.remove(id as string));
+    const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow());
+    this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as { sessionId: string; text: string; agentId: string }));
+    this.register('chat.listSessions', () => chat.listSessions());
+    this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
+    this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register(IpcChannel.secretsSet, async (_e, key, value) => { await secrets.set(key as string, value as string); return { ok: true }; });
