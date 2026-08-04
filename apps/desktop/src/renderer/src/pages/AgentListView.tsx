@@ -12,8 +12,13 @@ export function AgentListView() {
   return (
     <div data-testid="agent-list">
       <h2>{t('menu.agents')}</h2>
-      {editing === '__new__' && <AgentDetailPage agentId={null} onClose={() => setEditing(null)} />}
-      {editing && editing !== '__new__' && <AgentDetailPage agentId={editing} onClose={() => setEditing(null)} />}
+      {editing !== null && (
+        <AgentDetailPage
+          key={editing}
+          agentId={editing === '__new__' ? null : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
       <ul>
         {agents.map(a => (
           <li key={a.id}>

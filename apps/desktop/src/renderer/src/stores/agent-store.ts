@@ -16,7 +16,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   current: null,
   async refresh() {
     const agents = (await window.jarvis.invoke('agent.list')) as AgentConfig[];
-    set({ agents, current: get().current ?? agents[0] ?? null });
+    const current = get().current;
+    // Drop a deleted agent from `current` so chat sends never target a dead id.
+    const stillExists = current ? agents.some(a => a.id === current.id) : false;
+    set({ agents, current: stillExists ? current : (agents[0] ?? null) });
   },
   async create(input) {
     const a = (await window.jarvis.invoke('agent.create', input)) as AgentConfig;
