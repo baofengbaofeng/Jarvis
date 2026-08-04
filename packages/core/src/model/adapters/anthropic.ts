@@ -24,15 +24,19 @@ export class AnthropicAdapter implements ProviderAdapter {
       signal: ctx.signal
     });
     if (!res.ok) throw new Error(`anthropic http ${res.status}: ${await res.text()}`);
+    let inputTokens = 0;
     for await (const data of parseSSE(res.body)) {
-      const parsed = JSON.parse(data) as { type?: string; delta?: { type?: string; text?: string; partial_json?: string }; index?: number; message?: { usage?: { input_tokens: number; output_tokens: number } } };
+      const parsed = JSON.parse(data) as { type?: string; delta?: { type?: string; text?: string }; message?: { usage?: { input_tokens?: number } }; usage?: { output_tokens?: number } };
+      if (parsed.type === 'message_start' && parsed.message?.usage?.input_tokens !== undefined) {
+        inputTokens = parsed.message.usage.input_tokens;
+      }
       if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta' && parsed.delta.text) {
         ctx.onChunk({ kind: 'delta', delta: parsed.delta.text });
       }
       if (parsed.type === 'message_stop') break;
-      if (parsed.type === 'message_delta' && parsed.message?.usage) {
-        const u = parsed.message.usage;
-        ctx.onChunk({ kind: 'usage', usage: { promptTokens: u.input_tokens, completionTokens: u.output_tokens, totalTokens: u.input_tokens + u.output_tokens } });
+      if (parsed.type === 'message_delta' && parsed.usage?.output_tokens !== undefined) {
+        const outputTokens = parsed.usage.output_tokens;
+        ctx.onChunk({ kind: 'usage', usage: { promptTokens: inputTokens, completionTokens: outputTokens, totalTokens: inputTokens + outputTokens } });
       }
     }
     ctx.onChunk({ kind: 'done' });
