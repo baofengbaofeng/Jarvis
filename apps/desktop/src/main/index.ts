@@ -1,9 +1,12 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
+import { openDatabase } from './db/connection';
+import { runMigrations } from './db/migrations';
+import { IpcRouter } from './ipc/IpcRouter';
 
-// Reduced cold-start bootstrap for M0. Later tasks wire their pieces in here:
-// Task 5 (db/migrations), Task 6 (IpcRouter), Task 10 (WindowManager),
-// Task 11 (DaemonSupervisor), Task 12 (TrayManager).
+// Cold-start bootstrap for M0. db (Task 5) and ipc (Task 6) are wired here.
+// Later tasks add: Task 10 (WindowManager), Task 11 (DaemonSupervisor),
+// Task 12 (TrayManager).
 export function createMainWindow(): BrowserWindow {
   // electron-vite emits the preload as ESM (.mjs) because package.json is
   // "type": "module"; ESM preloads require sandbox disabled.
@@ -39,6 +42,12 @@ export function createMainWindow(): BrowserWindow {
 }
 
 export async function bootstrap(): Promise<void> {
+  const db = openDatabase();
+  runMigrations(db);
+  const ipc = new IpcRouter(db);
+  ipc.registerAll();
+  ipc.listen();
+
   createMainWindow();
 }
 
