@@ -58,6 +58,7 @@ export class IpcRouter {
     this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));
     this.register('task.resume', (_e, id) => tasks.resume(_e, id as string));
     this.register(IpcChannel.taskRetry, (_e, id) => tasks.retry(_e, id as string));
+    this.register('approval.resolve', (_e, id, ok) => { tasks.approvalCenter.resolve(id as string, ok as boolean); return { ok: true }; });
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });

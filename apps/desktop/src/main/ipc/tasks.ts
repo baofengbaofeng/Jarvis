@@ -2,11 +2,12 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createApprovalGate } from '@jarvis/core';
 import type { EngineChatFn, SandboxPolicy, Usage } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
+import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
 
@@ -59,7 +60,20 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   const toolPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: [] };
   createFileTools(toolRegistry, toolPolicy);
   createShellTool(toolRegistry, toolPolicy);
-  const engine = new AgentEngine({ modelRouter: { chat: chatFn }, toolRegistry, maxSteps: deps.maxSteps ?? 10 });
+  const approvalGate = createApprovalGate();
+  const approval = new ApprovalCenter(getWindow);
+  const engine = new AgentEngine({
+    modelRouter: { chat: chatFn },
+    toolRegistry,
+    maxSteps: deps.maxSteps ?? 10,
+    approvalGate: async (req) => {
+      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways: ['read_file', 'list_dir'], sensitiveCommands: [] });
+      if (decision === 'allow') return true;
+      const ok = await approval.request(req);
+      appendAudit(db, { agentId: null, kind: 'approval', detail: { toolName: req.toolName, ok } });
+      return ok;
+    }
+  });
   const store = {
     async create(id: string, agentId: string) {
       db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run(id, agentId, 'queued', '{}', new Date().toISOString());
@@ -87,6 +101,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   }, 6);
 
   return {
+    approvalCenter: approval,
     async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string; sessionId?: string }) {
       const { agentId, prompt, sessionId } = args;
       const id = randomUUID();
@@ -119,4 +134,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
 
 function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
   return buildContextMessages(ctx, agent.systemPrompt, [{ role: 'user', content: prompt }]);
+}
+
+// J5 base: audit trail for approval decisions (and other lifecycle events).
+export function appendAudit(db: Database.Database, e: { agentId: string | null; kind: string; detail: unknown }): void {
+  db.prepare('INSERT INTO audit_logs (id, agent_id, kind, detail_json, created_at) VALUES (?,?,?,?,?)')
+    .run(randomUUID(), e.agentId, e.kind, JSON.stringify(e.detail), new Date().toISOString());
 }
