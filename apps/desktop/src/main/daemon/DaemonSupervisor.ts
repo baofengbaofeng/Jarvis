@@ -38,13 +38,13 @@ export class DaemonSupervisor {
 
   constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
 
-  start(onReady?: () => void): void {
+  start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
     this.child = spawn(this.binaryPath, [], { env: { ...process.env, JARVIS_DAEMON_PORT: String(this.port) } });
     this.child.on('error', () => { this.healthy = false; this.child = null; });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
     void this.poller.start(() => { this.healthy = true; onReady?.(); });
-    this.child.on('exit', () => { this.healthy = false; });
+    this.child.on('exit', () => { this.healthy = false; onExit?.(); });
   }
 
   async status(): Promise<{ running: boolean; version: string; activeTasks: number }> {

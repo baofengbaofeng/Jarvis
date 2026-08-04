@@ -8,10 +8,11 @@ import { DaemonSupervisor } from './daemon/DaemonSupervisor';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
+const daemon = new DaemonSupervisor();
+
 export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
-  const daemon = new DaemonSupervisor();
   const ipc = new IpcRouter(db);
   ipc.registerAll(daemon);
   ipc.listen();
@@ -24,7 +25,7 @@ export async function bootstrap(): Promise<void> {
   });
 
   tray.create();
-  daemon.start();
+  daemon.start(() => tray.updateDaemonStatus(true), () => tray.updateDaemonStatus(false));
   windows.createMainWindow();
 }
 
@@ -42,3 +43,5 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+app.on('will-quit', () => daemon.stop());

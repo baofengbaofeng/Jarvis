@@ -15,7 +15,7 @@ void i18n.use(initReactI18next).init({
   defaultNS: 'common'
 });
 
-void initRendererState().finally(() => {
+void initRendererState().catch(console.error).finally(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <App />

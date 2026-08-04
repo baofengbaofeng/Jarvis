@@ -21,8 +21,9 @@ export class IpcRouter {
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register(IpcChannel.daemonStatus, () => daemon.status());
     this.register(IpcChannel.daemonRestart, () => { daemon.restart(); return { ok: true }; });
-    this.register(IpcChannel.envInfo, () => collectEnvInfo());
-    this.register(IpcChannel.diagnosticsRun, () => collectEnvInfo());
+    const collectEnv = () => collectEnvInfo({ daemonRunning: async () => (await daemon.status()).running });
+    this.register(IpcChannel.envInfo, collectEnv);
+    this.register(IpcChannel.diagnosticsRun, collectEnv);
   }
 
   listen(): void {
