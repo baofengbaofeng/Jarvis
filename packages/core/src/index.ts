@@ -13,4 +13,7 @@ export * from './task/TaskOrchestrator';
 export * from './sandbox/Sandbox';
 export * from './sandbox/ignore';
 export * from './approval/ApprovalGate';
+export * from './mcp/McpClient';
+export * from './mcp/transport';
+export * from './mcp/register';
 export * from './tools';
