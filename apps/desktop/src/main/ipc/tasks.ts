@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -29,6 +29,12 @@ const taskLogs = new Map<string, string[]>();
 // submitted task, so agent A's grant is never auto-allowed for agent B (the
 // cheap isolation gap-fix; a full multi-agent rework is out of scope).
 let currentAgentId: string | null = null;
+
+// E10 (plan mode): plan-only flag for the shared engine's approval gate. The
+// engine has no notion of "the current agent", so tasks.create sets this
+// alongside currentAgentId under the same documented single-active-task
+// assumption; the gate uses it to hard-block mutating tools at execution.
+let currentPlanOnly = false;
 
 export interface TaskHandlerDeps {
   chatFn?: EngineChatFn;
@@ -90,6 +96,13 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     toolRegistry,
     maxSteps: deps.maxSteps ?? 10,
     approvalGate: async (req) => {
+      // E10 (plan mode): a plan-only agent's mutating tool calls are blocked at
+      // execution regardless of what the model attempts — before the normal
+      // approval flow so the block is unconditional (no prompt, no grant write).
+      if (currentPlanOnly && isPlanBlocked(req.toolName)) {
+        appendAudit(db, { agentId: currentAgentId, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'plan_only_blocked' } });
+        return false;
+      }
       // G8: previously-approved mcp:{server}:{tool} calls are auto-allowed by
       // folding the grants rows into allowAlways (granted=1 rows). M3 final
       // review (J2): grants are consulted per-agent (the id set by
@@ -159,6 +172,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       currentAgentId = agentId;
       const id = randomUUID();
       const agent = agentStore.get(agentId);
+      currentPlanOnly = agent.planOnly;
       const ctx = workspace.loadContext(agentId);
       const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.', db, currentAgentId);
       const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
@@ -186,6 +200,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // process instead of leaking one per run; failures are logged and skipped
       // so a bad server never blocks task creation.
       await registerAgentMcpTools(db, toolRegistry, agentId);
+      // E10 (plan mode): expose only the plan-safe tool subset to the model.
+      // The approval gate above re-blocks the same tools at execution time; the
+      // visible set is stored on the engine for the upcoming tools-field wiring
+      // (ChatRequest.tools lands with the real-provider REACT rework).
+      engine.setVisibleTools(planVisibleTools(toolRegistry.list().map(t => t.name), agent.planOnly));
       if (sessionId) {
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);

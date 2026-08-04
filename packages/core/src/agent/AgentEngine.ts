@@ -36,7 +36,15 @@ export interface EngineRunInput {
 
 export class AgentEngine {
   private maxSteps: number;
+  // E10 (plan mode): the tool-name subset this engine may expose to the model.
+  // ChatRequest has no `tools` field yet — it lands with the real-provider
+  // REACT rework — so this set is stored for that wiring; today the plan-only
+  // enforcement is the execution-side gate in the tasks approval closure.
+  private visibleTools: string[] | null = null;
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
+
+  setVisibleTools(names: string[]): void { this.visibleTools = names; }
+  getVisibleTools(): string[] | null { return this.visibleTools; }
 
   async run(input: EngineRunInput): Promise<TaskResult> {
     const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy } = input;
