@@ -23,7 +23,7 @@ describe('run_tests tool', () => {
   it('allows the default `npm test` despite an empty per-agent allowlist', async () => {
     const reg = new ToolRegistry();
     const seen: string[] = [];
-    registerRunTestsTool(reg, testPolicy, { execImpl: async (cmd) => { seen.push(cmd); return { stdout: 'ok', stderr: '' }; } });
+    registerRunTestsTool(reg, testPolicy, { execImpl: async (cmd) => { seen.push(cmd); return { stdout: 'ok', stderr: '', code: 0 }; } });
     const r = await reg.execute({ id: '1', name: 'run_tests', arguments: {} }, agentCtx);
     expect(seen).toEqual(['npm test']);
     expect(r.ok).toBe(true);
@@ -31,9 +31,36 @@ describe('run_tests tool', () => {
 
   it('rejects metacharacter chaining at assertCommand', async () => {
     const reg = new ToolRegistry();
-    registerRunTestsTool(reg, testPolicy, { execImpl: async () => ({ stdout: '', stderr: '' }) });
+    registerRunTestsTool(reg, testPolicy, { execImpl: async () => ({ stdout: '', stderr: '', code: 0 }) });
     await expect(reg.execute({ id: '1', name: 'run_tests', arguments: { command: 'npm test; rm -rf /' } }, agentCtx))
       .rejects.toThrow(SandboxError);
+  });
+
+  it('reports ok:false for a non-zero exit even when output is stdout-only (no stderr)', async () => {
+    // Simulates promisified execFile rejecting on a non-zero exit: the failure
+    // text lands on stdout, stderr is empty. The pre-fix handler computed
+    // ok:!stderr, which would have reported a FALSE PASS and silently ended the
+    // E8 fix loop. ok must derive from the exit code instead.
+    const reg = new ToolRegistry();
+    registerRunTestsTool(reg, testPolicy, {
+      execImpl: async () => { throw Object.assign(new Error('test failed'), { code: 1, stdout: '1 failed', stderr: '' }); }
+    });
+    const r = await reg.execute({ id: '1', name: 'run_tests', arguments: {} }, agentCtx);
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain('1 failed');
+    expect(r.output).toContain('exit code 1');
+  });
+
+  it('reports ok:true for exit 0 even when stderr carries deprecation warnings', async () => {
+    // npm deprecation warnings on stderr with a passing exit code must not turn
+    // the run into a failure (pre-fix handler computed ok:!stderr).
+    const reg = new ToolRegistry();
+    registerRunTestsTool(reg, testPolicy, {
+      execImpl: async () => ({ stdout: 'PASS', stderr: 'npm WARN deprecated x@1.0.0', code: 0 })
+    });
+    const r = await reg.execute({ id: '1', name: 'run_tests', arguments: {} }, agentCtx);
+    expect(r.ok).toBe(true);
+    expect(r.output).toContain('PASS');
   });
 
   it('does not execute command substitution or redirection (no-shell spawn-array)', async () => {
