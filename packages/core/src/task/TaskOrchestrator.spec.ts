@@ -43,4 +43,29 @@ describe('TaskOrchestrator', () => {
     expect(peak).toBeLessThanOrEqual(2);
     expect(finished).toBe(5);
   });
+
+  it('retries a failed task and runs it to completion', async () => {
+    let calls = 0;
+    const reg = new ToolRegistry();
+    const engine = new AgentEngine({ modelRouter: { chat: async (_r, o) => { calls++; if (calls === 1) throw new Error('boom'); o.onChunk?.({ kind: 'done' }); return { text: 'ok', usage: null }; } }, toolRegistry: reg });
+    const { store } = makeStore();
+    const seen: string[] = [];
+    let failedRes!: () => void;
+    let doneRes!: () => void;
+    const failed = new Promise<void>((res) => { failedRes = res; });
+    const done = new Promise<void>((res) => { doneRes = res; });
+    const orb = new TaskOrchestrator(engine, store, {
+      onStateChange: (_id, state) => {
+        seen.push(state);
+        if (state === 'failed') failedRes();
+        if (state === 'completed') doneRes();
+      }
+    }, 1);
+    orb.submit({ id: 't1', agent, messages: [{ role: 'user', content: 'x' }], cwd: '/', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    await failed;
+    await orb.retry('t1');
+    await done;
+    expect(calls).toBe(2);
+    expect(seen).toEqual(['queued', 'running', 'failed', 'queued', 'running', 'completed']);
+  });
 });

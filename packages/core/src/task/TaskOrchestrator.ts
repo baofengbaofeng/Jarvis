@@ -108,16 +108,22 @@ export class TaskOrchestrator {
 
     try {
       const result = await this.engine.run({ ...input, signal: controller.signal, onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); } });
-      await this.store.updateState(input.id, transition('running', 'complete'));
-      this.states.set(input.id, 'completed');
-      this.cb.onStateChange?.(input.id, 'completed');
-      this.cb.onDone?.(input.id, true, result.text);
+      if (this.states.get(input.id) === 'running') {
+        await this.store.updateState(input.id, transition('running', 'complete'));
+        this.states.set(input.id, 'completed');
+        this.cb.onStateChange?.(input.id, 'completed');
+        this.cb.onDone?.(input.id, true, result.text);
+      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await this.store.updateState(input.id, transition('running', 'fail'));
-      this.states.set(input.id, 'failed');
-      this.cb.onStateChange?.(input.id, 'failed');
-      this.cb.onDone?.(input.id, false, msg);
+      // A prior cancel() sets the state to 'cancelled'; never overwrite that
+      // with a fail/complete transition (e.g. the AbortError from the signal).
+      if (this.states.get(input.id) === 'running') {
+        const msg = e instanceof Error ? e.message : String(e);
+        await this.store.updateState(input.id, transition('running', 'fail'));
+        this.states.set(input.id, 'failed');
+        this.cb.onStateChange?.(input.id, 'failed');
+        this.cb.onDone?.(input.id, false, msg);
+      }
     } finally {
       this.active.set(input.agent.id, Math.max(0, (this.active.get(input.agent.id) ?? 0) - 1));
       void this.pump();
