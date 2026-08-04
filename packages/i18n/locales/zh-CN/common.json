@@ -11,7 +11,9 @@
   },
   "settings": {
     "title": "设置",
-    "nav": { "providers": "Provider", "logs": "日志" },
+    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能" },
+    "mcp": { "command": "命令" },
+    "skills": { "import": "导入" },
     "provider": {
       "title": "Provider 管理",
       "add": "添加 Provider",

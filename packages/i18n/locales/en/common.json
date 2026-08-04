@@ -11,7 +11,9 @@
   },
   "settings": {
     "title": "Settings",
-    "nav": { "providers": "Providers", "logs": "Logs" },
+    "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills" },
+    "mcp": { "command": "Command" },
+    "skills": { "import": "Import" },
     "provider": {
       "title": "Provider Management",
       "add": "Add Provider",

@@ -8,6 +8,8 @@ export function SettingsLayout() {
     <div data-testid="settings-layout" style={{ display: 'flex', minHeight: '100vh' }}>
       <nav style={{ width: 200, borderRight: '1px solid var(--border)', padding: 16 }}>
         <NavLink to="/settings/providers">{t('settings.nav.providers')}</NavLink>
+        <NavLink to="/settings/mcp">{t('settings.nav.mcp')}</NavLink>
+        <NavLink to="/settings/skills">{t('settings.nav.skills')}</NavLink>
         <NavLink to="/settings/logs">{t('settings.nav.logs')}</NavLink>
         <LanguageSwitcher />
       </nav>

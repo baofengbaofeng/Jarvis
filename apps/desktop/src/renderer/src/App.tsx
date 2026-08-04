@@ -5,6 +5,8 @@ import { ChatPage } from './pages/ChatPage';
 import { SettingsLayout } from './layouts/SettingsLayout';
 import { ProviderSettingsPage } from './pages/settings/ProviderSettingsPage';
 import { LogPanelPage } from './pages/settings/LogPanelPage';
+import { McpSettingsPage } from './pages/settings/McpSettingsPage';
+import { SkillsSettingsPage } from './pages/settings/SkillsSettingsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { AgentListView } from './pages/AgentListView';
 
@@ -19,6 +21,8 @@ export default function App() {
           <Route path="/agents" element={<AgentListView />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
+            <Route path="mcp" element={<McpSettingsPage />} />
+            <Route path="skills" element={<SkillsSettingsPage />} />
             <Route path="logs" element={<LogPanelPage />} />
           </Route>
         </Routes>
