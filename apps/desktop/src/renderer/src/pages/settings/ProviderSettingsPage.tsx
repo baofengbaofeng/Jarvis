@@ -20,7 +20,7 @@ export function ProviderSettingsPage() {
         {providers.map(p => (
           <li key={p.id}>
             <span>{p.name}</span> ({p.type})
-            <button onClick={() => void remove(p.id)}>{t('common.cancel')}</button>
+            <button onClick={() => void remove(p.id)}>{t('settings.provider.remove')}</button>
           </li>
         ))}
       </ul>

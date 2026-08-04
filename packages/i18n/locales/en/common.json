@@ -15,6 +15,7 @@
     "provider": {
       "title": "Provider Management",
       "add": "Add Provider",
+      "remove": "Delete",
       "empty": "No provider configured yet",
       "language": "Language",
       "languageHint": "Choose the interface language",

@@ -15,6 +15,7 @@
     "provider": {
       "title": "Provider 管理",
       "add": "添加 Provider",
+      "remove": "删除",
       "empty": "尚未配置 Provider",
       "language": "界面语言",
       "languageHint": "选择界面显示语言",
