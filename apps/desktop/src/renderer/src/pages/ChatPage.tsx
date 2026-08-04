@@ -7,10 +7,13 @@ import { MarkdownView } from '../components/chat/MarkdownView';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { AgentSwitcher } from '../components/agents/AgentSwitcher';
 import { TaskControlBar } from '../components/tasks/TaskControlBar';
+import { PlanModeBadge } from '../components/coding/PlanModeBadge';
+import { useAgentStore } from '../stores/agent-store';
 
 export function ChatPage() {
   const { t } = useTranslation('common');
   const { messages, streamingText, sessions, sessionId, init } = useChatStore();
+  const currentAgent = useAgentStore((s) => s.current);
 
   useEffect(() => { void init(); }, [init]);
 
@@ -48,6 +51,9 @@ export function ChatPage() {
         </ul>
       </aside>
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '4px 8px', borderBottom: '1px solid var(--border, #eee)' }}>
+          <PlanModeBadge active={Boolean(currentAgent?.planOnly)} />
+        </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
           {messages.map(m => <MessageBubble key={m.id} message={m} />)}
           {streamingText && <div data-testid="streaming-text"><MarkdownView content={streamingText} /></div>}

@@ -59,5 +59,8 @@
     "concurrency": "Machine concurrency"
   },
   "coding": { "selectFile": "Select a file from the left to preview" },
+  "diff": { "title": "Diff", "accept": "Accept", "reject": "Reject", "apply": "Apply" },
+  "mention": { "placeholder": "@file or @symbol" },
+  "plan": { "badge": "Plan" },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

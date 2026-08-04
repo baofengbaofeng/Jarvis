@@ -59,5 +59,8 @@
     "concurrency": "机器并发"
   },
   "coding": { "selectFile": "从左侧选择文件预览" },
+  "diff": { "title": "改动", "accept": "接受", "reject": "拒绝", "apply": "应用改动" },
+  "mention": { "placeholder": "@文件或 @符号" },
+  "plan": { "badge": "Plan" },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

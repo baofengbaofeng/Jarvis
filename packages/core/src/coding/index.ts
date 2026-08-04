@@ -1,5 +1,6 @@
 export * from './diff';
 export * from './filetree';
+export * from './session';
 export * from './fixloop';
 export * from './mention';
 export * from './plan';

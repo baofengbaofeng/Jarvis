@@ -1,8 +1,9 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding } from '@jarvis/core';
-import { createCodeIndexAdapter, reindexWorkspace } from './coding';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, type TreeNode } from '@jarvis/core';
+import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
+import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
@@ -70,6 +71,34 @@ export class IpcRouter {
     this.register('index.search', (_e, args) => {
       const { query, limit } = args as { query: string; limit?: number };
       return codeIndex.search(query, limit ?? 5);
+    });
+    // M4 Task 8 (E9/E6): diff apply/read + mention search IPC.
+    // diff.applyAll/read target the single-active workspace (same getWorkspace
+    // assumption as workspace.tree) and read the task's snapshot for the base.
+    const snapshotStore = createSnapshotStore(this.db);
+    this.register('diff.applyAll', (_e, args) => {
+      const { taskId, path, accepts } = args as { taskId: string; path: string; accepts: boolean[] };
+      const ws = getWorkspace();
+      if (!ws) return { ok: false, error: 'no workspace' };
+      return applyDiffToFile(ws, path, accepts, taskId, snapshotStore);
+    });
+    this.register('diff.read', (_e, args) => {
+      const { taskId, path } = args as { taskId: string; path: string };
+      const ws = getWorkspace();
+      if (!ws) return { ok: false, error: 'no workspace' };
+      return readDiffFile(ws, path, taskId, snapshotStore);
+    });
+    // mention.search binds the code index, the agent list, and a flattened
+    // workspace tree (the current agent's workspace) so the renderer's
+    // `mention.search(query)` single-arg call works end to end.
+    const flattenTree = (nodes: TreeNode[]): Array<{ path: string; type: string }> => {
+      const out: Array<{ path: string; type: string }> = [];
+      const walk = (ns: TreeNode[]) => { for (const n of ns) { out.push({ path: n.path, type: n.type }); walk(n.children); } };
+      walk(nodes);
+      return out;
+    };
+    this.register('mention.search', async (_e, query) => {
+      return searchMentions(query as string, codeIndex, agents.list(), () => flattenTree(workspaceIpc.tree()));
     });
     this.register(IpcChannel.dialogOpenFile, async () => {
       const { dialog } = await import('electron');

@@ -171,6 +171,33 @@ describe('task handlers', () => {
       rmSync(ws, { recursive: true, force: true });
     }
   });
+
+  it('task.resume returns resumed context messages for a completed task (E15)', async () => {
+    const fn: EngineChatFn = async (_req, opts) => {
+      opts.onChunk?.({ kind: 'delta', delta: 'Hello' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'Hello', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const chatService = createChatService(createChatDbAdapter(db));
+    const session = await chatService.createSession('Test');
+    const agentId = seedAgent();
+    const { id } = await tasks.create(fakeEvent, { agentId, prompt: 'hi', sessionId: session.id });
+
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status FROM tasks WHERE id = ?').get(id) as { status: string };
+      expect(row.status).toBe('completed');
+    });
+    // The session link was persisted into payload_json at create time.
+    const row = db.prepare('SELECT payload_json FROM tasks WHERE id = ?').get(id) as { payload_json: string };
+    expect((JSON.parse(row.payload_json) as { sessionId: string }).sessionId).toBe(session.id);
+
+    const r = await tasks.resume(fakeEvent, id) as { ok: boolean; resumed: string; messages: Array<{ role: string; content: string }> };
+    expect(r.ok).toBe(true);
+    expect(r.resumed).toBe('context');
+    // Both chat turns fit the agent budget, so the full history is returned.
+    expect(r.messages.map(m => m.content)).toEqual(['hi', 'Hello']);
+  });
 });
 
 describe('approval gate wiring (M3 Task 7)', () => {

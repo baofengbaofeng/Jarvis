@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { IndexStore, hashEmbedding } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
-import { createCodeIndexAdapter, reindexWorkspace } from './coding';
+import { createCodeIndexAdapter, reindexWorkspace, createSnapshotStore, applyDiffToFile } from './coding';
 
 // M4 Task 6 (E1/L27): the code index SQLite adapter round-trips IndexRow
 // through the v2 code_chunks table, and reindexWorkspace walks a real workspace
@@ -90,6 +91,69 @@ describe('code index adapter (E1/L27)', () => {
     } finally {
       rmSync(wsA, { recursive: true, force: true });
       rmSync(wsB, { recursive: true, force: true });
+    }
+  });
+});
+
+// M4 Task 8 (E9): applyDiffToFile resolves the diff base from the TASK SNAPSHOT
+// copy files (or git HEAD), never from the current file — otherwise a non-git /
+// untracked file would have base == modified and the apply would be a silent
+// no-op (controller gap #2).
+describe('applyDiffToFile (E9)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('rejects hunks against the task snapshot copy base in a non-git workspace', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-'));
+    try {
+      const taskId = 't1';
+      const store = createSnapshotStore(db);
+      // Simulate snapshotBeforeTask's copy snapshot: pre-task state is x = 1.
+      store.save(taskId, { kind: 'copy', dir: `${ws}/.jarvis/snapshots/t1`, files: { 'a.ts': 'const x = 1;\nconst y = 2;' } });
+      // The task changed the file to x = 2.
+      writeFileSync(join(ws, 'a.ts'), 'const x = 2;\nconst y = 2;');
+
+      // Reject the change -> the file must revert to the SNAPSHOT base (x = 1),
+      // proving base did not silently fall back to the current file.
+      const r = applyDiffToFile(ws, 'a.ts', [false], taskId, store);
+      expect(r.ok).toBe(true);
+      expect(readFileSync(join(ws, 'a.ts'), 'utf8')).toBe('const x = 1;\nconst y = 2;');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('uses git HEAD as the base for a tracked file in a git repo', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-git-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: ws });
+      execFileSync('git', ['config', 'user.email', 't@example.com'], { cwd: ws });
+      execFileSync('git', ['config', 'user.name', 't'], { cwd: ws });
+      writeFileSync(join(ws, 'a.ts'), 'const x = 1;\n');
+      execFileSync('git', ['add', 'a.ts'], { cwd: ws });
+      execFileSync('git', ['commit', '-qm', 'init'], { cwd: ws });
+      writeFileSync(join(ws, 'a.ts'), 'const x = 2;\n');
+
+      const store = createSnapshotStore(db);
+      // Reject the working-tree change -> revert to HEAD (x = 1).
+      const r = applyDiffToFile(ws, 'a.ts', [false], 't1', store);
+      expect(r.ok).toBe(true);
+      expect(readFileSync(join(ws, 'a.ts'), 'utf8')).toBe('const x = 1;');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('returns an error when neither git HEAD nor a snapshot base exists (no silent no-op)', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'jarvis-diff-nobase-'));
+    try {
+      writeFileSync(join(ws, 'a.ts'), 'const x = 2;');
+      const store = createSnapshotStore(db);
+      const r = applyDiffToFile(ws, 'a.ts', [false], 't1', store);
+      expect(r.ok).toBe(false);
+      expect(r.error).toBe('no base for diff');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
     }
   });
 });

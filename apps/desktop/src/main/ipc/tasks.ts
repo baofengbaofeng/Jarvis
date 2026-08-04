@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type SessionStoreAdapter, type SessionMessage } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -223,6 +223,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (sessionId) {
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);
+        // E15: persist the task -> session link in payload_json so task.resume
+        // can rebuild context even after the in-memory taskSessions map is gone
+        // (e.g. the app was restarted since the task ran).
+        db.prepare('UPDATE tasks SET payload_json = ? WHERE id = ?').run(JSON.stringify({ sessionId }), id);
       }
       // M4 Task 2 (L26): snapshot the workspace BEFORE the engine runs, so
       // task.rollback can restore the exact pre-task state. The snapshot uses
@@ -239,7 +243,26 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),
     pause: (_e: unknown, id: string) => orchestrator.pause(id),
-    resume: (_e: unknown, id: string) => orchestrator.resume(id),
+    // M4 Task 8 (E15): resume-with-context. A PAUSED task resumes through the
+    // in-memory orchestrator (existing behavior). A finished/interrupted task
+    // rebuilds its engine context from the chat history via resumeSession and
+    // returns the resumed SessionMessage[] for the caller to continue from.
+    // The engine re-run (submitting those messages back into AgentEngine.run)
+    // is the documented remaining step — the plumbing to obtain the resumed
+    // context is fully wired here.
+    resume: async (_e: unknown, id: string) => {
+      const row = db.prepare('SELECT status, agent_id, payload_json FROM tasks WHERE id = ?').get(id) as { status: string; agent_id: string; payload_json: string } | undefined;
+      if (!row) throw new Error(`task not found: ${id}`);
+      if (row.status === 'paused') { orchestrator.resume(id); return { ok: true, resumed: 'paused' }; }
+      const sessionId = taskSessions.get(id) ?? ((JSON.parse(row.payload_json ?? '{}') as { sessionId?: string }).sessionId);
+      if (!sessionId) throw new Error(`no chat session for task ${id}`);
+      const agent = agentStore.get(row.agent_id);
+      const messages = await resumeSession(createTaskSessionAdapter(db, sessionId), id, agent.contextBudgetTokens, async (dropped) => {
+        const text = dropped.map(m => `${m.role}: ${m.content}`).join('\n');
+        return text.length > 4000 ? `${text.slice(0, 4000)}…` : text;
+      });
+      return { ok: true, resumed: 'context', messages };
+    },
     retry: (_e: unknown, id: string) => orchestrator.retry(id),
     // M4 Task 2 (L26): restore the pre-task snapshot and mark the task failed.
     // The tasks table has no workspace_id column — the workspace lives on the
@@ -298,6 +321,28 @@ function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, ag
   const system = `${agent.systemPrompt}${injection}`;
   const { input, block } = attachMentions(prompt, workspaceRoot, db, agentId);
   return buildContextMessages(ctx, system, [{ role: 'user', content: `${input}${block}` }]);
+}
+
+// M4 Task 8 (E15): SessionStoreAdapter over the chat_messages table. History is
+// the session's user/assistant turns; summaries are persisted as specially
+// marked system messages so resumeSession can reuse them across restarts
+// without a schema change (the task -> session link is in tasks.payload_json).
+const SUMMARY_MARKER = '[JARVIS_SUMMARY]';
+
+function createTaskSessionAdapter(db: Database.Database, sessionId: string): SessionStoreAdapter {
+  return {
+    async getMessages(): Promise<SessionMessage[]> {
+      const rows = db.prepare('SELECT role, content FROM chat_messages WHERE session_id = ? AND role IN (?,?) ORDER BY created_at').all(sessionId, 'user', 'assistant') as Array<{ role: 'user' | 'assistant'; content: string }>;
+      return rows.filter(r => !r.content.startsWith(SUMMARY_MARKER));
+    },
+    async getSummary(): Promise<string | null> {
+      const row = db.prepare('SELECT content FROM chat_messages WHERE session_id = ? AND role = ? AND content LIKE ? ORDER BY created_at DESC LIMIT 1').get(sessionId, 'system', `${SUMMARY_MARKER}%`) as { content: string } | undefined;
+      return row ? row.content.slice(SUMMARY_MARKER.length) : null;
+    },
+    async saveSummary(_taskId: string, text: string): Promise<void> {
+      db.prepare('INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES (?,?,?,?,?)').run(randomUUID(), sessionId, 'system', `${SUMMARY_MARKER}${text}`, new Date().toISOString());
+    }
+  };
 }
 
 // J5 base: audit trail for approval decisions (and other lifecycle events).

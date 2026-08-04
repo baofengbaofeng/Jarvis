@@ -1,9 +1,9 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { createTaskSnapshot, parseIgnorePatterns, isIgnored, type SnapshotGit, type SnapshotFs, type SnapshotMeta, type SnapshotStore, type IndexStore, type IndexRow } from '@jarvis/core';
+import { createTaskSnapshot, parseIgnorePatterns, isIgnored, diffLines, groupHunks, applyHunks, type SnapshotGit, type SnapshotFs, type SnapshotMeta, type SnapshotStore, type IndexStore, type IndexRow } from '@jarvis/core';
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
@@ -148,4 +148,59 @@ export async function reindexWorkspace(index: IndexStore, wsRoot: string): Promi
 //      adapter.remove(relPath) so deletions are reflected without a full walk.
 // The on-demand index.reindex IPC (already wired) is the deterministic,
 // testable path until that lands.
+
+// =============================================================================
+// M4 Task 8 (E9): diff.applyAll + diff.read. The base of a diff is resolved
+// git-HEAD-first, then the task snapshot copy files (Task 2 / L26), and never
+// silently falls back to the CURRENT file — for a non-git workspace or an
+// untracked file, base == modified would make the diff a no-op (controller gap
+// #2). When neither git HEAD nor a snapshot copy exists we return an error
+// instead of applying nothing.
+// =============================================================================
+
+function toLines(text: string): string[] {
+  return text.replace(/\n$/, '').split('\n');
+}
+
+function resolveDiffBase(wsRoot: string, path: string, taskId: string, snapshotStore: SnapshotStore): { base: string[] } | { error: string } {
+  // 1) git HEAD first (tracked files in a git repo).
+  try {
+    const stdout = execFileSync('git', ['show', `HEAD:${path}`], { cwd: wsRoot, encoding: 'utf8' });
+    return { base: toLines(stdout) };
+  } catch { /* not a git repo, untracked file, or no HEAD yet */ }
+  // 2) Task snapshot copy files (non-git workspaces) — the exact pre-task state
+  // captured by snapshotBeforeTask, so applying a hunk reverses a task change.
+  const meta = snapshotStore.get(taskId);
+  if (meta && meta.kind === 'copy' && meta.files[path] !== undefined) {
+    return { base: toLines(meta.files[path]) };
+  }
+  // 3) Neither a git base nor a snapshot base: refuse rather than silently no-op.
+  return { error: 'no base for diff' };
+}
+
+export function applyDiffToFile(wsRoot: string, path: string, accepts: boolean[], taskId: string, snapshotStore: SnapshotStore): { ok: boolean; error?: string } {
+  const abs = join(wsRoot, path);
+  if (!existsSync(abs)) return { ok: false, error: 'file not found' };
+  const modified = toLines(readFileSync(abs, 'utf8'));
+  const baseRes = resolveDiffBase(wsRoot, path, taskId, snapshotStore);
+  if ('error' in baseRes) return { ok: false, error: baseRes.error };
+  const hunks = groupHunks(diffLines(baseRes.base, modified));
+  const result = applyHunks(baseRes.base, hunks, accepts).join('\n');
+  writeFileSync(abs, result);
+  return { ok: true };
+}
+
+// diff.read lets the renderer mount the DiffPanel: it resolves the same base as
+// applyDiffToFile and returns base + modified + whether they differ, without
+// applying anything.
+export function readDiffFile(wsRoot: string, path: string, taskId: string, snapshotStore: SnapshotStore): { ok: true; base: string; modified: string; changed: boolean } | { ok: false; error: string } {
+  const abs = join(wsRoot, path);
+  if (!existsSync(abs)) return { ok: false, error: 'file not found' };
+  const modified = toLines(readFileSync(abs, 'utf8'));
+  const baseRes = resolveDiffBase(wsRoot, path, taskId, snapshotStore);
+  if ('error' in baseRes) return { ok: false, error: baseRes.error };
+  const baseText = baseRes.base.join('\n');
+  const modifiedText = modified.join('\n');
+  return { ok: true, base: baseText, modified: modifiedText, changed: baseText !== modifiedText };
+}
 
