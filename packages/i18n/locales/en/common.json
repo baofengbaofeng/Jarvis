@@ -17,7 +17,10 @@
       "add": "Add Provider",
       "empty": "No provider configured yet",
       "language": "Language",
-      "languageHint": "Choose the interface language"
+      "languageHint": "Choose the interface language",
+      "name": "Name",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key"
     }
   },
   "theme": { "light": "Light", "dark": "Dark", "system": "System" },

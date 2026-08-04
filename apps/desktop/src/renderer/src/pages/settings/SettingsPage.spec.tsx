@@ -12,6 +12,15 @@ beforeAll(async () => {
 
 describe('settings pages', () => {
   it('ProviderSettingsPage shows empty state', () => {
+    // Task 5 rewrote the page to call window.jarvis.invoke('provider.list') on
+    // mount (via the provider store's refresh()); provide a minimal bridge so
+    // the effect resolves to an empty list and the empty state renders.
+    (window as unknown as { jarvis: unknown }).jarvis = {
+      invoke: async (method: string) => (method === 'provider.list' ? [] : []),
+      settingsGet: async () => null,
+      settingsSet: async () => {},
+      onDidReceive: () => () => {}
+    };
     render(<ProviderSettingsPage />);
     expect(screen.getByText('尚未配置 Provider')).toBeTruthy();
   });
