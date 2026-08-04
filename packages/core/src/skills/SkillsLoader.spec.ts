@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseSkillFrontmatter, scanSkillsDir } from './SkillsLoader';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parseSkillFrontmatter, scanSkillsDir, importSkillFromUrl } from './SkillsLoader';
 
 describe('SkillsLoader', () => {
   it('parses frontmatter', () => {
@@ -17,5 +20,25 @@ describe('SkillsLoader', () => {
     ]);
     const metas = scanSkillsDir('/ws/.jarvis/skills', (p) => files.get(p) ?? null, (dir) => Array.from(new Set([...files.keys()].filter(k => k.startsWith(dir)).map(k => k.slice(dir.length + 1).split('/')[0]))));
     expect(metas.map(m => m.name)).toContain('code-review');
+  });
+
+  it('imports a SKILL.md from url into destDir', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'jarvis-skill-'));
+    try {
+      const meta = await importSkillFromUrl('https://example.com/SKILL.md', dest, {
+        fetchImpl: async () => ({ ok: true, text: async () => `---\nname: web-import\ndescription: 从 URL 导入\ntriggers: [import]\n---\nbody` }) as Response
+      });
+      expect(meta.name).toBe('web-import');
+      expect(meta.path).toBe(join(dest, 'SKILL.md'));
+      expect(readFileSync(meta.path, 'utf8')).toContain('name: web-import');
+    } finally {
+      rmSync(dest, { recursive: true, force: true });
+    }
+  });
+
+  it('throws when url fetch fails', async () => {
+    await expect(importSkillFromUrl('https://down.example.com/SKILL.md', '/tmp', {
+      fetchImpl: async () => ({ ok: false, status: 404, text: async () => '' }) as Response
+    })).rejects.toThrow('import skill');
   });
 });

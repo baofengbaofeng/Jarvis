@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export interface SkillMeta { name: string; description: string; triggers: string[]; path: string }
 
@@ -37,4 +38,14 @@ export function scanSkillsDir(skillsDir: string, readImpl: ReadFn = (p) => { try
 export function buildSkillInjection(metas: SkillMeta[]): string {
   if (metas.length === 0) return '';
   return '\n<available-skills>\n' + metas.map(m => `- ${m.name}: ${m.description}`).join('\n') + '\n</available-skills>';
+}
+
+export async function importSkillFromUrl(url: string, destDir: string, deps: { fetchImpl?: typeof fetch } = {}): Promise<SkillMeta> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const res = await fetchImpl(url);
+  if (!res.ok) throw new Error(`import skill http ${res.status}`);
+  const text = await res.text();
+  const meta = { ...parseSkillFrontmatter(text), path: join(destDir, 'SKILL.md') };
+  writeFileSync(meta.path, text, 'utf8');
+  return meta;
 }
