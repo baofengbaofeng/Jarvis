@@ -10,3 +10,5 @@ export * from './agent/ToolRegistry';
 export * from './agent/AgentEngine';
 export * from './task/TaskStateMachine';
 export * from './task/TaskOrchestrator';
+export * from './sandbox/Sandbox';
+export * from './sandbox/ignore';
