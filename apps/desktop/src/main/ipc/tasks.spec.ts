@@ -12,6 +12,7 @@ import { createAgentStore } from './agents';
 import { createSettingsStore } from './settings';
 import { createChatService } from '@jarvis/core';
 import { createChatDbAdapter } from './chat';
+import { createMemoryAdapter } from './memory';
 import type { SecureStorage } from '../secrets/SecureStorage';
 
 const fakeEvent = {} as Electron.IpcMainInvokeEvent;
@@ -71,6 +72,59 @@ describe('task handlers', () => {
     const finished = db.prepare('SELECT status, result_json FROM tasks WHERE id = ?').get(id) as { status: string; result_json: string };
     expect(finished.status).toBe('completed');
     expect(JSON.parse(finished.result_json)).toEqual({ text: 'Hello' });
+  });
+
+  // M6 Task 7 (F11): each run starts with the agent's persisted memories
+  // appended to the system prompt. The injection is built fresh in
+  // resolveAgentRun -> buildTaskMessages, so it reflects whatever was persisted
+  // before the run.
+  it('injects the agent persisted memory into the system prompt (F11)', async () => {
+    const agentId = seedAgent();
+    createMemoryAdapter(db).upsert(agentId, 'lang', 'zh');
+    createMemoryAdapter(db).upsert(agentId, 'style', 'concise');
+    let systemContent = '';
+    const fn: EngineChatFn = async (req, opts) => {
+      const s = req.messages.find(m => m.role === 'system')?.content;
+      systemContent = typeof s === 'string' ? s : '';
+      opts.onChunk?.({ kind: 'delta', delta: 'ok' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    await vi.waitFor(() => expect(systemContent).toContain('<memory>'));
+    expect(systemContent).toContain('lang: zh');
+    expect(systemContent).toContain('style: concise');
+  });
+
+  // M6 Task 7 (F11): the memorize/recall tools registered in the task path
+  // persist to the main-owned agent_memory table and read back the same value.
+  // memorize auto-allows (no command arg, not plan-blocked), so the tool runs
+  // without interactive approval.
+  it('memorize/recall tools persist and read back agent memory through a task (F11)', async () => {
+    const agentId = seedAgent();
+    let step = 0;
+    let recallOutput = '';
+    const fn: EngineChatFn = async (req, opts) => {
+      step++;
+      if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'memorize', arguments: { key: 'pref', value: 'short answers' } }] });
+      else if (step === 2) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '2', name: 'recall', arguments: {} }] });
+      else {
+        // The recall result is the LAST tool message in this turn's history
+        // (the memorize result 'remembered' precedes it).
+        const toolMsgs = req.messages.filter(m => m.role === 'tool');
+        const last = toolMsgs[toolMsgs.length - 1]?.content;
+        recallOutput = typeof last === 'string' ? last : '';
+        opts.onChunk?.({ kind: 'done' });
+      }
+      return { text: '', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    await vi.waitFor(() => expect(recallOutput).toContain('pref: short answers'));
+    // The memorize persisted to the agent_memory table via the adapter.
+    const row = db.prepare('SELECT value FROM agent_memory WHERE agent_id = ? AND key = ?').get(agentId, 'pref') as { value: string };
+    expect(row.value).toBe('short answers');
   });
 
   it('throws when the agent has no model binding and writes nothing to the session', async () => {

@@ -285,6 +285,28 @@ export const MIGRATIONS: Migration[] = [
     ALTER TABLE agent_call_edges ADD COLUMN ok INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE agent_call_edges ADD COLUMN squad_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_agent_call_edges_squad ON agent_call_edges(squad_id);`
+  },
+  // M6 Task 7 (F11): persistent agent memory. Unlike v4/v5/v7 these are brand-new
+  // tables (agent_memory / agent_config_versions), so plain IF NOT EXISTS CREATE
+  // is idempotent — no in-place ALTER needed. agent_memory is the F11 store:
+  // one row per (agent_id, key), UNIQUE so createMemoryAdapter's
+  // INSERT ... ON CONFLICT(agent_id, key) DO UPDATE upsert works. The
+  // updated_at is refreshed by the adapter, not here. agent_config_versions is
+  // created now for M6 Task 9 (agent config versioning) — empty until then.
+  {
+    version: 8,
+    sql: `
+    CREATE TABLE IF NOT EXISTS agent_memory (
+      id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, key TEXT NOT NULL,
+      value TEXT NOT NULL, updated_at TEXT NOT NULL,
+      UNIQUE(agent_id, key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_memory_agent ON agent_memory(agent_id);
+    CREATE TABLE IF NOT EXISTS agent_config_versions (
+      id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, snapshot_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_config_versions_agent ON agent_config_versions(agent_id, created_at);`
   }
 ];
 

@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, MemoryStore, buildMemoryInjection, registerMemoryTools, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
+import { createMemoryAdapter } from './memory';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
@@ -53,7 +54,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     const agent = agentStore.get(agentId);
     const ctx = workspace.loadContext(agentId);
     const workspaceRoot = agent.workspaceId ?? '.';
-    const messages = buildTaskMessages(ctx, agent, prompt, workspaceRoot, db, agent.id);
+    const messages = buildTaskMessages(ctx, agent, prompt, workspaceRoot, db, agent.id, memory);
     const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
     if (!modelRow) throw new Error('agent has no valid model binding');
     const apiKey = await secrets.get(modelRow.api_key_ref);
@@ -108,6 +109,22 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // sandbox. An empty allowCommands list falls back to the sandbox default
   // whitelist at readwrite level.
   const toolRegistry = new ToolRegistry();
+  // F11: one shared MemoryStore over the main-owned agent_memory table (the
+  // adapter is keyed by agent_id, so a single store serves every agent). The
+  // per-run <memory> injection (buildTaskMessages) is where an agent's persisted
+  // memories actually reach the model; the memorize/recall tools are registered
+  // per-run below (see registerMemoryToolsFor).
+  const memory = new MemoryStore(createMemoryAdapter(db));
+  // F11: register the shared memorize/recall tools for THIS run's agent. The
+  // engine tool registry is SHARED across concurrently running tasks
+  // (TaskOrchestrator concurrency 6) and the handlers bake the agentId at
+  // registration, so when two agents run concurrently the LAST registration wins
+  // for both — a documented single-active limitation (same precedent as the
+  // squadCtx guard, M6 Task 3). The per-run <memory> system-prompt injection
+  // (buildTaskMessages above) is the PRIMARY F11 value and stays correct for
+  // every run; the tools are best-effort until M7 threads a per-run agent
+  // resolver into ToolContext.
+  const registerMemoryToolsFor = (agentId: string): void => registerMemoryTools(toolRegistry, memory, agentId);
   const toolPolicy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: [] };
   createFileTools(toolRegistry, toolPolicy);
   createShellTool(toolRegistry, toolPolicy);
@@ -213,6 +230,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   const runMemberAgent = async (agentId: string, subtask: string): Promise<string> => {
     const run = await resolveAgentRun(agentId, subtask);
     await registerAgentMcpTools(db, toolRegistry, agentId);
+    registerMemoryToolsFor(agentId);
     const result = await engine.run({ ...run, cwd: run.workspaceRoot });
     return result.text;
   };
@@ -303,6 +321,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (!squadCtx) throw new Error('squad runner used without prepare');
       const leader = await resolveAgentRun(squadCtx.leaderAgentId, input);
       await registerAgentMcpTools(db, toolRegistry, squadCtx.leaderAgentId);
+      registerMemoryToolsFor(squadCtx.leaderAgentId);
       const delegations: Array<{ to: string; subtask: string }> = [];
       const result = await engine.run({
         ...leader, cwd: leader.workspaceRoot,
@@ -390,6 +409,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // process instead of leaking one per run; failures are logged and skipped
       // so a bad server never blocks task creation.
       await registerAgentMcpTools(db, toolRegistry, agentId);
+      registerMemoryToolsFor(agentId);
       // E10 (plan mode): expose only the plan-safe tool subset to the model.
       // The approval gate above re-blocks the same tools at execution time; the
       // visible set is stored on the engine for the upcoming tools-field wiring
@@ -490,10 +510,16 @@ function attachMentions(userInput: string, wsRoot: string, db: Database.Database
   return { input, block: buildMentionBlock(refs) };
 }
 
-function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string, workspaceRoot: string, db: Database.Database, agentId: string | null): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
+function buildTaskMessages(ctx: { jarvisMd: string; agentMd: string | null }, agent: AgentConfig, prompt: string, workspaceRoot: string, db: Database.Database, agentId: string | null, memory: MemoryStore): Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> {
   const skills = scanSkillsDir(`${workspaceRoot}/.jarvis/skills`);
   const injection = buildSkillInjection(skills);
-  const system = `${agent.systemPrompt}${injection}`;
+  // F11: every run starts with THIS agent's persisted memories appended to the
+  // system prompt. Built fresh per resolveAgentRun, so concurrent runs of
+  // different agents each see their own <memory> block (the injection is the
+  // primary F11 value and is per-run correct even where the memorize/recall
+  // tools are single-active).
+  const memoryBlock = agentId ? buildMemoryInjection(memory.recall(agentId)) : '';
+  const system = `${agent.systemPrompt}${injection}${memoryBlock}`;
   const { input, block } = attachMentions(prompt, workspaceRoot, db, agentId);
   return buildContextMessages(ctx, system, [{ role: 'user', content: `${input}${block}` }]);
 }

@@ -32,8 +32,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 7 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14)', () => {
-    expect(latestVersion()).toBe(7);
+  it('reports latestVersion as 8 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11)', () => {
+    expect(latestVersion()).toBe(8);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
@@ -60,6 +60,23 @@ describe('db migrations', () => {
     db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
       .run('a1', 'A', 'a', '', '', null, null, 128000, 0, '{}', '[]', now, now);
     expect((db.prepare('SELECT context_passing FROM agents WHERE id = ?').get('a1') as { context_passing: string }).context_passing).toBe('full');
+  });
+
+  // M6 Task 7 (F11): v8 creates the persistent-agent-memory store
+  // (agent_memory with UNIQUE(agent_id, key)) and the agent config versioning
+  // table (agent_config_versions, empty until M6 Task 9).
+  it('v8 creates agent_memory and agent_config_versions', () => {
+    applyMigrations(db);
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
+    const names = tables.map(t => t.name);
+    for (const t of ['agent_memory', 'agent_config_versions']) {
+      expect(names).toContain(t);
+    }
+    // UNIQUE(agent_id, key) backs the adapter's ON CONFLICT upsert.
+    const idxs = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agent_memory'").all() as Array<{ name: string }>;
+    expect(idxs.map(i => i.name)).toContain('idx_agent_memory_agent');
+    // The table is idempotent: re-applying migrations must not throw.
+    applyMigrations(db);
   });
 
   // M6 Task 5 (L14): v7 reshapes the v1 agent_call_edges table (legacy
