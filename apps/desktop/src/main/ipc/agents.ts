@@ -39,21 +39,29 @@ export function createAgentStore(db: Database.Database) {
     return rowToAgent(r);
   };
 
-  // M6 Task 9 (L31): snapshot-free raw write used ONLY by the version store's
-  // rollback. It is the SAME UPDATE statement as `update`'s write but bypasses
-  // the snapshot-before-write hook, so a rollback does not record itself as a
-  // new version (which would create a snapshot per rollback and pollute the
-  // history). The version store injects this as its applyAgent; the caller
-  // (createAgentVersionStore) types it as Record<string, unknown>, so cast here.
-  const applyRaw = (cfg: Record<string, unknown>): void => {
-    const c = cfg as unknown as AgentConfig;
-    const slug = slugify(c.name);
+  // M6 Task 9 (L31) review fix: the single 12-column UPDATE shared by `update`
+  // (after snapshotting the old config) AND the version store's rollback path
+  // (`applyRaw`). Both resolve a full AgentConfig first, then write it here, so
+  // the SQL lives in ONE place — a future schema change or new update side-effect
+  // cannot be applied to one path and silently missed by the other (which would
+  // make a rollback partially apply).
+  const writeAgentColumns = (c: AgentConfig): void => {
     db.prepare('UPDATE agents SET name=?, slug=?, system_prompt=?, model_id=?, workspace_id=?, description=?, context_budget_tokens=?, plan_only=?, env_vars_json=?, cli_args_json=?, context_passing=?, updated_at=? WHERE id=?')
-      .run(c.name, slug, c.systemPrompt, c.modelId, c.workspaceId, c.description ?? '',
+      .run(c.name, slugify(c.name), c.systemPrompt, c.modelId, c.workspaceId, c.description ?? '',
         c.contextBudgetTokens, c.planOnly ? 1 : 0,
         JSON.stringify(c.envVars ?? {}), JSON.stringify(c.cliArgs ?? []),
         // c.contextPassing is always defined (rowToAgent defaults to 'full').
         c.contextPassing ?? 'full', now(), c.id);
+  };
+
+  // M6 Task 9 (L31): snapshot-free raw write used ONLY by the version store's
+  // rollback. It bypasses the snapshot-before-write hook, so a rollback does not
+  // record itself as a new version (which would create a snapshot per rollback
+  // and pollute the history). The version store injects this as its applyAgent;
+  // the caller (createAgentVersionStore) types it as Record<string, unknown>, so
+  // cast here — writeAgentColumns does the actual write.
+  const applyRaw = (cfg: Record<string, unknown>): void => {
+    writeAgentColumns(cfg as unknown as AgentConfig);
   };
 
   // AgentConfig is an interface (no index signature), so it is not assignable
@@ -84,18 +92,24 @@ export function createAgentStore(db: Database.Database) {
       // (AgentConfig does not expose them), so partial patches cannot silently
       // clobber those columns with the DB defaults.
       const raw = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as Record<string, unknown>;
-      const name = patch.name ?? cur.name;
-      const slug = slugify(name);
-      db.prepare('UPDATE agents SET name=?, slug=?, system_prompt=?, model_id=?, workspace_id=?, description=?, context_budget_tokens=?, plan_only=?, env_vars_json=?, cli_args_json=?, context_passing=?, updated_at=? WHERE id=?')
-        .run(name, slug, patch.systemPrompt ?? cur.systemPrompt, patch.modelId !== undefined ? patch.modelId : cur.modelId,
-          patch.workspaceId !== undefined ? patch.workspaceId : cur.workspaceId, patch.description ?? cur.description,
-          patch.contextBudgetTokens ?? cur.contextBudgetTokens, patch.planOnly !== undefined ? (patch.planOnly ? 1 : 0) : (cur.planOnly ? 1 : 0),
-          JSON.stringify(patch.envVars ?? JSON.parse((raw.env_vars_json as string) ?? '{}')),
-          JSON.stringify(patch.cliArgs ?? JSON.parse((raw.cli_args_json as string) ?? '[]')),
-          // cur.contextPassing is always defined (rowToAgent defaults to 'full'),
-          // so an unrelated patch cannot clobber a saved strategy with the DB default.
-          patch.contextPassing ?? cur.contextPassing,
-          now(), id);
+      const next: AgentConfig = {
+        ...cur,
+        name: patch.name ?? cur.name,
+        systemPrompt: patch.systemPrompt ?? cur.systemPrompt,
+        modelId: patch.modelId !== undefined ? patch.modelId : cur.modelId,
+        workspaceId: patch.workspaceId !== undefined ? patch.workspaceId : cur.workspaceId,
+        description: patch.description ?? cur.description,
+        contextBudgetTokens: patch.contextBudgetTokens ?? cur.contextBudgetTokens,
+        planOnly: patch.planOnly !== undefined ? patch.planOnly : cur.planOnly,
+        envVars: patch.envVars ?? (JSON.parse((raw.env_vars_json as string) ?? '{}') as Record<string, string>),
+        cliArgs: patch.cliArgs ?? (JSON.parse((raw.cli_args_json as string) ?? '[]') as string[]),
+        // cur.contextPassing is always defined (rowToAgent defaults to 'full'),
+        // so an unrelated patch cannot clobber a saved strategy with the DB default.
+        contextPassing: patch.contextPassing ?? cur.contextPassing,
+      };
+      // Single shared write path — identical columns/order to the rollback path
+      // (writeAgentColumns), so update and rollback round-trip the same config.
+      writeAgentColumns(next);
       return get(id);
     },
     remove(id: string): void {

@@ -54,4 +54,17 @@ describe('agent version store', () => {
     const v = store();
     expect(() => v.rollback('nope')).toThrow('version nope not found');
   });
+
+  // L31 review fix: rollback is scoped by agent_id (defense-in-depth) so a
+  // version owned by another agent cannot be applied even if the IPC cross-agent
+  // guard were bypassed.
+  it('refuses to roll back a version owned by another agent when scoped by agent id', () => {
+    const v = store();
+    v.snapshot('a1');
+    const [version] = v.list('a1');
+    expect(() => v.rollback(version.id, 'other')).toThrow('not found');
+    // The unscoped call still works (backward-compatible single-arg form).
+    v.rollback(version.id);
+    expect(applied).toEqual({ id: 'a1', name: 'v1', model: 'm1' });
+  });
 });

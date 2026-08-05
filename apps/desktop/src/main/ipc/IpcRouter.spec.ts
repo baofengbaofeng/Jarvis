@@ -208,6 +208,18 @@ describe('IpcRouter agent version channels (L31)', () => {
     const bad = await rollback({}, undefined) as { ok: boolean; error?: string };
     expect(bad.ok).toBe(false);
   });
+
+  it('returns { ok:false } for agents.versions with an unknown agent id (lax input validation)', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const versions = handlers.get('agents.versions')!;
+    const res = await versions({}, { id: 'nope' }) as { ok: boolean; versions?: unknown[]; error?: string };
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('agent not found');
+    expect(res.versions).toBeUndefined();
+  });
 });
 
 // M6 Task 1 (L12) review fix: registerAll's persist subscription must not leak

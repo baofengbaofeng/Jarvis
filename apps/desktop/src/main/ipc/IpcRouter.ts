@@ -52,24 +52,30 @@ export class IpcRouter {
     // leaks (same contract as squad.*/templates.*). The version store lives on
     // the agent store (agents.versions) so the update path and these channels
     // share ONE snapshot history.
-    this.register('agents.versions', (_e, args) => {
+    this.register(IpcChannel.agentVersions, (_e, args) => {
       try {
         const { id } = (args ?? {}) as { id: string };
+        // Lax input validation: an unknown agent id is an error, not an empty
+        // list (get throws 'agent not found' -> { ok:false }).
+        agents.get(id);
         return { ok: true as const, versions: agents.versions.list(id) };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
       }
     });
-    this.register('agents.rollback', (_e, args) => {
+    this.register(IpcChannel.agentRollback, (_e, args) => {
       try {
         const { id, versionId } = (args ?? {}) as { id: string; versionId: string };
-        // Cross-agent guard: the version must belong to the payload agent id so
-        // a stale client cannot roll an agent to another agent's snapshot. The
-        // rollback itself applies the snapshot through a snapshot-free raw write
-        // (applyRaw in agents.ts), so it restores the config without recording a
-        // brand-new version.
-        if (!agents.versions.list(id).some(v => v.id === versionId)) return { ok: false as const, error: `version ${versionId} not found for agent ${id}` };
-        agents.versions.rollback(versionId);
+        // Cross-agent guard: a cheap PK+agent_id existence check (NOT a full
+        // list() with a JSON.parse per snapshot) so a stale client cannot roll
+        // an agent to another agent's snapshot. rollback() itself is also scoped
+        // by agent_id for defense-in-depth, and applies the snapshot through a
+        // snapshot-free raw write (applyRaw in agents.ts) so it restores the
+        // config without recording a brand-new version.
+        if (!this.db.prepare('SELECT 1 FROM agent_config_versions WHERE id = ? AND agent_id = ?').get(versionId, id)) {
+          return { ok: false as const, error: `version ${versionId} not found for agent ${id}` };
+        }
+        agents.versions.rollback(versionId, id);
         return { ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };

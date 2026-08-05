@@ -84,10 +84,39 @@ describe('agent store', () => {
     store.update(a.id, { systemPrompt: 'v2' });
 
     const [version] = store.versions.list(a.id);
-    store.versions.rollback(version.id);
+    store.versions.rollback(version.id, a.id);
     expect(store.get(a.id).systemPrompt).toBe('v1');
     // No new snapshot was written by the rollback itself.
     const rows = db.prepare('SELECT COUNT(*) AS c FROM agent_config_versions').get() as { c: number };
     expect(rows.c).toBe(1);
+  });
+
+  // L31 review fix: update and rollback go through the SAME writeAgentColumns
+  // path, so every column an update persists (workspace/env/cli/contextPassing)
+  // must be restored by a rollback to the pre-update snapshot — a duplicated
+  // UPDATE that drifted on one column would silently partially apply.
+  it('round-trips workspace/env/cli/contextPassing through update and rollback', () => {
+    const store = createAgentStore(db);
+    const a = store.create({ name: 'A', systemPrompt: 'v1', modelId: null, workspaceId: null });
+    store.update(a.id, {
+      workspaceId: 'ws-1',
+      envVars: { FOO: 'bar' },
+      cliArgs: ['--x'],
+      contextPassing: 'conclusion',
+    });
+    const mid = store.get(a.id);
+    expect(mid.workspaceId).toBe('ws-1');
+    expect(mid.envVars).toEqual({ FOO: 'bar' });
+    expect(mid.cliArgs).toEqual(['--x']);
+    expect(mid.contextPassing).toBe('conclusion');
+
+    // Roll back to the snapshot taken before that update (the initial config).
+    const [version] = store.versions.list(a.id);
+    store.versions.rollback(version.id, a.id);
+    const restored = store.get(a.id);
+    expect(restored.workspaceId).toBeNull();
+    expect(restored.envVars).toEqual({});
+    expect(restored.cliArgs).toEqual([]);
+    expect(restored.contextPassing).toBe('full');
   });
 });

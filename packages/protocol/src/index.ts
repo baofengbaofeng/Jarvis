@@ -9,6 +9,9 @@ export const IpcChannel = {
   agentCreate: 'agent.create',
   agentUpdate: 'agent.update',
   agentDelete: 'agent.delete',
+  // M6 Task 9 (L31): agent config version history + rollback channels.
+  agentVersions: 'agents.versions',
+  agentRollback: 'agents.rollback',
   taskCreate: 'task.create',
   taskCancel: 'task.cancel',
   taskPause: 'task.pause',

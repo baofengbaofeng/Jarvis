@@ -19,8 +19,13 @@ export function createAgentVersionStore(db: Database.Database, getAgent: (id: st
         id: r.id as string, createdAt: r.created_at as string, fields: Object.keys(JSON.parse(r.snapshot_json as string))
       }));
     },
-    rollback(versionId: string) {
-      const v = db.prepare('SELECT snapshot_json FROM agent_config_versions WHERE id = ?').get(versionId) as { snapshot_json: string } | undefined;
+    // M6 Task 9 (L31) review fix: agentId is scoped into the SELECT (defense in
+    // depth) so even a direct rollback call without the IPC cross-agent guard
+    // cannot apply another agent's snapshot. The IPC layer always passes it.
+    rollback(versionId: string, agentId?: string) {
+      const v = agentId
+        ? (db.prepare('SELECT snapshot_json FROM agent_config_versions WHERE id = ? AND agent_id = ?').get(versionId, agentId) as { snapshot_json: string } | undefined)
+        : (db.prepare('SELECT snapshot_json FROM agent_config_versions WHERE id = ?').get(versionId) as { snapshot_json: string } | undefined);
       if (!v) throw new Error(`version ${versionId} not found`);
       applyAgent(JSON.parse(v.snapshot_json));
     }
