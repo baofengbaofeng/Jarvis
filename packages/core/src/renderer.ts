@@ -39,3 +39,7 @@ export * from './tasks/index';
 // J5 (M8 Task 3): audit types are pure (no node:*), so the audit sink types are
 // renderer-safe. Kept in sync with the main barrel's ./audit/index.
 export * from './audit/index';
+// L20 (M8 Task 5): wipe scope/table/confirmPhrase are pure (no node:*), so the
+// renderer WipePane can import the same allowlist + phrase the main-process
+// WipeService guards against. Kept in sync with the main barrel's ./data/index.
+export * from './data/index';

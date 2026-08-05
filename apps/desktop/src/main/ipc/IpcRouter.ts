@@ -1,7 +1,7 @@
 import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
@@ -20,7 +20,9 @@ import { createTaskboardIpc } from './taskboard';
 import { createUsageIpc } from './usage';
 import { createAuditIpc } from './audit';
 import { createBackupIpc } from './backup';
+import { createWipeIpc } from './wipe';
 import { BackupService } from '../backup/BackupService';
+import { WipeService } from '../wipe/WipeService';
 import { UsageTracker } from '../usage/UsageTracker';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
@@ -228,6 +230,27 @@ export class IpcRouter {
     // L18: `app.relaunch` does not exist on the preload surface — the renderer's
     // BackupPane invokes it after a restore, so expose it here (relaunch then quit).
     this.register('app.relaunch', () => { app.relaunch(); app.quit(); return { ok: true }; });
+    // L20 (M8 Task 5): sensitive-data wipe. The WipeService deletes the
+    // DEFAULT_WIPE_TABLES rows, then the Keychain API keys and the single-active
+    // workspace root when the scope asks for them. deleteAllApiKeys enumerates
+    // every persisted api_key_ref (providers + the settings image.api_key_ref)
+    // and best-effort deletes each — a missing keychain item must not abort the
+    // wipe (SecureStorage.delete throws when the item is absent).
+    const wipeSvc = new WipeService(this.db, {
+      deleteAllApiKeys: async () => {
+        const refs: string[] = (this.db.prepare('SELECT api_key_ref FROM providers').all() as Array<{ api_key_ref: string }>)
+          .map(r => r.api_key_ref);
+        const imgRef = settings.get('image.api_key_ref') as string | undefined;
+        if (imgRef) refs.push(imgRef);
+        let n = 0;
+        for (const ref of refs) {
+          try { await secrets.delete(ref); n++; } catch { /* best-effort */ }
+        }
+        return n;
+      },
+    }, getWorkspace() ?? undefined);
+    const wipeIpc = createWipeIpc(wipeSvc);
+    this.register('wipe.run', (_e, scope, phrase) => wipeIpc.run(_e, scope as WipeScope, phrase as string));
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract

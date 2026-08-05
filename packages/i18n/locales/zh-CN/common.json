@@ -80,7 +80,11 @@
     "backup_now": "立即备份",
     "restore": "恢复",
     "restore_confirm": "确定要恢复该备份吗？应用将重启。",
-    "tab": { "backup": "备份" }
+    "tab": { "backup": "备份", "wipe": "擦除" },
+    "wipe_keychain": "同时删除 Keychain 中的 API Key",
+    "wipe_now": "立即擦除",
+    "wipe_msg": "擦除结果",
+    "local_only": "纯本地模式（数据不出本机）"
   },
   "coding": { "selectFile": "从左侧选择文件预览" },
   "usage": {

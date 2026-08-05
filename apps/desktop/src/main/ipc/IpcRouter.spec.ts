@@ -351,3 +351,36 @@ describe('IpcRouter backup channels (L18)', () => {
     expect(handlers.get('app.relaunch')).toBeTruthy();
   });
 });
+
+// M8 Task 5 (L20): wipe.run is registered unconditionally and delegates to a
+// real WipeService over the migrated db (keychain adapter walks providers
+// api_key_refs; the single-active workspace is threaded as the workspace root).
+describe('IpcRouter wipe channel (L20)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers wipe.run and deletes allowlisted rows through the channel', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const wipeRun = handlers.get('wipe.run')!;
+    expect(wipeRun).toBeTruthy();
+
+    db.prepare("INSERT INTO chat_sessions (id, title, created_at, updated_at) VALUES ('s1', 't', '2026-01-01', '2026-01-01')").run();
+    db.prepare("INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES ('m1', 's1', 'user', 'x', '2026-01-01')").run();
+
+    const { DEFAULT_WIPE_TABLES } = await import('@jarvis/core');
+    const r = await wipeRun({}, { tables: DEFAULT_WIPE_TABLES, keychain: false, workspace: false }, 'DELETE') as {
+      deleted: Record<string, number>; keychainDeleted: number; workspaceRemoved: boolean; vacuumed: boolean;
+    };
+    // The migrated schema has chat_messages.session_id ON DELETE CASCADE, so
+    // wiping chat_sessions removes the message before the explicit DELETE FROM
+    // chat_messages runs (reported changes 0). The wipe outcome is what matters:
+    // both tables are empty and the session row is gone.
+    expect(r.deleted.chat_sessions).toBe(1);
+    expect(r.deleted.audit_logs).toBe(0);
+    expect((db.prepare('SELECT COUNT(*) c FROM chat_messages').get() as { c: number }).c).toBe(0);
+    expect((db.prepare('SELECT COUNT(*) c FROM chat_sessions').get() as { c: number }).c).toBe(0);
+  });
+});
