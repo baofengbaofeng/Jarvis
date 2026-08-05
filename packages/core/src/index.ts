@@ -29,3 +29,4 @@ export * from './data/index';
 export * from './memory/index';
 export * from './squad/index';
 export * from './squad/agents/index';
+export * from './config/index';

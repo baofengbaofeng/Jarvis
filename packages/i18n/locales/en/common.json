@@ -86,6 +86,16 @@
     "wipe_msg": "Wipe result",
     "local_only": "Local-only mode (data never leaves this machine)"
   },
+  "configTransfer": {
+    "title": "Config Import / Export",
+    "exportJson": "Export JSON",
+    "exportYaml": "Export YAML",
+    "import": "Import config",
+    "strategy": "Import strategy",
+    "strategySkip": "Skip existing",
+    "strategyOverwrite": "Overwrite existing",
+    "strategyMerge": "Merge existing"
+  },
   "coding": { "selectFile": "Select a file from the left to preview" },
   "usage": {
     "title": "Usage",

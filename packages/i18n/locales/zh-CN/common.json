@@ -86,6 +86,16 @@
     "wipe_msg": "擦除结果",
     "local_only": "纯本地模式（数据不出本机）"
   },
+  "configTransfer": {
+    "title": "配置导入 / 导出",
+    "exportJson": "导出 JSON",
+    "exportYaml": "导出 YAML",
+    "import": "导入配置",
+    "strategy": "导入策略",
+    "strategySkip": "跳过已存在",
+    "strategyOverwrite": "覆盖已存在",
+    "strategyMerge": "合并已存在"
+  },
   "coding": { "selectFile": "从左侧选择文件预览" },
   "usage": {
     "title": "Token 统计",

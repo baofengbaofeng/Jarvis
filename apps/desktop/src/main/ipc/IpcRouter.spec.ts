@@ -384,3 +384,123 @@ describe('IpcRouter wipe channel (L20)', () => {
     expect((db.prepare('SELECT COUNT(*) c FROM chat_sessions').get() as { c: number }).c).toBe(0);
   });
 });
+
+// M8 Task 6 (C12): config.export / config.import channels registered on the
+// router, plus the file-picker mode of dialog.openFile and fs.readFile that the
+// ConfigImportExportView relies on.
+describe('IpcRouter config channels (C12)', () => {
+  let db: Database.Database;
+  let dir: string;
+  beforeEach(() => {
+    db = new Database(':memory:');
+    applyMigrations(db);
+    dir = mkdtempSync(join(tmpdir(), 'jarvis-ipc-config-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const seed = () => {
+    db.prepare("INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES ('p1', 'P1', 'openai-compatible', 'https://old.example', 'keychain:p1', '2026-08-01', '2026-08-01')").run();
+  };
+
+  it('config.export serializes providers with schemaVersion 11 and no plaintext keys', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const exportCfg = handlers.get('config.export')!;
+    seed();
+    const out = await exportCfg({}, 'json') as string;
+    expect(out).toContain('"schemaVersion": 11');
+    expect(out).toContain('"apiKeyRef": "keychain:p1"');
+    expect(out).not.toContain('sk-');
+    const yaml = await exportCfg({}, 'yaml') as string;
+    expect(yaml).toContain('schemaVersion: 11');
+  });
+
+  it('config.import applies skip/overwrite/merge and skips agents whose model is missing', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const importCfg = handlers.get('config.import')!;
+
+    // Merge: an existing provider keeps its apiKeyRef but picks up the new
+    // baseUrl; a brand-new provider and a settings row are created.
+    seed();
+    const payload = JSON.stringify({
+      schemaVersion: 11, exportedAt: '2026-08-05T00:00:00Z',
+      providers: [
+        { id: 'p1', name: 'P1', type: 'openai-compatible', baseUrl: 'https://new.example', apiKeyRef: '' },
+        { id: 'p2', name: 'P2', type: 'anthropic-compatible', baseUrl: 'https://p2.example', apiKeyRef: 'keychain:p2' },
+      ],
+      models: [],
+      agents: [{ id: 'a1', name: 'A1', slug: 'a-1', modelId: 'missing-model' }],
+      settings: { concurrency: { perAgent: 5 } },
+    });
+    const res = await importCfg({}, payload, 'merge') as { ok: boolean; created: number; updated: number; skipped: number };
+    expect(res.ok).toBe(true);
+    expect(res.created).toBe(2);
+    expect(res.updated).toBe(1);
+    expect(res.skipped).toBe(1); // a1 references a model that does not exist
+
+    const p1 = db.prepare('SELECT * FROM providers WHERE id = ?').get('p1') as { base_url: string; api_key_ref: string };
+    expect(p1.base_url).toBe('https://new.example');
+    expect(p1.api_key_ref).toBe('keychain:p1'); // empty apiKeyRef did not clobber
+    const p2 = db.prepare('SELECT * FROM providers WHERE id = ?').get('p2') as { name: string };
+    expect(p2.name).toBe('P2');
+    expect((db.prepare('SELECT COUNT(*) c FROM agents').get() as { c: number }).c).toBe(0);
+    expect(db.prepare('SELECT value_json FROM settings WHERE key = ?').get('concurrency')).toEqual({ value_json: '{"perAgent":5}' });
+  });
+
+  it('config.import skip leaves an existing provider untouched', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const importCfg = handlers.get('config.import')!;
+    seed();
+    const payload = JSON.stringify({
+      schemaVersion: 11, exportedAt: '2026-08-05T00:00:00Z',
+      providers: [{ id: 'p1', name: 'Changed', type: 'openai-compatible', baseUrl: 'https://new.example', apiKeyRef: '' }],
+      models: [], agents: [], settings: {},
+    });
+    const res = await importCfg({}, payload, 'skip') as { ok: boolean; skipped: number };
+    expect(res.ok).toBe(true);
+    expect(res.skipped).toBe(1);
+    const p1 = db.prepare('SELECT * FROM providers WHERE id = ?').get('p1') as { base_url: string };
+    expect(p1.base_url).toBe('https://old.example');
+  });
+
+  it('fs.readFile returns text on success and { ok:false } on failure', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const readFile = handlers.get('fs.readFile')!;
+    const file = join(dir, 'config.json');
+    writeFileSync(file, '{"schemaVersion": 11}', 'utf8');
+    expect(await readFile({}, file)).toBe('{"schemaVersion": 11}');
+    const missing = await readFile({}, join(dir, 'nope.json')) as { ok: boolean; error: string };
+    expect(missing.ok).toBe(false);
+    expect(missing.error).toBeTruthy();
+  });
+
+  it('dialog.openFile opens a file (with filters) and a directory (without args)', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const openFile = handlers.get('dialog.openFile')!;
+    const { dialog } = await import('electron');
+    const showOpenDialog = vi.mocked(dialog.showOpenDialog);
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/tmp/x.json'] });
+    const fileRes = await openFile({}, { filters: [{ name: 'config', extensions: ['json', 'yaml', 'yml'] }] }) as { path: string };
+    expect(fileRes.path).toBe('/tmp/x.json');
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ properties: ['openFile'] }));
+    showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] });
+    expect((await openFile({}, { filters: [] })) as { path: string }).toEqual({ path: '' });
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/tmp/dir'] });
+    const dirRes = await openFile({}) as string | null;
+    expect(dirRes).toBe('/tmp/dir');
+  });
+});

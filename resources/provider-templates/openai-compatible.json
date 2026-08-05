@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 11,
+  "exportedAt": "2026-08-05T00:00:00.000Z",
+  "providers": [
+    {
+      "id": "template-openai-compatible",
+      "name": "OpenAI-compatible",
+      "type": "openai-compatible",
+      "baseUrl": "https://api.example.com/v1",
+      "apiKeyRef": ""
+    }
+  ],
+  "models": [],
+  "agents": [],
+  "settings": {}
+}

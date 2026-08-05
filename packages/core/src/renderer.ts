@@ -43,3 +43,7 @@ export * from './audit/index';
 // renderer WipePane can import the same allowlist + phrase the main-process
 // WipeService guards against. Kept in sync with the main barrel's ./data/index.
 export * from './data/index';
+// C12 (M8 Task 6): config import/export transfer model is pure (no node:*), so
+// the renderer ConfigImportExportView can share CURRENT_SCHEMA + shapes with the
+// main-process config IPC. Kept in sync with the main barrel's ./config/index.
+export * from './config/index';

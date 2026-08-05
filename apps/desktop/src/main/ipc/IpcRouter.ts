@@ -1,7 +1,7 @@
 import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope, type ImportStrategy } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
@@ -21,6 +21,7 @@ import { createUsageIpc } from './usage';
 import { createAuditIpc } from './audit';
 import { createBackupIpc } from './backup';
 import { createWipeIpc } from './wipe';
+import { createConfigIpc } from './config';
 import { BackupService } from '../backup/BackupService';
 import { WipeService } from '../wipe/WipeService';
 import { UsageTracker } from '../usage/UsageTracker';
@@ -157,10 +158,29 @@ export class IpcRouter {
     this.register('mention.search', async (_e, query) => {
       return searchMentions(query as string, codeIndex, agents.list(), () => flattenTree(workspaceIpc.tree()));
     });
-    this.register(IpcChannel.dialogOpenFile, async () => {
+    // C12 (M8 Task 6): dialog.openFile is polymorphic on first-arg presence.
+    // No args → directory picker (the legacy contract used by AgentDetailPage /
+    // SkillsSettingsPage, returns string | null). With a { filters } payload →
+    // file picker (the ConfigImportExportView contract, returns { path }).
+    this.register(IpcChannel.dialogOpenFile, async (_e, ...args) => {
       const { dialog } = await import('electron');
+      const opts = args[0] as { filters?: Array<{ name: string; extensions: string[] }> } | undefined;
+      if (opts && typeof opts === 'object') {
+        const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: opts.filters ?? [] });
+        return { path: r.canceled ? '' : r.filePaths[0] ?? '' };
+      }
       const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
       return r.canceled ? null : r.filePaths[0];
+    });
+    // C12: read a config file chosen via dialog.openFile. Returns the file text
+    // on success, { ok:false, error } on failure (never an ipcMain rejection).
+    this.register('fs.readFile', async (_e, path) => {
+      try {
+        const { readFileSync } = await import('node:fs');
+        return readFileSync(path as string, 'utf8');
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
     });
     // M8 Task 3 (J5): save-text dialog used by the audit view's CSV/JSONL
     // export. Takes a single { defaultName, content } payload and returns
@@ -260,6 +280,12 @@ export class IpcRouter {
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });
     this.register('proxy.set', (_e, cfg: unknown) => { settings.set('proxy_json', cfg); return { ok: true }; });
+    // C12 (M8 Task 6): config import/export. Export serializes the providers/
+    // models/agents/settings tables (apiKeyRef only, never plaintext keys);
+    // import applies a skip/overwrite/merge strategy over the same tables.
+    const config = createConfigIpc(this.db, settings.get);
+    this.register('config.export', (_e, format) => config.exportConfig(format as 'json' | 'yaml'));
+    this.register('config.import', (_e, text, strategy) => config.importConfig(text as string, strategy as ImportStrategy));
     this.register(IpcChannel.secretsSet, async (_e, key, value) => { await secrets.set(key as string, value as string); return { ok: true }; });
     this.register(IpcChannel.secretsGet, async (_e, key) => secrets.get(key as string));
     this.register(IpcChannel.secretsDelete, async (_e, key) => { await secrets.delete(key as string); return { ok: true }; });
