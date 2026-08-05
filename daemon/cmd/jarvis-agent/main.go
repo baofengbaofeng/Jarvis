@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 )
 
 func main() {
@@ -20,11 +21,26 @@ func main() {
 	} else {
 		defer d.Close()
 		root.AddCommand(NewListModelsCmd(sqliteModelLister{d: d}, out))
+		root.AddCommand(NewRunCmd(RunDeps{
+			Runner:   &NodeRunner{},
+			History:  &sqliteHistoryLoader{d: d},
+			Recorder: &sqliteTaskRecorder{d: d},
+			Pool:     runtime.NewWorkspacePool(workspaceRoot()),
+			Profiles: &sqliteProfileStore{d: d},
+		}, out))
 	}
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func workspaceRoot() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".", ".jarvis", "workspaces")
+	}
+	return filepath.Join(home, ".jarvis", "workspaces")
 }
 
 func defaultDBPath() string {

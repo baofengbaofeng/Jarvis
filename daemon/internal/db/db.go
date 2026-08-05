@@ -143,3 +143,29 @@ func UpsertProfile(ctx context.Context, d *sql.DB, p Profile) error {
 	}
 	return nil
 }
+
+// MapTaskIDs links a local task to its Multica task id (L36).
+func MapTaskIDs(ctx context.Context, d *sql.DB, localTaskID, multicaTaskID string) error {
+	if multicaTaskID == "" {
+		return nil
+	}
+	_, err := d.ExecContext(ctx,
+		`UPDATE tasks SET multica_task_id = ? WHERE id = ?`, multicaTaskID, localTaskID)
+	if err != nil {
+		return fmt.Errorf("map task ids %s->%s: %w", localTaskID, multicaTaskID, err)
+	}
+	return nil
+}
+
+// MulticaTaskIDByLocal resolves a Multica task id from a local task id.
+func MulticaTaskIDByLocal(ctx context.Context, d *sql.DB, localTaskID string) (string, error) {
+	var id sql.NullString
+	err := d.QueryRowContext(ctx, `SELECT multica_task_id FROM tasks WHERE id = ?`, localTaskID).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+	return id.String, nil
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { applyMigrations, latestVersion } from './migrations';
+import { applyMigrations, latestVersion, MIGRATIONS } from './migrations';
 
 describe('db migrations', () => {
   let db: Database.Database;
@@ -32,8 +32,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 8 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11)', () => {
-    expect(latestVersion()).toBe(8);
+  it('reports latestVersion as 9 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index)', () => {
+    expect(latestVersion()).toBe(9);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
@@ -117,5 +117,35 @@ describe('db migrations', () => {
     db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
       .run('s1', 'leader', '["m1","m2"]', 'idle', null, new Date().toISOString());
     expect((db.prepare('SELECT member_agent_ids_json FROM squads WHERE id = ?').get('s1') as { member_agent_ids_json: string }).member_agent_ids_json).toBe('["m1","m2"]');
+  });
+
+  // M7 Task 6 (L36): v9 backs the daemon's local<->multica task id mapping.
+  // The v1 tasks table ALREADY has multica_task_id TEXT UNIQUE, so v9 does NOT
+  // ALTER the table (that would fail on existing DBs) — it only adds the unique
+  // partial index, which enforces one multica id per local task while letting
+  // the many legacy NULL rows coexist.
+  it('v9 creates the unique tasks.multica_task_id index (L36 id mapping)', () => {
+    applyMigrations(db);
+    const idxs = db.prepare("SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='tasks'").all() as Array<{ name: string; sql: string }>;
+    const idx = idxs.find(i => i.name === 'idx_tasks_multica_task_id');
+    expect(idx).toBeDefined();
+    expect(idx!.sql).toContain('UNIQUE');
+    expect(idx!.sql).toContain('multica_task_id IS NOT NULL');
+    // The partial index allows many NULL multica ids...
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run('t1', 'a1', 'queued', '{}', now);
+    db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run('t2', 'a1', 'queued', '{}', now);
+    db.prepare('UPDATE tasks SET multica_task_id = ? WHERE id = ?').run('mt-1', 't1');
+    // ...but rejects a second local task mapped to the same multica id.
+    expect(() => db.prepare('UPDATE tasks SET multica_task_id = ? WHERE id = ?').run('mt-1', 't2')).toThrow(/UNIQUE/);
+    // Re-applying stays idempotent.
+    applyMigrations(db);
+  });
+
+  it('v9 sql mentions multica_task_id and UNIQUE INDEX', () => {
+    const v9 = MIGRATIONS.find((m) => m.version === 9);
+    expect(v9).toBeDefined();
+    expect(v9!.sql).toContain('multica_task_id');
+    expect(v9!.sql).toContain('UNIQUE INDEX');
   });
 });

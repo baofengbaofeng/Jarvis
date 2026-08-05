@@ -112,3 +112,80 @@ func TestUpsertProfileNilEnvNormalized(t *testing.T) {
 		t.Fatalf("expected empty env map, got: %+v", got.Env)
 	}
 }
+
+// mustTasksTable creates the main-owned `tasks` table (same shape migration v1
+// creates — it already carries multica_task_id TEXT UNIQUE) for the L36
+// id-mapping tests. The daemon's Open() only creates daemon-owned tables.
+func mustTasksTable(t *testing.T, d *sql.DB) {
+	t.Helper()
+	if _, err := d.Exec(`CREATE TABLE tasks (
+		id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
+		payload_json TEXT NOT NULL, result_json TEXT, error_json TEXT,
+		multica_task_id TEXT UNIQUE, created_at TEXT NOT NULL, started_at TEXT, completed_at TEXT
+	)`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMapTaskIDsUpdatesRow(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if _, err := d.Exec(`INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES ('local-1','a1','queued','{}','2026-01-01')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := MapTaskIDs(context.Background(), d, "local-1", "mt-1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := MulticaTaskIDByLocal(context.Background(), d, "local-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "mt-1" {
+		t.Fatalf("expected mt-1, got %q", got)
+	}
+}
+
+func TestMapTaskIDsEmptyMulticaIsNoop(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if _, err := d.Exec(`INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES ('local-1','a1','queued','{}','2026-01-01')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := MapTaskIDs(context.Background(), d, "local-1", ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err := MulticaTaskIDByLocal(context.Background(), d, "local-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("expected empty multica id, got %q", got)
+	}
+}
+
+func TestMulticaTaskIDByLocalMissingReturnsEmpty(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	got, err := MulticaTaskIDByLocal(context.Background(), d, "nope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("expected empty multica id for missing row, got %q", got)
+	}
+}
+
+func TestMulticaTaskIDByLocalNullColumn(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if _, err := d.Exec(`INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES ('local-1','a1','queued','{}','2026-01-01')`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := MulticaTaskIDByLocal(context.Background(), d, "local-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("expected empty multica id for NULL column, got %q", got)
+	}
+}

@@ -307,6 +307,18 @@ export const MIGRATIONS: Migration[] = [
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_agent_config_versions_agent ON agent_config_versions(agent_id, created_at);`
+  },
+  // M7 Task 6 (L36): local<->multica task id mapping. The `tasks` table ALREADY
+  // carries `multica_task_id TEXT UNIQUE` from migration v1, so this migration
+  // must NOT ALTER it (that would fail on any existing DB). It only creates the
+  // unique index the daemon's db.MapTaskIDs round-trip relies on; a partial
+  // index (WHERE multica_task_id IS NOT NULL) so the many NULL rows from legacy
+  // tasks do not collide. Version 9 (not 5): v5 was already consumed by the M6
+  // squad reshape, so the M7 plan's "v5" became 9 in sequence.
+  {
+    version: 9,
+    sql: `
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_multica_task_id ON tasks(multica_task_id) WHERE multica_task_id IS NOT NULL;`
   }
 ];
 
