@@ -22,4 +22,20 @@ describe('ShortcutMap', () => {
     expect(parseBinding('esc')).toBe('Esc');
     expect(parseBinding('Cmd+L')).toBe('Cmd+L');
   });
+  it('pins the Escape canonical form together across all producers', () => {
+    // A real Escape keydown reports e.key === 'Escape'; normalizeCombo must
+    // canonicalize it to the same 'Esc' the default binding and parseBinding use,
+    // otherwise task.cancel silently never fires.
+    expect(normalizeCombo({ key: 'Escape' })).toBe(DEFAULT_SHORTCUTS['task.cancel']);
+    expect(parseBinding('esc')).toBe(DEFAULT_SHORTCUTS['task.cancel']);
+    expect(normalizeCombo({ key: 'Escape' })).toBe(parseBinding('esc'));
+  });
+  it('named keys agree across normalizeCombo and parseBinding', () => {
+    expect(normalizeCombo({ key: 'Enter' })).toBe('Enter');
+    expect(normalizeCombo({ key: ' ' })).toBe('Space');
+    expect(normalizeCombo({ key: 'ArrowUp' })).toBe('ArrowUp');
+    expect(parseBinding('enter')).toBe('Enter');
+    expect(parseBinding('space')).toBe('Space');
+    expect(parseBinding('ArrowUp')).toBe('ArrowUp');
+  });
 });

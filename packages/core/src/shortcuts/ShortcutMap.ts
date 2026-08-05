@@ -9,22 +9,9 @@ export const DEFAULT_SHORTCUTS: ShortcutBindings = {
   'focus.input': 'Cmd+L',
 };
 
-// Normalizes a KeyboardEvent-like into a canonical combo string ("Cmd+K").
-// metaKey → Cmd, ctrlKey → Ctrl, altKey → Alt, shiftKey → Shift (in that
-// order); ' ' → Space; single-char keys are uppercased; named keys pass through.
-export function normalizeCombo(e: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean }): string {
-  const mods: string[] = [];
-  if (e.metaKey) mods.push('Cmd');
-  if (e.ctrlKey) mods.push('Ctrl');
-  if (e.altKey) mods.push('Alt');
-  if (e.shiftKey) mods.push('Shift');
-  const key = e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  return mods.length ? `${mods.join('+')}+${key}` : key;
-}
-
-// Common non-printing key names, mapped to the canonical form KeyboardEvent.key
-// reports so a free-text binding ("enter", "esc") round-trips to the same combo
-// string the runtime lookup uses.
+// Common non-printing key names, mapped to a SINGLE canonical combo string that
+// every producer (KeyboardEvent.key, free-text parseBinding, DEFAULT_SHORTCUTS)
+// shares. Keyed by the lowercased alias ("escape", "esc", "enter", "up", ...).
 const NAMED_KEYS: Record<string, string> = {
   enter: 'Enter',
   esc: 'Esc',
@@ -43,6 +30,21 @@ const NAMED_KEYS: Record<string, string> = {
   pagedown: 'PageDown',
   insert: 'Insert',
 };
+
+// Normalizes a KeyboardEvent-like into a canonical combo string ("Cmd+K").
+// metaKey → Cmd, ctrlKey → Ctrl, altKey → Alt, shiftKey → Shift (in that
+// order); ' ' → Space; single-char keys are uppercased; named keys are aliased
+// through NAMED_KEYS so an Escape keydown ('Escape') yields 'Esc' — the same
+// string DEFAULT_SHORTCUTS and parseBinding emit.
+export function normalizeCombo(e: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean }): string {
+  const mods: string[] = [];
+  if (e.metaKey) mods.push('Cmd');
+  if (e.ctrlKey) mods.push('Ctrl');
+  if (e.altKey) mods.push('Alt');
+  if (e.shiftKey) mods.push('Shift');
+  const key = e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : (NAMED_KEYS[e.key.toLowerCase()] ?? e.key);
+  return mods.length ? `${mods.join('+')}+${key}` : key;
+}
 
 // Parse a free-text binding ("cmd + enter", "Ctrl+Shift+P") into the same
 // canonical combo form normalizeCombo produces. Unknown parts are kept verbatim.
