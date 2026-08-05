@@ -256,6 +256,16 @@ export const MIGRATIONS: Migration[] = [
     ALTER TABLE squads ADD COLUMN member_agent_ids_json TEXT NOT NULL DEFAULT '[]';
     ALTER TABLE squads ADD COLUMN task_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_squads_status ON squads(status);`
+  },
+  // M6 Task 4 (L13): per-agent squad context-passing strategy. Existing agents
+  // default to 'full' (leader context passed verbatim) so they keep working
+  // with no reconfiguration; the value is free-form TEXT because the protocol
+  // union (full/summary/conclusion/custom) is validated at the store boundary,
+  // not by SQLite CHECK (matching how env_vars_json/cli_args_json are stored).
+  {
+    version: 6,
+    sql: `
+    ALTER TABLE agents ADD COLUMN context_passing TEXT NOT NULL DEFAULT 'full';`
   }
 ];
 

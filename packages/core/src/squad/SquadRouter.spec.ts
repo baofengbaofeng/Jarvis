@@ -6,7 +6,7 @@ describe('runSquad', () => {
     const deps = {
       runLeader: async () => ({ text: 'plan', delegations: [{ to: 'm1', subtask: 'a' }, { to: 'm2', subtask: 'b' }] }),
       runMember: async (agentId: string) => `result of ${agentId}`,
-      buildContext: async (s: string) => s,
+      buildContext: async (_memberId: string, s: string) => s,
       summarize: async (members: Array<{ agent: string; result: string }>) => members.map(m => m.result).join(';')
     };
     const squad = { id: 's1', leaderAgentId: 'leader', memberAgentIds: ['m1', 'm2'], status: 'in_progress' as const };

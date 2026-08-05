@@ -64,6 +64,11 @@ export interface AgentConfig {
   workspaceId: string | null;   // C7
   contextBudgetTokens: number;  // L17
   planOnly: boolean;            // E10
+  // L13 squad context passing: the strategy used to shape what the leader's
+  // delegation context becomes before it reaches THIS agent when it runs as a
+  // squad member. Mirrors core's ContextPassingStrategy under structural
+  // typing (protocol cannot depend on @jarvis/core).
+  contextPassing?: 'full' | 'summary' | 'conclusion' | 'custom';
   // Parsed from env_vars_json / cli_args_json (I1, C9). Not persisted columns
   // themselves; exposed so the EnvSettingsPage can pre-load and round-trip them
   // instead of wiping on a blank save.

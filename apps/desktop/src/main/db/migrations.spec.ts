@@ -32,8 +32,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 5 (v5 reshapes squads for the M6 squad model)', () => {
-    expect(latestVersion()).toBe(5);
+  it('reports latestVersion as 6 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing)', () => {
+    expect(latestVersion()).toBe(6);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
@@ -45,6 +45,21 @@ describe('db migrations', () => {
     expect(cols.map(c => c.name)).toEqual(expect.arrayContaining(['id','kind','from_agent','to_agent','task_id','payload_json','created_at']));
     const idxs = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agent_messages'").all() as Array<{ name: string }>;
     expect(idxs.map(i => i.name)).toEqual(expect.arrayContaining(['idx_agent_messages_to_task','idx_agent_messages_task']));
+  });
+
+  // M6 Task 4 (L13): v6 adds agents.context_passing, defaulting to 'full' so
+  // existing agents keep passing the leader context verbatim until configured.
+  it('v6 adds agents.context_passing defaulting to full', () => {
+    applyMigrations(db);
+    const cols = db.prepare('PRAGMA table_info(agents)').all() as Array<{ name: string; dflt_value: unknown }>;
+    const col = cols.find(c => c.name === 'context_passing');
+    expect(col).toBeDefined();
+    expect(col?.dflt_value).toBe("'full'");
+    // A row inserted without the column picks up the default.
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run('a1', 'A', 'a', '', '', null, null, 128000, 0, '{}', '[]', now, now);
+    expect((db.prepare('SELECT context_passing FROM agents WHERE id = ?').get('a1') as { context_passing: string }).context_passing).toBe('full');
   });
 
   // M6 Task 3 (F8/F9): v5 reshapes the v1 squads table (legacy `name` column)

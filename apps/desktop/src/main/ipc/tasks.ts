@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -299,7 +299,15 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (cached !== undefined) return cached;
       return runMemberAgent(agentId, subtask);
     },
-    buildContext: async (result: string): Promise<string> => result,
+    // L13: the RECEIVING member's context_passing strategy shapes the leader's
+    // delegation context (runSquad passes d.to). Resolving by memberId instead
+    // of the brief's single `agent` is intentional — "按 agent 配置" reads most
+    // naturally as each member controlling what IT is handed; a shared leader
+    // strategy would flatten every member to one shape.
+    buildContext: async (memberId: string, result: string): Promise<string> => {
+      const member = agentStore.get(memberId);
+      return buildPassedContext(member.contextPassing ?? 'full', result);
+    },
     summarize: async (members: Array<{ agent: string; result: string }>): Promise<string> => members.map(m => m.result).join('\n')
   };
 

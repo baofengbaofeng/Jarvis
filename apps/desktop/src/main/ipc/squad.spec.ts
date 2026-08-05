@@ -101,7 +101,7 @@ describe('squad IPC (F8/F9)', () => {
     const deps: SquadRouterDeps = {
       async runLeader() { return { text: 'plan', delegations: [{ to: 'm1', subtask: 'a' }, { to: 'm2', subtask: 'b' }] }; },
       async runMember(agentId: string) { return `result of ${agentId}`; },
-      async buildContext(s: string) { return s; },
+      async buildContext(_memberId: string, s: string) { return s; },
       async summarize(members: Array<{ agent: string; result: string }>) { return members.map(m => m.result).join(';'); }
     };
     return { prepare() {}, teardown() {}, isActive: () => false, ...deps };
@@ -119,7 +119,7 @@ describe('squad IPC (F8/F9)', () => {
       isActive: () => active,
       async runLeader() { return gate; },
       async runMember(agentId: string) { return `result of ${agentId}`; },
-      async buildContext(s: string) { return s; },
+      async buildContext(_memberId: string, s: string) { return s; },
       async summarize() { return 'summary'; }
     };
     return { runner, release };

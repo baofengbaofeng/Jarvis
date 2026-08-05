@@ -21,6 +21,21 @@ describe('agent store', () => {
     expect(updated.systemPrompt).toBe('new prompt');
   });
 
+  it('defaults context_passing to full and persists an explicit strategy', async () => {
+    const store = createAgentStore(db);
+    // Default when not provided.
+    const a = store.create({ name: 'Default Agent', systemPrompt: '', modelId: null, workspaceId: null });
+    expect(a.contextPassing).toBe('full');
+    // Explicit strategy is persisted and read back.
+    const updated = store.update(a.id, { contextPassing: 'conclusion' });
+    expect(updated.contextPassing).toBe('conclusion');
+    const row = db.prepare('SELECT context_passing FROM agents WHERE id = ?').get(a.id) as { context_passing: string };
+    expect(row.context_passing).toBe('conclusion');
+    // An unrelated patch keeps the saved strategy (does not reset to the default).
+    const renamed = store.update(a.id, { name: 'Renamed Agent' });
+    expect(renamed.contextPassing).toBe('conclusion');
+  });
+
   it('persists envVars and cliArgs, and an unrelated patch does not clobber them while renaming regenerates the slug', async () => {
     const store = createAgentStore(db);
     const a = store.create({ name: 'Env Agent', systemPrompt: '', modelId: null, workspaceId: null });

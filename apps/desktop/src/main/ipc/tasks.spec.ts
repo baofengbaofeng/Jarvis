@@ -272,6 +272,24 @@ describe('task handlers', () => {
       runner.teardown();
     }
   });
+
+  // M6 Task 4 (L13): the squad runner's buildContext applies the RECEIVING
+  // member's context_passing strategy to the leader's delegation context.
+  it('applies the member context_passing strategy in buildContext', async () => {
+    const m1 = seedAgent();
+    db.prepare('UPDATE agents SET context_passing = ? WHERE id = ?').run('conclusion', m1);
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db));
+    const runner = tasks.squad;
+    // conclusion drops everything except 结论/总结 lines.
+    const ctx = await runner.buildContext(m1, '背景...\n结论:方案 A\n细节...\n总结:可行');
+    expect(ctx).toContain('方案 A');
+    expect(ctx).toContain('可行');
+    expect(ctx).not.toContain('背景');
+    // default (full) passes the text verbatim for an unconfigured member.
+    const m2 = seedAgent();
+    const ctx2 = await runner.buildContext(m2, 'whole text');
+    expect(ctx2).toBe('whole text');
+  });
 });
 
 describe('approval gate wiring (M3 Task 7)', () => {
