@@ -8,6 +8,7 @@
     "coding": "代码面板",
     "office": "办公增强",
     "squad": "Squad",
+    "templates": "Agent 模板",
     "quit": "退出",
     "open": "打开 JARVIS",
     "daemonStatus": "Daemon 状态",
@@ -15,7 +16,7 @@
   },
   "settings": {
     "title": "设置",
-    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能", "daemon": "Daemon", "permissions": "权限", "env": "环境", "concurrency": "并发" },
+    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能", "daemon": "Daemon", "permissions": "权限", "env": "环境", "concurrency": "并发", "dataSafety": "数据安全", "config": "配置导入导出", "shortcuts": "快捷键", "usage": "用量统计", "audit": "审计日志" },
     "mcp": {
       "title": "MCP 服务",
       "name": "名称",
@@ -195,6 +196,7 @@
     "run": "运行",
     "add": "+ {{name}}",
     "edge": "→ {{to}}",
+    "connectTo": "连接到…",
     "remove": "删除",
     "inputPlaceholder": "输入模板"
   },

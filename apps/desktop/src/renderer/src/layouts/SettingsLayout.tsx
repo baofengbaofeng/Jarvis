@@ -15,6 +15,13 @@ export function SettingsLayout() {
         <NavLink to="/settings/permissions">{t('settings.nav.permissions')}</NavLink>
         <NavLink to="/settings/env">{t('settings.nav.env')}</NavLink>
         <NavLink to="/settings/concurrency">{t('settings.nav.concurrency')}</NavLink>
+        {/* M8 final review: the M8 settings pages (L18/L20/J4 safety, C12 config,
+            C5 shortcuts, B9 usage, J5 audit) need nav entries to be reachable. */}
+        <NavLink to="/settings/data-safety">{t('settings.nav.dataSafety')}</NavLink>
+        <NavLink to="/settings/config">{t('settings.nav.config')}</NavLink>
+        <NavLink to="/settings/shortcuts">{t('settings.nav.shortcuts')}</NavLink>
+        <NavLink to="/settings/usage">{t('settings.nav.usage')}</NavLink>
+        <NavLink to="/settings/audit">{t('settings.nav.audit')}</NavLink>
         <LanguageSwitcher />
       </nav>
       <main style={{ flex: 1, padding: 16 }}>

@@ -27,6 +27,10 @@ export function ChatPage() {
           <button data-testid="chat-to-office" onClick={() => (window.location.href = '/office')}>{t('menu.office')}</button>
           <button data-testid="chat-to-squad" onClick={() => (window.location.href = '/squad')}>{t('menu.squad')}</button>
           <button data-testid="chat-to-canvas" onClick={() => (window.location.href = '/canvas')}>{t('canvas.title')}</button>
+          {/* M8 final review: /board and /workflow had no nav entry (only /canvas
+              got one) — add the same sidebar buttons so they are reachable. */}
+          <button data-testid="chat-to-board" onClick={() => (window.location.href = '/board')}>{t('board.title')}</button>
+          <button data-testid="chat-to-workflow" onClick={() => (window.location.href = '/workflow')}>{t('workflow.title')}</button>
           <button data-testid="chat-to-settings" onClick={() => (window.location.href = '/settings')}>{t('settings.title')}</button>
         </div>
         <LanguageSwitcher />

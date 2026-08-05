@@ -7,7 +7,7 @@ import { useWorkflowStore } from '../../stores/workflow-store';
 // enhancement; toWorkflow/store stay unchanged either way).
 export function WorkflowEditor() {
   const { t } = useTranslation('common');
-  const { nodes, edges, agents, outputs, loadAgents, addNode, removeNode, setInput, run } = useWorkflowStore();
+  const { nodes, edges, agents, outputs, loadAgents, addNode, removeNode, connect, setInput, run } = useWorkflowStore();
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   return (
     <div data-testid="workflow-editor">
@@ -30,6 +30,20 @@ export function WorkflowEditor() {
               onChange={e => setInput(n.id, e.target.value)}
               placeholder={t('workflow.inputPlaceholder')}
             />
+            {/* M8 final review: the F10 "编辑节点/连线" acceptance needed a UI to
+                CREATE edges — the store's connect() was only exercised by specs.
+                A per-node downstream select (over the OTHER nodes) calls connect
+                when a target is chosen; the controlled value="" resets it after. */}
+            <select
+              data-testid={`wf-connect-${n.id}`}
+              value=""
+              onChange={e => { if (e.target.value) connect(n.id, e.target.value); }}
+            >
+              <option value="">{t('workflow.connectTo')}</option>
+              {nodes.filter(o => o.id !== n.id).map(o => (
+                <option key={o.id} value={o.id}>{o.agentId}</option>
+              ))}
+            </select>
             <button
               data-testid={`wf-remove-${n.id}`}
               aria-label={t('workflow.remove')}

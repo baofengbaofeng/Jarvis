@@ -88,7 +88,11 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
             // M8 Task 2 (B9): best-effort token telemetry from the streaming
             // usage chunk. The model id is the actual string passed to the
             // router above.
-            if (c.kind === 'usage') deps.usageTracker?.track({ sessionId, agentId, modelId, ...c.usage });
+            if (c.kind === 'usage') {
+              // M8 final review: telemetry is best-effort — a tracker throw must
+              // not abort the chat stream.
+              try { deps.usageTracker?.track({ sessionId, agentId, modelId, ...c.usage }); } catch { /* best-effort telemetry */ }
+            }
             sendChunk(c);
           }
         });

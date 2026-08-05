@@ -16,7 +16,14 @@ export function createTaskboardIpc(db: Database) {
         status: r.status as TaskSummary['status'],
         createdAt: r.createdAt as string,
         completedAt: r.completedAt as string | undefined,
-        error: (r.resultJson as string | null) ? ((JSON.parse(r.resultJson as string) as { error?: string }).error) : undefined,
+        error: parseResultError(r.resultJson as string | null),
       }));
   return { list };
+}
+
+// M8 final review: result_json is free-form task output — never trust it to be
+// valid JSON. A malformed row degrades to no error instead of breaking the list.
+function parseResultError(json: string | null): string | undefined {
+  if (!json) return undefined;
+  try { return (JSON.parse(json) as { error?: string }).error; } catch { return undefined; }
 }

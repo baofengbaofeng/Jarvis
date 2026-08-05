@@ -27,6 +27,9 @@ export function AgentListView() {
         ))}
       </ul>
       <button data-testid="agent-add" onClick={() => setEditing('__new__')}>{t('settings.provider.add')}</button>
+      {/* L30 (M8 Task 8): the template library is one click away from the agent
+          list (a nav entry on the page itself, not buried in settings). */}
+      <button data-testid="agent-templates" onClick={() => (window.location.href = '/agents/templates')}>{t('menu.templates')}</button>
     </div>
   );
 }

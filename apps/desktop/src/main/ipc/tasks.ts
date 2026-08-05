@@ -462,6 +462,9 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
         const run = taskRuns.get(id);
         deps.usageTracker?.track({ taskId: id, agentId: run?.agentId, modelId: run?.modelId, ...usage });
       }
+      // M8 final review: a task run is single-shot — release its resolved run
+      // identity so the map cannot grow unbounded across many tasks.
+      taskRuns.delete(id);
       // K6 (M8 Task 10): capture markdown tables / ```mermaid blocks from the
       // final result into task_artifacts so the /canvas view can render them.
       // Best-effort with the SAME contract as the token telemetry above: a

@@ -2,9 +2,11 @@
 // node:* deps — re-exported from BOTH core barrels (index.ts + renderer.ts) so
 // main and the renderer share the same shapes/validators.
 
-// Latest migration version (migrations.ts latestVersion). The B12 template's
-// schemaVersion MUST equal this. Task 10 bumps it when it adds its migration.
-export const CURRENT_SCHEMA = 11;
+// Latest migration version (desktop db migrations latestVersion() = 12, added
+// by K6/M8 Task 10 for task_artifacts). Keep in sync with that: an export at 11
+// would be rejected by a future 12 importer, so an export must always carry the
+// CURRENT version.
+export const CURRENT_SCHEMA = 12;
 
 export interface ProviderExport {
   id: string;

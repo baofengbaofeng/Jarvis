@@ -23,10 +23,41 @@ import { ApprovalModal } from './components/approval/ApprovalModal';
 import { SelectionMenu } from './components/office/SelectionMenu';
 import { ToastHost } from './components/squad/ToastHost';
 import { ApprovalPanel } from './components/squad/ApprovalPanel';
+import { DataSafetyPage } from './components/safety/DataSafetyPage';
+import { ConfigImportExportView } from './components/settings/ConfigImportExportView';
+import { ShortcutsSettingsView } from './components/settings/ShortcutsSettingsView';
+import { UsageDashboard } from './components/usage/UsageDashboard';
+import { AuditLogView } from './components/logs/AuditLogView';
+import { AgentTemplatesPage } from './pages/AgentTemplatesPage';
+import { useShortcuts } from './hooks/useShortcuts';
+import { useTaskStore } from './stores/task-store';
 import { useSquadStore } from './stores/squad-store';
+
+// C5 (M8 Task 7): the persisted shortcut bindings fire GLOBALLY (the hook is
+// mounted once here, next to the other app-root overlays). focus.input/chat.send
+// focus the chat textarea when it is on the page (the chat route); from any
+// other route they land the user on the chat page so the next press focuses.
+function focusChatInput() {
+  const el = document.querySelector<HTMLTextAreaElement>('[data-testid="chat-input"]');
+  if (el) { el.focus(); return; }
+  window.location.href = '/';
+}
 
 export default function App() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
+  // C5 (M8 Task 7): one global keydown listener resolving the persisted
+  // bindings (shortcuts.get) and dispatching the matching action. Mounted at the
+  // app root so every page honors the bindings (the "在 App 内生效" acceptance).
+  useShortcuts({
+    'settings.open': () => { window.location.href = '/settings'; },
+    'chat.new': () => { window.location.href = '/'; },
+    'task.cancel': () => {
+      const id = useTaskStore.getState().activeTaskId;
+      if (id) void window.jarvis.invoke('task.cancel', id);
+    },
+    'focus.input': focusChatInput,
+    'chat.send': focusChatInput,
+  });
   return (
     <ThemeProvider>
       <ApprovalModal />
@@ -48,6 +79,10 @@ export default function App() {
           <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/agents" element={<AgentListView />} />
+          {/* L30 (M8 Task 8): agent template library — create a new agent from
+              a preset. Top-level next to /agents; reached via the templates
+              button on AgentListView. */}
+          <Route path="/agents/templates" element={<AgentTemplatesPage />} />
           <Route path="/coding" element={<CodingPanelPage />} />
           <Route path="/office" element={<OfficePage />} />
           {/* K5/L14 (M6 Task 10): the squad view — timeline + call graph +
@@ -68,6 +103,13 @@ export default function App() {
             <Route path="permissions" element={<PermissionsSettingsPage />} />
             <Route path="env" element={<EnvSettingsPage />} />
             <Route path="concurrency" element={<ConcurrencySettingsPage />} />
+            {/* M8 final review: wire the remaining M8 settings pages — L18/L20/J4
+                data safety, C12 config transfer, C5 shortcuts, B9 usage, J5 audit. */}
+            <Route path="data-safety" element={<DataSafetyPage />} />
+            <Route path="config" element={<ConfigImportExportView />} />
+            <Route path="shortcuts" element={<ShortcutsSettingsView />} />
+            <Route path="usage" element={<UsageDashboard />} />
+            <Route path="audit" element={<AuditLogView />} />
           </Route>
         </Routes>
       </BrowserRouter>

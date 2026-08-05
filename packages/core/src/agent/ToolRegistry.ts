@@ -21,17 +21,23 @@ export class ToolRegistry {
   has(name: string): boolean { return this.tools.has(name); }
 
   async execute(call: ToolCall, ctx: ToolContext): Promise<ToolResult> {
+    // M8 final review: onExec is best-effort telemetry (the audit sink). A hook
+    // throw must never flip a successful tool call into an error, so every
+    // dispatch is wrapped — the tool outcome below is the single source of truth.
+    const emit = (result: 'ok' | 'error') => {
+      try { this.opts.onExec?.({ ts: Date.now(), tool: call.name, args: call.arguments, result }); } catch { /* best-effort audit */ }
+    };
     const tool = this.tools.get(call.name);
     if (!tool) {
-      this.opts.onExec?.({ ts: Date.now(), tool: call.name, args: call.arguments, result: 'error' });
+      emit('error');
       throw new Error(`unknown tool: ${call.name}`);
     }
     try {
       const result = await tool.handler(call.arguments, ctx);
-      this.opts.onExec?.({ ts: Date.now(), tool: call.name, args: call.arguments, result: 'ok' });
+      emit('ok');
       return result;
     } catch (err) {
-      this.opts.onExec?.({ ts: Date.now(), tool: call.name, args: call.arguments, result: 'error' });
+      emit('error');
       throw err;
     }
   }

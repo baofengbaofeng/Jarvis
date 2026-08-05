@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
+import { DEFAULT_SHORTCUTS } from '@jarvis/core/renderer';
 import App from './App';
 import { useSettings } from './stores/settings-store';
 import { useSquadStore } from './stores/squad-store';
+import { useTaskStore } from './stores/task-store';
 
 beforeAll(async () => {
   // jsdom does not implement window.matchMedia; the real ThemeProvider
@@ -28,15 +30,23 @@ beforeAll(async () => {
   // from its useEffect init(); without a bridge mock it throws and the
   // "renders chat page when onboarding is done" case regresses.
   (window as unknown as { jarvis: unknown }).jarvis = {
-    invoke: async (method: string, ..._args: unknown[]) => {
+    invoke: vi.fn(async (method: string, ..._args: unknown[]) => {
       if (method === 'agent.list') return [];
       if (method === 'chat.listSessions') return [];
       if (method === 'chat.createSession') return { id: 's1', title: '', createdAt: '', updatedAt: '' };
       if (method === 'chat.loadMessages') return [];
       if (method === 'chat.send') return { ok: true };
       if (method === 'squad.current') return { ok: true, squad: null };
+      // M8 final review: the new routes' views call these channels on mount;
+      // ShortcutsSettingsView needs real DEFAULT_SHORTCUTS (it Object.keys() them),
+      // the rest degrade to empty lists.
+      if (method === 'shortcuts.get') return DEFAULT_SHORTCUTS;
+      if (method === 'audit.list') return [];
+      if (method === 'agent-templates.list') return [];
+      if (method === 'backup.list') return [];
       return null;
-    },
+    }),
+    settingsSet: async () => {},
     onDidReceive: () => () => {}
   };
 });
@@ -95,5 +105,54 @@ describe('App', () => {
     expect(screen.getByTestId('canvas-view')).toBeTruthy();
     expect(screen.getByTestId('canvas-empty')).toBeTruthy();
     expect(screen.getByText('画布')).toBeTruthy();
+  });
+
+  // M8 final review: the six M8 UI deliverables were orphaned (no route, no nav).
+  // Each new route must render its page from the real App tree.
+  const M8_SETTINGS_ROUTES: Array<[string, string]> = [
+    ['/settings/data-safety', 'data-safety-page'],
+    ['/settings/config', 'config-transfer'],
+    ['/settings/shortcuts', 'shortcuts-view'],
+    ['/settings/usage', 'usage-loading'],
+    ['/settings/audit', 'audit-log'],
+  ];
+  it.each(M8_SETTINGS_ROUTES)('renders the M8 settings page at %s', (route, testid) => {
+    useSettings.setState({ onboardingDone: true });
+    window.history.replaceState({}, '', route);
+    render(<App />);
+    expect(screen.getByTestId('settings-layout')).toBeTruthy();
+    expect(screen.getByTestId(testid)).toBeTruthy();
+  });
+
+  it('renders the agent template page on /agents/templates', () => {
+    useSettings.setState({ onboardingDone: true });
+    window.history.replaceState({}, '', '/agents/templates');
+    render(<App />);
+    expect(screen.getByTestId('template-view')).toBeTruthy();
+  });
+
+  // C5 (M8 Task 7): useShortcuts is mounted once at the app root. Esc resolves
+  // the persisted binding (default task.cancel) and dispatches the IPC call.
+  it('dispatches the global task.cancel shortcut (Esc) to the task IPC', async () => {
+    useSettings.setState({ onboardingDone: true });
+    useTaskStore.setState({ activeTaskId: 't1' });
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('chat-page')).toBeTruthy());
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect((window as unknown as { jarvis: { invoke: ReturnType<typeof vi.fn> } }).jarvis.invoke).toHaveBeenCalledWith('task.cancel', 't1');
+    });
+  });
+
+  // C5 (M8 Task 7): focus.input (Cmd+L) focuses the chat textarea when the
+  // chat page is the active route.
+  it('focus.input (Cmd+L) focuses the chat textarea on the chat page', async () => {
+    useSettings.setState({ onboardingDone: true });
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
+    fireEvent.keyDown(window, { key: 'l', metaKey: true });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('chat-input')));
   });
 });
