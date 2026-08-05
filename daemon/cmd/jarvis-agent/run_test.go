@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
@@ -97,6 +98,29 @@ func TestExecuteTaskAppliesProfileEnv(t *testing.T) {
 	}
 }
 
+func TestExecuteTaskProfileEnvOverridesPayloadEnv(t *testing.T) {
+	runner := &fakeRunner{res: RunResult{Status: "completed", Result: "ok"}}
+	prof := &db.Profile{ID: "dev", Env: map[string]string{"LOG_LEVEL": "debug", "SHARED": "profile"}}
+	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{prof: prof})
+	var buf bytes.Buffer
+	payload := &acp.TaskPayload{
+		TaskID:      "t-5",
+		Instruction: "go",
+		Profile:     "dev",
+		Env:         map[string]string{"LOG_LEVEL": "info", "PAYLOAD_ONLY": "yes"},
+	}
+	if err := ExecuteTask(context.Background(), deps, payload, TaskOpts{}, runtime.NewStreamWriter(&buf)); err != nil {
+		t.Fatal(err)
+	}
+	env := runner.specs[0].Env
+	if env["LOG_LEVEL"] != "debug" {
+		t.Fatalf("profile env should win over payload env, got %q", env["LOG_LEVEL"])
+	}
+	if env["SHARED"] != "profile" || env["PAYLOAD_ONLY"] != "yes" {
+		t.Fatalf("unexpected merged env: %+v", env)
+	}
+}
+
 func TestExecuteTaskRunnerErrorStreamsFailed(t *testing.T) {
 	runner := &fakeRunner{err: errors.New("boom")}
 	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{})
@@ -108,6 +132,54 @@ func TestExecuteTaskRunnerErrorStreamsFailed(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte(`"status":"failed"`)) {
 		t.Fatalf("no failed frame: %s", buf.String())
+	}
+}
+
+func TestParseResultFramesLastResultWins(t *testing.T) {
+	input := `{"type":"delta","delta":"partial"}
+{"type":"result","status":"completed","result":"done","model":"m1"}
+{"type":"result","status":"completed","result":"overwritten","model":"m2"}
+`
+	res, err := parseResultFrames(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "completed" || res.Result != "overwritten" || res.Model != "m2" {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+}
+
+func TestParseResultFramesLargeFrame(t *testing.T) {
+	big := strings.Repeat("x", 128*1024) // 128KB > bufio.Scanner's 64KB cap
+	input := `{"type":"result","status":"completed","result":"` + big + `","model":"m1"}` + "\n"
+	res, err := parseResultFrames(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "completed" || len(res.Result) != len(big) {
+		t.Fatalf("large frame truncated: len=%d want=%d", len(res.Result), len(big))
+	}
+}
+
+func TestParseResultFramesNoResultIsFailed(t *testing.T) {
+	input := `{"type":"delta","delta":"partial"}` + "\n"
+	res, err := parseResultFrames(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "failed" || res.Error != "core produced no result frame" {
+		t.Fatalf("expected failed result, got: %+v", res)
+	}
+}
+
+func TestParseResultFramesSkipsNoiseLines(t *testing.T) {
+	input := "some non-JSON noise line\n{\"type\":\"result\",\"status\":\"completed\",\"result\":\"ok\"}\n"
+	res, err := parseResultFrames(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "completed" || res.Result != "ok" {
+		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 

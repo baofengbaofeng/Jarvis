@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -178,25 +179,53 @@ func (r *NodeRunner) Run(ctx context.Context, spec RunSpec) (RunResult, error) {
 		return RunResult{}, err
 	}
 
-	var res RunResult
-	sc := bufio.NewScanner(stdout)
-	for sc.Scan() {
-		var frame struct {
-			Type   string `json:"type"`
-			Status string `json:"status"`
-			Result string `json:"result,omitempty"`
-			Error  string `json:"error,omitempty"`
-			Model  string `json:"model,omitempty"`
-		}
-		if err := json.Unmarshal(sc.Bytes(), &frame); err != nil {
-			continue
-		}
-		if frame.Type == "result" {
-			res = RunResult{Result: frame.Result, Model: frame.Model, Status: frame.Status, Error: frame.Error}
-		}
+	// parseResultFrames reads stdout to EOF BEFORE cmd.Wait(): a partial read
+	// could leave the child blocked writing to a full pipe and deadlock Wait.
+	res, perr := parseResultFrames(stdout)
+	if perr != nil {
+		_ = cmd.Wait() // reap the child even on a read error
+		return RunResult{}, perr
 	}
 	if err := cmd.Wait(); err != nil {
 		return RunResult{}, err
+	}
+	return res, nil
+}
+
+// resultFrame is one JSONL line emitted by the core on stdout.
+type resultFrame struct {
+	Type   string `json:"type"`
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Model  string `json:"model,omitempty"`
+}
+
+// parseResultFrames reads a JSONL stream ({"type":"delta"|"result",...}) and
+// returns the LAST "result" frame (later frames win), or a failed RunResult if
+// none was seen. Unlike a bufio.Scanner (64KB token cap), bufio.Reader lines
+// are unbounded, so a large frame cannot truncate mid-frame; the stream is
+// always drained to EOF/error, and non-JSON noise lines are skipped.
+func parseResultFrames(r io.Reader) (RunResult, error) {
+	var res RunResult
+	br := bufio.NewReader(r)
+	for {
+		line, err := br.ReadBytes('\n')
+		if len(line) > 0 {
+			line = bytes.TrimSpace(line)
+			if len(line) > 0 {
+				var f resultFrame
+				if uerr := json.Unmarshal(line, &f); uerr == nil && f.Type == "result" {
+					res = RunResult{Result: f.Result, Model: f.Model, Status: f.Status, Error: f.Error}
+				}
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return res, err
+		}
 	}
 	if res.Status == "" {
 		res.Status = "failed"

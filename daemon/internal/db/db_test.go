@@ -145,6 +145,15 @@ func TestMapTaskIDsUpdatesRow(t *testing.T) {
 	}
 }
 
+func TestMapTaskIDsMissingLocalTaskErrors(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	err := MapTaskIDs(context.Background(), d, "nope", "mt-1")
+	if err == nil {
+		t.Fatal("expected error mapping a nonexistent local task")
+	}
+}
+
 func TestMapTaskIDsEmptyMulticaIsNoop(t *testing.T) {
 	d := mustOpen(t)
 	mustTasksTable(t, d)

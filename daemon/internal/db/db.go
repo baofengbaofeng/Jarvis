@@ -144,15 +144,20 @@ func UpsertProfile(ctx context.Context, d *sql.DB, p Profile) error {
 	return nil
 }
 
-// MapTaskIDs links a local task to its Multica task id (L36).
+// MapTaskIDs links a local task to its Multica task id (L36). A nonzero
+// RowsAffected is required: mapping a nonexistent local task would otherwise
+// silently succeed and lose the L36 mapping.
 func MapTaskIDs(ctx context.Context, d *sql.DB, localTaskID, multicaTaskID string) error {
 	if multicaTaskID == "" {
 		return nil
 	}
-	_, err := d.ExecContext(ctx,
+	res, err := d.ExecContext(ctx,
 		`UPDATE tasks SET multica_task_id = ? WHERE id = ?`, multicaTaskID, localTaskID)
 	if err != nil {
 		return fmt.Errorf("map task ids %s->%s: %w", localTaskID, multicaTaskID, err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("map task ids %s->%s: no such local task", localTaskID, multicaTaskID)
 	}
 	return nil
 }
