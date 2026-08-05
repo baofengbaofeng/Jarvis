@@ -57,3 +57,22 @@ func TestWorkspaceAllocateEmptyID(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestWorkspaceRejectUnsafeIDs(t *testing.T) {
+	fs := &memFS{dirs: map[string]bool{}, removed: map[string]bool{}}
+	pool := NewWorkspacePoolFS("/ws", fs)
+	for _, id := range []string{"../victim", "/etc", "a/b", `a\b`, ".", ".."} {
+		if _, err := pool.Allocate(id); err == nil {
+			t.Fatalf("Allocate(%q): expected error", id)
+		}
+		if err := pool.Cleanup(id); err == nil {
+			t.Fatalf("Cleanup(%q): expected error", id)
+		}
+		if len(fs.dirs) != 0 {
+			t.Fatalf("Allocate(%q): dirs must not be created, got %v", id, fs.dirs)
+		}
+		if len(fs.removed) != 0 {
+			t.Fatalf("Cleanup(%q): must not remove anything, got %v", id, fs.removed)
+		}
+	}
+}

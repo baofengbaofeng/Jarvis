@@ -43,5 +43,8 @@ func (s *StreamWriter) emit(c StreamChunk) error {
 	if err := s.enc.Encode(c); err != nil {
 		return fmt.Errorf("stream emit: %w", err)
 	}
-	return s.w.Flush()
+	if err := s.w.Flush(); err != nil {
+		return fmt.Errorf("stream emit flush: %w", err)
+	}
+	return nil
 }
