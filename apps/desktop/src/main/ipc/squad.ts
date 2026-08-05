@@ -188,6 +188,10 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
       // squad B's context; the first to finish nulls squadCtx mid-flight).
       // Reject before any transition or prepare.
       if (deps.runner.isActive()) return { ok: false as const, error: 'another squad run is in progress' };
+      // K5 review fix: a fresh run must not inherit the previous squad's review
+      // detail — null the stash before this run begins so squad.current cannot
+      // serve stale summary/members mid-run or from an abandoned start.
+      deps.runner.lastResult = null;
       // start before prepare so a duplicate start on an already-started squad
       // fails cleanly (invalid transition) without touching the runner context.
       store.transition(id, 'start');
@@ -224,6 +228,10 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
     try {
       const { id, ok } = (args ?? {}) as { id: string; ok: boolean };
       const next = store.transition(id, ok ? 'approve' : 'reject');
+      // K5 review fix: a human decision settles the review — drop the stashed
+      // summary/members so a later squad.current on this (now terminal or
+      // re-opened) squad does not resurrect the old review.
+      deps.runner.lastResult = null;
       emit(id, next);
       // M6 Task 8 (F15/I5): surface the human approve/reject outcome as a
       // desktop notification + in-app toast. A reject returns the squad to

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './components/theme/ThemeProvider';
 import { useSettings } from './stores/settings-store';
 import { ChatPage } from './pages/ChatPage';
@@ -24,7 +24,6 @@ import { useSquadStore } from './stores/squad-store';
 
 export default function App() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
-  const review = useSquadStore((s) => s.review);
   return (
     <ThemeProvider>
       <ApprovalModal />
@@ -34,18 +33,14 @@ export default function App() {
       {/* I5 (M6 Task 8): the in-app toast queue is global, so host it once at
           the root next to the other global overlays. */}
       <ToastHost />
-      {/* F15 (M6 Task 8): while a squad sits in_review the ApprovalPanel is
-          shown; the squad-store clears it on approve/reject via the
-          squad:status event. Task 10's squad view will drive start(). */}
-      {review && (
-        <ApprovalPanel
-          squadId={review.id}
-          summary={review.summary}
-          members={review.members}
-          onDone={() => useSquadStore.getState().setReview(null)}
-        />
-      )}
       <BrowserRouter>
+        {/* F15 (M6 Task 8): while a squad sits in_review the ApprovalPanel is
+            shown; the squad-store clears it on approve/reject via the
+            squad:status event. Rendered INSIDE the router so it can route-aware
+            suppress itself on /squad — the squad view owns the F15 surface
+            there and renders its own full-data panel (duplicating it would show
+            two approve/reject control sets). */}
+        <RootApprovalPanel />
         <Routes>
           <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -68,5 +63,24 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
+  );
+}
+
+// F15 (M6 Task 8): the global approval panel rendered from useSquadStore.review,
+// shown on every page while a squad sits in_review. On the /squad route the page
+// owns the F15 surface (it drives the panel with FULL data via squad.current),
+// so this root panel is suppressed there to avoid duplicate approve/reject
+// controls (M6 Task 10 review finding).
+function RootApprovalPanel() {
+  const { pathname } = useLocation();
+  const review = useSquadStore((s) => s.review);
+  if (!review || pathname === '/squad') return null;
+  return (
+    <ApprovalPanel
+      squadId={review.id}
+      summary={review.summary}
+      members={review.members}
+      onDone={() => useSquadStore.getState().setReview(null)}
+    />
   );
 }

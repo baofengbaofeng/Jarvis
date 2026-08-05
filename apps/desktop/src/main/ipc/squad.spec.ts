@@ -242,6 +242,47 @@ describe('squad IPC (F8/F9)', () => {
     expect(r.squad).toBeNull();
   });
 
+  // K5 review fix (M6 Task 10): the stashed lastResult must not outlive the
+  // review it describes. Approve/reject settles it, so a later squad.current on
+  // the now-terminal/re-opened squad must not resurrect the old summary/members.
+  it('clears runner.lastResult on approve/reject (staleness guard)', async () => {
+    const runner = fakeRunner();
+    register(runner);
+    const create = handlers.get('squad.create')!;
+    const start = handlers.get('squad.start')!;
+    const approve = handlers.get('squad.approve')!;
+    const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1'] }) as { id: string };
+    await start({}, { id, input: 'do it' });
+    expect(runner.lastResult?.squadId).toBe(id);
+    approve({}, { id, ok: true });
+    expect(runner.lastResult).toBeNull();
+  });
+
+  // K5 review fix: a fresh squad.start nulls the stash BEFORE the run begins so
+  // squad.current cannot serve the PREVIOUS squad's review mid-run (observed
+  // synchronously right after the second start is dispatched, while its run is
+  // still pending).
+  it('clears a stale runner.lastResult at the beginning of a fresh squad.start', async () => {
+    const { runner, release } = deferredRunner();
+    register(runner);
+    const create = handlers.get('squad.create')!;
+    const start = handlers.get('squad.start')!;
+    const { id: id1 } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1'] }) as { id: string };
+    // First run completes into in_review, stashing lastResult.
+    const first = start({}, { id: id1, input: 'run one' });
+    release({ text: 'plan', delegations: [] });
+    await first;
+    expect(runner.lastResult?.squadId).toBe(id1);
+    // A fresh squad starts; lastResult must be nulled synchronously (before its
+    // runLeader awaits the gate) so the stale review is never observable.
+    const { id: id2 } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m2'] }) as { id: string };
+    const second = start({}, { id: id2, input: 'run two' });
+    expect(runner.lastResult).toBeNull();
+    release({ text: 'plan2', delegations: [] });
+    await second;
+    expect(runner.lastResult?.squadId).toBe(id2);
+  });
+
   it('squad.graph flags a repeated delegation as a cycle', async () => {
     register();
     const create = handlers.get('squad.create')!;
