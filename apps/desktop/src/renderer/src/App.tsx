@@ -18,6 +18,7 @@ import { SquadViewPage } from './pages/SquadViewPage';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
 import { TaskBoardPage } from './pages/TaskBoardPage';
 import { WorkflowPage } from './pages/WorkflowPage';
+import { CanvasPage } from './pages/CanvasPage';
 import { ApprovalModal } from './components/approval/ApprovalModal';
 import { SelectionMenu } from './components/office/SelectionMenu';
 import { ToastHost } from './components/squad/ToastHost';
@@ -56,6 +57,8 @@ export default function App() {
           <Route path="/board" element={<TaskBoardPage />} />
           {/* F10 (M8 Task 9): DAG workflow visual editor + runner. */}
           <Route path="/workflow" element={<WorkflowPage />} />
+          {/* K6 (M8 Task 10): canvas workspace rendering task artifacts. */}
+          <Route path="/canvas" element={<CanvasPage />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />

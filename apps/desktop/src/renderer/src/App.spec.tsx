@@ -82,4 +82,18 @@ describe('App', () => {
     expect(screen.queryByTestId('approval-panel')).toBeNull();
     expect(screen.getByTestId('squad-view')).toBeTruthy();
   });
+
+  // M8 Task 10 (K6) review finding: the /canvas route must be reachable (the
+  // acceptance checklist requires "/canvas 渲染"). Without a taskId the view
+  // renders the empty state — no artifacts.list IPC call is made, so the mocked
+  // bridge is untouched.
+  it('renders the canvas page on /canvas', () => {
+    useSettings.setState({ onboardingDone: true });
+    window.history.replaceState({}, '', '/canvas');
+    render(<App />);
+    expect(screen.getByTestId('canvas-page')).toBeTruthy();
+    expect(screen.getByTestId('canvas-view')).toBeTruthy();
+    expect(screen.getByTestId('canvas-empty')).toBeTruthy();
+    expect(screen.getByText('画布')).toBeTruthy();
+  });
 });
