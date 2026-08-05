@@ -54,6 +54,34 @@ describe('globalSearch (L21)', () => {
     expect(globalSearch(db, '')).toEqual([]);
     expect(globalSearch(db, '   ')).toEqual([]);
   });
+
+  // Regression guards for the AU (UPDATE) and AD (DELETE) FTS triggers — the
+  // riskiest deviations from the brief (DELETE-instead-of-the-'delete'-command
+  // and the added UPDATE triggers). A future change back to the 'delete' command
+  // or a broken AU trigger must fail these, not just pass the INSERT tests.
+  it('AU trigger: updating a source row replaces the indexed text', () => {
+    db.prepare("UPDATE chat_messages SET content = 'gibberish value' WHERE id = 'm1'").run();
+    // The old content no longer matches this message (other rows still match).
+    const afterUpdate = globalSearch(db, 'jarvis');
+    expect(afterUpdate.find(r => r.table === 'message' && r.id === '1')).toBeUndefined();
+    // The new content matches the same row.
+    const newText = globalSearch(db, 'gibberish');
+    expect(newText.find(r => r.table === 'message' && r.id === '1')?.snippet).toBe('gibberish value');
+  });
+
+  it('AU trigger: the multi-column agents trigger follows a description edit', () => {
+    db.prepare("UPDATE agents SET description = 'plain description' WHERE id = 'a1'").run();
+    const rows = globalSearch(db, 'jarvis');
+    expect(rows.find(r => r.table === 'agent')).toBeUndefined();
+  });
+
+  it('AD trigger: deleting a source row removes it from the index', () => {
+    db.prepare("DELETE FROM chat_messages WHERE id = 'm1'").run();
+    const rows = globalSearch(db, 'jarvis');
+    // 'jarvis' still matches the agent description + task payload, but not the
+    // deleted message (rowid 1) — proving the DELETE-rowid trigger fired.
+    expect(rows.some(r => r.table === 'message')).toBe(false);
+  });
 });
 
 describe('webSearch (L25)', () => {

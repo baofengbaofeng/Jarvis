@@ -30,10 +30,10 @@ export function parseSearchResults(provider: SearchProviderType, body: unknown):
     return ((b.results as Array<{ title?: string; url?: string; content?: string }>) ?? []).map(r => ({ title: r.title ?? '', url: r.url ?? '', snippet: r.content ?? '' }));
   }
   if (provider === 'bing') {
-    return (((b.webPages as { value?: Array<{ name?: string; url?: string; snippet?: string }> }).value) ?? []).map(r => ({ title: r.name ?? '', url: r.url ?? '', snippet: r.snippet ?? '' }));
+    return (((b.webPages as { value?: Array<{ name?: string; url?: string; snippet?: string }> } | undefined)?.value) ?? []).map(r => ({ title: r.name ?? '', url: r.url ?? '', snippet: r.snippet ?? '' }));
   }
   if (provider === 'brave') {
-    return (((b.web as { results?: Array<{ title?: string; url?: string; description?: string }> }).results) ?? []).map(r => ({ title: r.title ?? '', url: r.url ?? '', snippet: r.description ?? '' }));
+    return (((b.web as { results?: Array<{ title?: string; url?: string; description?: string }> } | undefined)?.results) ?? []).map(r => ({ title: r.title ?? '', url: r.url ?? '', snippet: r.description ?? '' }));
   }
   return [];
 }

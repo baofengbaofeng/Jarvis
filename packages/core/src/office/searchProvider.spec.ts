@@ -14,4 +14,11 @@ describe('search provider', () => {
     const r = parseSearchResults('serper', { organic: [{ title: 'T', link: 'https://x', snippet: 'S' }] });
     expect(r[0]).toEqual({ title: 'T', url: 'https://x', snippet: 'S' });
   });
+
+  // A 200 body without the expected top-level key (bing webPages / brave web)
+  // must parse to [] — the previous cast-and-deref threw a TypeError.
+  it('parses bing/brave bodies missing the top-level key as an empty list', () => {
+    expect(parseSearchResults('bing', {})).toEqual([]);
+    expect(parseSearchResults('brave', {})).toEqual([]);
+  });
 });
