@@ -81,6 +81,11 @@
     "col": { "agent": "Agent" },
     "totalTokens": "Token 总数"
   },
+  "audit": {
+    "title": "审计日志",
+    "col": { "ts": "时间", "kind": "类型", "action": "操作", "result": "结果" },
+    "export": "导出"
+  },
   "diff": { "title": "改动", "accept": "接受", "reject": "拒绝", "apply": "应用改动" },
   "versionHistory": { "title": "版本历史", "rollback": "回滚", "rolledBack": "已回滚", "fields": "变更字段" },
   "squadView": { "title": "Squad {{id}} — {{status}}", "leader": "队长", "members": "成员", "newSquad": "新建 Squad", "task": "任务输入", "create": "创建" },

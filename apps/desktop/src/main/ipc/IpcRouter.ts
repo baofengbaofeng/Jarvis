@@ -18,6 +18,7 @@ import { registerRuntimeHandlers } from './runtime';
 import { registerTaskHandlers } from './tasks';
 import { createTaskboardIpc } from './taskboard';
 import { createUsageIpc } from './usage';
+import { createAuditIpc } from './audit';
 import { UsageTracker } from '../usage/UsageTracker';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
@@ -157,6 +158,23 @@ export class IpcRouter {
       const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
       return r.canceled ? null : r.filePaths[0];
     });
+    // M8 Task 3 (J5): save-text dialog used by the audit view's CSV/JSONL
+    // export. Takes a single { defaultName, content } payload and returns
+    // { ok } / { ok: false, error } so a canceled dialog or write failure is a
+    // clean value, never an ipcMain rejection.
+    this.register('dialog.saveText', async (_e, args) => {
+      try {
+        const { defaultName, content } = (args ?? {}) as { defaultName: string; content: string };
+        const { dialog } = await import('electron');
+        const { writeFile } = await import('node:fs/promises');
+        const r = await dialog.showSaveDialog({ defaultPath: defaultName });
+        if (r.canceled || !r.filePath) return { ok: false as const };
+        await writeFile(r.filePath, content, 'utf8');
+        return { ok: true as const };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    });
     this.register(IpcChannel.providerList, () => providers.list());
     this.register(IpcChannel.providerCreate, (_e, input) => providers.create(input as ProviderInput));
     this.register(IpcChannel.providerUpdate, (_e, id, patch) => providers.update(id as string, patch as Partial<ProviderInput>));
@@ -188,6 +206,12 @@ export class IpcRouter {
     const usage = createUsageIpc(usageTracker);
     this.register('usage.summary', () => usage.summary());
     this.register('usage.list', (_e, agentId) => usage.list(agentId as string | undefined));
+    // M8 Task 3 (J5): audit log data plane. Read/export only; writes flow
+    // through the sqliteAuditSink wired into registerTaskHandlers (onExec +
+    // approval-gate denials), not through IPC.
+    const audit = createAuditIpc(this.db);
+    this.register('audit.list', (_e, filter) => audit.list(filter as { kind?: string; result?: string }));
+    this.register('audit.export', (_e, filter) => audit.exportAudit(filter as { kind?: string; result?: string; format?: 'csv' | 'jsonl' }));
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract

@@ -344,6 +344,33 @@ export const MIGRATIONS: Migration[] = [
       cost_estimate REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`
+  },
+  // M8 Task 3 (J5): execution audit log. The v1 schema ALREADY created an
+  // audit_logs table with a vestigial shape (id TEXT PRIMARY KEY, agent_id,
+  // detail_json, created_at) that appendAudit wrote for approval/mention
+  // events. The J5 sqliteAuditSink INSERT (kind/actor/action/target/result/
+  // detail/task_id, no id — the sink omits it) cannot work against that shape,
+  // and a plain CREATE TABLE IF NOT EXISTS would be a no-op on fresh AND
+  // upgraded databases (the v1 table exists). So v11 DROPs it and creates the
+  // real execution-audit shape, exactly like v10 did for the vestigial
+  // token_usage table. schema_migrations version tracking runs v11 exactly
+  // once, so the DROP/CREATE is safe; appendAudit (tasks.ts) is migrated to the
+  // new shape in the same task.
+  {
+    version: 11,
+    sql: `
+    DROP TABLE IF EXISTS audit_logs;
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL DEFAULT (datetime('now')),
+      kind TEXT NOT NULL,
+      actor TEXT,
+      action TEXT NOT NULL,
+      target TEXT,
+      result TEXT NOT NULL,
+      detail TEXT,
+      task_id TEXT
+    );`
   }
 ];
 

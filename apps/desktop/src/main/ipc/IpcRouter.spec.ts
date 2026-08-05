@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyMigrations } from '../db/migrations';
@@ -14,7 +14,8 @@ import type { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 // constructed under vitest without a real Electron main process.
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
-  BrowserWindow: { getFocusedWindow: () => null }
+  BrowserWindow: { getFocusedWindow: () => null },
+  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() }
 }));
 
 // M6 Task 1 (L12) review fix: IpcRouter.registerAll subscribes the SHARED bus
@@ -243,5 +244,50 @@ describe('IpcRouter bus persist teardown (L12)', () => {
     const c2 = (db2.prepare('SELECT COUNT(*) AS c FROM agent_messages').get() as { c: number }).c;
     expect(c1).toBe(0);
     expect(c2).toBe(1);
+  });
+});
+
+// M8 Task 3 (J5): audit channels read the audit_logs table the sqliteAuditSink
+// writes; dialog.saveText persists export content through the native save dialog.
+describe('IpcRouter audit + saveText channels (J5)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers audit.list/audit.export over audit_logs and dialog.saveText', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const list = handlers.get('audit.list')!;
+    const exportAudit = handlers.get('audit.export')!;
+    const saveText = handlers.get('dialog.saveText')!;
+    expect(list).toBeTruthy();
+    expect(exportAudit).toBeTruthy();
+    expect(saveText).toBeTruthy();
+
+    // Seed an audit row through the same sink the task path uses.
+    const { sqliteAuditSink } = await import('../audit/sqliteAuditSink');
+    sqliteAuditSink(db).write({ ts: 'x', kind: 'tool_call', actor: 'agent', action: 'read_file', target: 'a.txt', result: 'ok' });
+    const rows = await list({}, { kind: 'tool_call' }) as Array<{ action: string; result: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].action).toBe('read_file');
+
+    const csv = await exportAudit({}, { format: 'csv' }) as string;
+    expect(csv).toContain('"tool_call"');
+
+    // dialog.saveText: a canceled dialog returns { ok:false }; a chosen path
+    // writes the content and returns { ok:true }.
+    const { dialog } = await import('electron');
+    const showSaveDialog = vi.mocked(dialog.showSaveDialog);
+    showSaveDialog.mockResolvedValueOnce({ canceled: true, filePath: '' });
+    expect(await saveText({}, { defaultName: 'audit.csv', content: 'x' })).toEqual({ ok: false });
+    const out = join(tmpdir(), `jarvis-save-${Date.now()}.csv`);
+    try {
+      showSaveDialog.mockResolvedValueOnce({ canceled: false, filePath: out });
+      expect(await saveText({}, { defaultName: 'audit.csv', content: 'hello' })).toEqual({ ok: true });
+      expect(readFileSync(out, 'utf8')).toBe('hello');
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
   });
 });

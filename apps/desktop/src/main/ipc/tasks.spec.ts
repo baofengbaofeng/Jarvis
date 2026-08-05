@@ -217,9 +217,10 @@ describe('task handlers', () => {
       // stripped and skipped (never fatal).
       expect(userContent).toContain('foo@bar.com');
       expect(userContent).not.toContain('@nope.ts');
-      // The skip is audited under kind 'mention'.
-      const audit = db.prepare('SELECT detail_json FROM audit_logs WHERE kind = ?').all('mention') as Array<{ detail_json: string }>;
-      expect(audit.map(a => (JSON.parse(a.detail_json) as { query: string }).query)).toContain('nope.ts');
+      // The skip is audited under kind 'mention' (v11 audit_logs shape: the
+      // full payload lives in `detail`, not the v1 `detail_json`).
+      const audit = db.prepare('SELECT detail FROM audit_logs WHERE kind = ?').all('mention') as Array<{ detail: string }>;
+      expect(audit.map(a => (JSON.parse(a.detail) as { query: string }).query)).toContain('nope.ts');
       await vi.waitFor(async () => {
         const r = db.prepare('SELECT status FROM tasks WHERE id = ?').get(id) as { status: string };
         expect(r.status).toBe('completed');

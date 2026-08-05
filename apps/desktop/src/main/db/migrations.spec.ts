@@ -32,8 +32,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 10 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table)', () => {
-    expect(latestVersion()).toBe(10);
+  it('reports latestVersion as 11 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table)', () => {
+    expect(latestVersion()).toBe(11);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
@@ -166,6 +166,26 @@ describe('db migrations', () => {
       .run('t1', 'a1', 'claude-3-5-sonnet', 10, 5, 15, null);
     const row = db.prepare('SELECT agent_id, model_id, total_tokens FROM token_usage WHERE task_id = ?').get('t1') as { agent_id: string; model_id: string; total_tokens: number };
     expect(row).toEqual({ agent_id: 'a1', model_id: 'claude-3-5-sonnet', total_tokens: 15 });
+    // Idempotent: re-applying migrations must not throw.
+    applyMigrations(db);
+  });
+
+  // M8 Task 3 (J5): v11 replaces the vestigial v1 audit_logs table (id TEXT,
+  // agent_id, detail_json, created_at) with the real execution-audit shape the
+  // sqliteAuditSink INSERT targets. Like v10 for token_usage, v11 DROPs the old
+  // table first so the reshape is effective on fresh AND upgraded databases.
+  it('v11 creates the J5 audit_logs table with the execution-audit shape', () => {
+    applyMigrations(db);
+    const cols = db.prepare('PRAGMA table_info(audit_logs)').all() as Array<{ name: string }>;
+    expect(cols.map(c => c.name)).toEqual(expect.arrayContaining([
+      'id', 'ts', 'kind', 'actor', 'action', 'target', 'result', 'detail', 'task_id'
+    ]));
+    // The sqliteAuditSink INSERT shape (omits id/ts — id autoincrements, ts
+    // defaults to datetime('now')) must work against the reshaped table.
+    db.prepare('INSERT INTO audit_logs (kind, actor, action, target, result, detail, task_id) VALUES (?,?,?,?,?,?,?)')
+      .run('tool_call', 'agent', 'read_file', 'a.txt', 'ok', null, null);
+    const row = db.prepare('SELECT kind, action, target, result, task_id FROM audit_logs WHERE action = ?').get('read_file') as { kind: string; action: string; target: string; result: string; task_id: string | null };
+    expect(row).toEqual({ kind: 'tool_call', action: 'read_file', target: 'a.txt', result: 'ok', task_id: null });
     // Idempotent: re-applying migrations must not throw.
     applyMigrations(db);
   });

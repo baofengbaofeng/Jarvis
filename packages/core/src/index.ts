@@ -24,6 +24,7 @@ export * from './tools';
 export * from './skills/SkillsLoader';
 export * from './plugins/PluginHost';
 export * from './util/debounce';
+export * from './audit/index';
 export * from './memory/index';
 export * from './squad/index';
 export * from './squad/agents/index';

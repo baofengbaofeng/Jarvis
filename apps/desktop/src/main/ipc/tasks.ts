@@ -7,6 +7,7 @@ import { IpcEvent } from '@jarvis/protocol';
 import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, buildTaskNotification, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, MemoryStore, buildMemoryInjection, registerMemoryTools, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import { createMemoryAdapter } from './memory';
+import { sqliteAuditSink } from '../audit/sqliteAuditSink';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
@@ -116,7 +117,13 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // per-submit from the agent's workspaceId), not from a fixed registration-time
   // sandbox. An empty allowCommands list falls back to the sandbox default
   // whitelist at readwrite level.
-  const toolRegistry = new ToolRegistry();
+  // M8 Task 3 (J5): persistent execution-audit sink over the audit_logs table
+  // (migration v11). The onExec hook maps every tool execution (ok/error) into
+  // the sink; approval-gate denials write a 'denied' entry directly below
+  // (ToolRegistry has no sandbox/permission concept, so execute() can never emit
+  // 'denied' itself — the gate is the single source of that result).
+  const auditSink = sqliteAuditSink(db);
+  const toolRegistry = new ToolRegistry({ onExec: (e) => auditSink.write({ ts: new Date(e.ts).toISOString(), kind: 'tool_call', actor: 'agent', action: e.tool, target: String(e.args).slice(0, 200), result: e.result }) });
   // F11: one shared MemoryStore over the main-owned agent_memory table (the
   // adapter is keyed by agent_id, so a single store serves every agent). The
   // per-run <memory> injection (buildTaskMessages) is where an agent's persisted
@@ -190,6 +197,9 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // each other's gate. (M4 review finding 1)
       if (req.agent.planOnly && isPlanBlocked(req.toolName)) {
         appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'plan_only_blocked' } });
+        // J5: the gate is where a denial is decided — ToolRegistry.execute has
+        // no permission concept, so the 'denied' audit entry is emitted here.
+        auditSink.write({ ts: new Date().toISOString(), kind: 'tool_call', actor: 'agent', action: req.toolName, target: String(req.args).slice(0, 200), result: 'denied' });
         return false;
       }
       // G8: previously-approved mcp:{server}:{tool} calls are auto-allowed by
@@ -206,6 +216,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (decision === 'allow' && req.toolName !== 'git_commit') return true;
       const ok = await approval.request(req);
       appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok } });
+      // J5: a denied approval is an execution-audit event — emit a 'denied'
+      // tool_call entry alongside the 'approval' decision row above.
+      if (!ok) {
+        auditSink.write({ ts: new Date().toISOString(), kind: 'tool_call', actor: 'agent', action: req.toolName, target: String(req.args).slice(0, 200), result: 'denied' });
+      }
       // G8/J7: a denied-then-approved mcp call writes a grant so the next call
       // hits allowAlways and skips approval. The grant is scoped to the run's
       // agent id (J2 per-agent isolation) rather than the old server-wide ''
@@ -622,7 +637,18 @@ function createTaskSessionAdapter(db: Database.Database, sessionId: string): Ses
 }
 
 // J5 base: audit trail for approval decisions (and other lifecycle events).
+// Migration v11 reshaped audit_logs from the v1 vestigial columns (id TEXT,
+// agent_id, detail_json, created_at) to the execution-audit shape
+// (kind, actor, action, target, result, detail, task_id, ts) — so this INSERT
+// maps the old fields onto the new columns: kind stays, actor=agentId,
+// action=toolName (or the kind), target=query, result is derived from the
+// detail (mention failures are 'error', denials 'denied', everything else
+// 'ok'), and detail keeps the full JSON payload.
 export function appendAudit(db: Database.Database, e: { agentId: string | null; kind: string; detail: unknown }): void {
-  db.prepare('INSERT INTO audit_logs (id, agent_id, kind, detail_json, created_at) VALUES (?,?,?,?,?)')
-    .run(randomUUID(), e.agentId, e.kind, JSON.stringify(e.detail), new Date().toISOString());
+  const d = (e.detail ?? {}) as { toolName?: string; ok?: boolean; reason?: string; query?: string };
+  const action = d.toolName ?? e.kind;
+  const target = d.query ?? null;
+  const result = e.kind === 'mention' ? 'error' : (d.ok === false || d.reason ? 'denied' : 'ok');
+  db.prepare('INSERT INTO audit_logs (kind, actor, action, target, result, detail) VALUES (?,?,?,?,?,?)')
+    .run(e.kind, e.agentId, action, target, result, JSON.stringify(e.detail));
 }

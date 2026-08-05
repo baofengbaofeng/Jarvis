@@ -36,3 +36,6 @@ export * from './coding/index/IndexStore';
 // K4 Task 看板 (M8 Task 1): board is pure (no node:*), so the kanban columns
 // logic is renderer-safe. Kept in sync with the main barrel's ./tasks/index.
 export * from './tasks/index';
+// J5 (M8 Task 3): audit types are pure (no node:*), so the audit sink types are
+// renderer-safe. Kept in sync with the main barrel's ./audit/index.
+export * from './audit/index';
