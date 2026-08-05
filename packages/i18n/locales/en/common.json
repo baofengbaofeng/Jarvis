@@ -48,7 +48,7 @@
   "theme": { "light": "Light", "dark": "Dark", "system": "System" },
   "onboarding": { "title": "Welcome to JARVIS", "start": "Get started", "step1": "Provider", "step2": "Agent", "step3": "Workspace" },
   "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat" },
-  "approval": { "title": "Approval Required", "approve": "Approve", "deny": "Deny" },
+  "approval": { "title": "Approval Required", "approve": "Approve", "deny": "Deny", "reject": "Reject", "summary": "Summary" },
   "agent": { "bindWorkspace": "Bind workspace", "systemPrompt": "System Prompt", "modelId": "Model ID" },
   "daemon": {
     "running": "Running",

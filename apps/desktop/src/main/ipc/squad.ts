@@ -160,6 +160,14 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
       const { id, ok } = (args ?? {}) as { id: string; ok: boolean };
       const next = store.transition(id, ok ? 'approve' : 'reject');
       emit(id, next);
+      // M6 Task 8 (F15/I5): surface the human approve/reject outcome as a
+      // desktop notification + in-app toast. A reject returns the squad to
+      // in_progress (NOT a terminal failure), so the toast kind is 'info' for
+      // reject and 'success' for approve. Lazy import keeps the 'electron'
+      // module out of the Node spec graph (same rationale as the tasks.ts hook).
+      const message = ok ? 'Squad approved' : 'Squad rejected';
+      void import('../notify/NotificationBridge').then(({ showSystemNotification }) => showSystemNotification(message, id)).catch(() => {});
+      deps.getWindow()?.webContents.send('toast:push', { kind: ok ? 'success' : 'info', message });
       return { ok: true as const, status: next };
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };

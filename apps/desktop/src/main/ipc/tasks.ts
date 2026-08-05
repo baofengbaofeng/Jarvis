@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, MemoryStore, buildMemoryInjection, registerMemoryTools, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, buildTaskNotification, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, MemoryStore, buildMemoryInjection, registerMemoryTools, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import { createMemoryAdapter } from './memory';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
@@ -386,6 +386,17 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       getWindow()?.webContents.send(ok ? IpcEvent.taskComplete : IpcEvent.taskFailed, { id, text });
       const sessionId = taskSessions.get(id);
       if (sessionId) void chatService.appendMessage(sessionId, 'assistant', text);
+      // M6 Task 8 (I5): a terminal task outcome fires a desktop notification
+      // plus an in-app toast. buildTaskNotification is the unit-tested decision
+      // logic (complete/failed only). NotificationBridge is lazy-imported so
+      // Node specs never load 'electron' at import time, and the bridge itself
+      // is a guarded no-op there. Tasks have no title column, so the body is a
+      // truncated representation of the terminal result text.
+      const d = buildTaskNotification(ok ? 'complete' : 'failed', { title: summarizeForNotification(text) });
+      if (d.notify) {
+        void import('../notify/NotificationBridge').then(({ showSystemNotification }) => showSystemNotification(d.title, d.body)).catch(() => {});
+        getWindow()?.webContents.send('toast:push', { kind: ok ? 'success' : 'error', message: d.body });
+      }
     }
   }, 6);
 
@@ -482,6 +493,16 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
 // ./coding — so @file mentions resolve against the agent's workspace root.
 function readImpl(p: string): string | null {
   try { return readFileSync(p, 'utf8'); } catch { return null; }
+}
+
+// I5 (M6 Task 8): the tasks table has no title column, so a task notification
+// body is a truncated representation of the terminal result text — the first
+// non-empty line, capped at 120 chars (the same text the renderer already
+// surfaces on task:complete / task:failed).
+function summarizeForNotification(text: string): string {
+  const line = text.trim().split('\n').find(l => l.trim().length > 0) ?? '';
+  const trimmed = line.trim();
+  return trimmed.length > 120 ? `${trimmed.slice(0, 120)}…` : trimmed;
 }
 
 // E6 (review fix): strip ONLY the parsed raw token ranges (via the index
