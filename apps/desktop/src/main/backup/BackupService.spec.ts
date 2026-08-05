@@ -37,4 +37,16 @@ describe('BackupService', () => {
     reopened.close();
     expect(rows).toEqual([{ v: 'original' }]);
   });
+
+  it('createBackup after restore is a safe no-op (closed-handle guard)', async () => {
+    const mainPath = join(dir, 'main3.db');
+    const db = new Database(mainPath);
+    db.exec("CREATE TABLE t (v TEXT); INSERT INTO t (v) VALUES ('x')");
+    const svc = new BackupService(db, join(dir, 'backups'), mainPath);
+    const file = await svc.createBackup();
+    await svc.restore(file);
+    // restore closes the db handle; a subsequent best-effort backup (e.g. the
+    // will-quit hook) must NOT reject on the closed connection.
+    await expect(svc.createBackup()).resolves.toBe('');
+  });
 });

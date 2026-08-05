@@ -147,6 +147,8 @@ app.on('will-quit', () => {
   void ideBridge?.close();
   // L18 (M8 Task 4): best-effort backup on graceful quit. The backup is async,
   // so this is fire-and-forget (a partial backup on hard-quit is acceptable;
-  // the periodic backups are the durable copy).
-  void backup?.createBackup();
+  // the periodic backups are the durable copy). The catch guards the restore
+  // path: after a restore the service's db handle is closed (createBackup is a
+  // guarded no-op then), and any other backup failure must not crash the quit.
+  void backup?.createBackup().catch(() => {});
 });
