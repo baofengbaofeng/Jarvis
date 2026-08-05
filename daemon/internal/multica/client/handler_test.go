@@ -1,0 +1,141 @@
+package client
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
+)
+
+type recordingAPI struct {
+	mu      sync.Mutex
+	acks    []bool
+	streams []runtime.StreamChunk
+	results []TaskResult
+	tasks   []ClaimedTask
+}
+
+func (f *recordingAPI) Register(context.Context, RegisterRequest) (RegisterResponse, error) {
+	return RegisterResponse{ClientID: "c1", HeartbeatSec: 15, PollSec: 3}, nil
+}
+func (f *recordingAPI) Heartbeat(context.Context, string, HeartbeatStatus) error { return nil }
+func (f *recordingAPI) Poll(context.Context, string) ([]ClaimedTask, error)      { return f.tasks, nil }
+func (f *recordingAPI) StreamProgress(_ context.Context, _ string, _ string, c runtime.StreamChunk) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.streams = append(f.streams, c)
+	return nil
+}
+func (f *recordingAPI) SendResult(_ context.Context, _, _ string, r TaskResult) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.results = append(f.results, r)
+	return nil
+}
+func (f *recordingAPI) Ack(_ context.Context, _, _ string, ok bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.acks = append(f.acks, ok)
+	return nil
+}
+
+func (f *recordingAPI) resultCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.results)
+}
+
+// fakeRecorder is a local TaskRecorder stub (package client, distinct from the
+// package main type in cmd/jarvis-agent).
+type fakeRecorder struct{ calls [][2]string }
+
+func (f *fakeRecorder) Record(context.Context, string, string) error { return nil }
+
+func TestHandleClaimsRunsAndStreams(t *testing.T) {
+	f := &recordingAPI{tasks: []ClaimedTask{{TaskID: "t1", MulticaTaskID: "mt1", Payload: []byte(`{"taskId":"t1","multicaTaskId":"mt1","instruction":"fix it"}`)}}}
+	q := runtime.NewQueue(1, 2)
+	h := &ClaimHandler{
+		API:      f,
+		Queue:    q,
+		ClientID: func() string { return "c1" },
+		Exec: func(_ context.Context, _ *acp.TaskPayload, _ func(runtime.StreamChunk)) (TaskResult, error) {
+			return TaskResult{Status: "completed", Result: "done", Model: "m1", FinishedAt: time.Now().Unix()}, nil
+		},
+		Recorder: &fakeRecorder{},
+	}
+	if err := h.HandleClaims(context.Background(), f.tasks); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(2 * time.Second)
+	for f.resultCount() < 1 {
+		select {
+		case <-deadline:
+			t.Fatal("no result sent")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if len(f.streams) == 0 {
+		t.Fatal("no progress streamed")
+	}
+	if len(f.acks) != 1 || !f.acks[0] {
+		t.Fatalf("expected ack true: %v", f.acks)
+	}
+}
+
+func TestHandleClaimsRejectsBadPayload(t *testing.T) {
+	f := &recordingAPI{tasks: []ClaimedTask{{TaskID: "bad", MulticaTaskID: "mb", Payload: []byte(`{"multicaTaskId":"mb"}`)}}}
+	q := runtime.NewQueue(1, 2)
+	h := &ClaimHandler{
+		API:      f,
+		Queue:    q,
+		ClientID: func() string { return "c1" },
+		Exec: func(context.Context, *acp.TaskPayload, func(runtime.StreamChunk)) (TaskResult, error) {
+			t.Fatal("exec should not run for bad payload")
+			return TaskResult{}, nil
+		},
+		Recorder: &fakeRecorder{},
+	}
+	if err := h.HandleClaims(context.Background(), f.tasks); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.acks) != 1 || f.acks[0] {
+		t.Fatalf("expected ack false: %v", f.acks)
+	}
+}
+
+type fakeSkillFS struct {
+	dirs   map[string]bool
+	copies [][2]string
+}
+
+func (f *fakeSkillFS) ReadDir(string) ([]string, error) { return nil, nil }
+func (f *fakeSkillFS) Copy(src, dst string) error {
+	f.copies = append(f.copies, [2]string{src, dst})
+	return nil
+}
+func (f *fakeSkillFS) MkdirAll(d string) error { f.dirs[d] = true; return nil }
+
+func TestApplyInjectionCopiesSkills(t *testing.T) {
+	fs := &fakeSkillFS{dirs: map[string]bool{}}
+	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"s1"}}
+	merged, sc, mc, err := applyInjection(context.Background(), p, acp.Injection{}, "/ws/t1", fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sc) != 0 || len(mc) != 0 {
+		t.Fatalf("no conflicts expected: %v %v", sc, mc)
+	}
+	if len(fs.copies) != 1 || fs.copies[0][1] != "/ws/t1/.jarvis/skills/s1" {
+		t.Fatalf("skill not copied: %v", fs.copies)
+	}
+	if !fs.dirs["/ws/t1/.jarvis/skills"] {
+		t.Fatalf("skills dir not created: %v", fs.dirs)
+	}
+	// Skills 内容已落盘 .jarvis/skills/,由 M3 SkillsLoader 扫描,payload.Skills 置空。
+	if merged.Skills != nil {
+		t.Fatalf("expected skills cleared after copy to disk, got %v", merged.Skills)
+	}
+}
