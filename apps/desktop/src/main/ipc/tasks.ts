@@ -291,7 +291,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // engine and collects the delegate_agent calls it makes as delegations;
   // runMember returns the inline member result when the tool already computed it
   // (avoiding a double member run), else runs the member fresh.
-  const squadRunner: SquadRouterDeps & { prepare(squad: Squad): void; teardown(): void; isActive(): boolean } = {
+  const squadRunner: SquadRouterDeps & { prepare(squad: Squad): void; teardown(): void; isActive(): boolean; runAgentOnce(agentId: string, input: string): Promise<string> } = {
     prepare(squad: Squad): void {
       squadCtx = { guard: createGuard(), leaderAgentId: squad.leaderAgentId, taskId: squad.id, memberResults: new Map(), memberActive: false };
     },
@@ -318,6 +318,14 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const cached = squadCtx?.memberResults.get(agentId);
       if (cached !== undefined) return cached;
       return runMemberAgent(agentId, subtask);
+    },
+    // M6 Task 6 (F10): a workflow node is a single agent run through the SAME
+    // shared engine as a squad member — resolveAgentRun -> engine.run, no squad
+    // context involved. runMemberAgent is exactly this, so reuse it rather than
+    // duplicating the resolution. Same per-run isolation (input.agent on the
+    // approval gate), so concurrent workflow nodes cannot leak into each other.
+    async runAgentOnce(agentId: string, input: string): Promise<string> {
+      return runMemberAgent(agentId, input);
     },
     // L13: the RECEIVING member's context_passing strategy shapes the leader's
     // delegation context (runSquad passes d.to). Resolving by memberId instead

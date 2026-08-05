@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { MessageBus, CallGraph, createSquad, detectCycle, squadTransition, runSquad, type Squad, type SquadEvent, type SquadRouterDeps, type SquadStatus } from '@jarvis/core';
+import { MessageBus, CallGraph, createSquad, detectCycle, squadTransition, runSquad, runWorkflow, type Squad, type SquadEvent, type SquadRouterDeps, type SquadStatus, type Workflow } from '@jarvis/core';
 import { IpcEvent } from '@jarvis/protocol';
 
 // The bus is a module-level singleton: every M6 squad feature (task
@@ -62,6 +62,11 @@ export interface SquadRunner extends SquadRouterDeps {
   // True while a squad run holds the shared runner context (single-active
   // enforcement in squad.start; see tasks.ts).
   isActive(): boolean;
+  // M6 Task 6 (F10): a single shared-engine agent run, no squad context. Used
+  // by workflow.run for each DAG node; the same per-run isolation (input.agent
+  // on the M4 approval gate) as a squad member run, so concurrent nodes cannot
+  // leak into each other.
+  runAgentOnce(agentId: string, input: string): Promise<string>;
 }
 
 export interface SquadIpcDeps {
@@ -156,6 +161,27 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
       const next = store.transition(id, ok ? 'approve' : 'reject');
       emit(id, next);
       return { ok: true as const, status: next };
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  // M6 Task 6 (F10): DAG workflow orchestration. definitionJson is the raw
+  // serialized Workflow; a bad JSON body, a cyclic graph (DagError from
+  // topoSort) or a missing agent (runAgentOnce) all return { ok:false, error }
+  // instead of an ipcMain rejection — same contract as the squad.* channels.
+  // Each node's input is the composed upstream context from runWorkflow; the
+  // runAgentOnce below is the same shared-engine single run the squad member
+  // path uses (see tasks.ts), so a workflow node is just an agent + input with
+  // no squad context involved. The UI editor is M8 (K6/DAG); this channel only
+  // executes a definition the renderer hands over.
+  register('workflow.run', async (_e, definitionJson) => {
+    try {
+      const wf = JSON.parse(definitionJson as string) as Workflow;
+      const outputs = await runWorkflow(wf, async (node, context) => {
+        return deps.runner.runAgentOnce(node.agentId, context);
+      });
+      return { ok: true as const, outputs };
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }

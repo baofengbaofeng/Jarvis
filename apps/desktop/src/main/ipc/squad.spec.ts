@@ -104,7 +104,7 @@ describe('squad IPC (F8/F9)', () => {
       async buildContext(_memberId: string, s: string) { return s; },
       async summarize(members: Array<{ agent: string; result: string }>) { return members.map(m => m.result).join(';'); }
     };
-    return { prepare() {}, teardown() {}, isActive: () => false, ...deps };
+    return { prepare() {}, teardown() {}, isActive: () => false, ...deps, async runAgentOnce(agentId: string, input: string) { return `once(${agentId})=${input}`; } };
   };
 
   // A runner whose runLeader stays pending until released, so the IPC single-
@@ -120,7 +120,8 @@ describe('squad IPC (F8/F9)', () => {
       async runLeader() { return gate; },
       async runMember(agentId: string) { return `result of ${agentId}`; },
       async buildContext(_memberId: string, s: string) { return s; },
-      async summarize() { return 'summary'; }
+      async summarize() { return 'summary'; },
+      async runAgentOnce(agentId: string, input: string) { return `once(${agentId})=${input}`; }
     };
     return { runner, release };
   }
@@ -258,5 +259,62 @@ describe('squad IPC (F8/F9)', () => {
     expect(firstRes.ok).toBe(true);
     expect(firstRes.result?.status).toBe('in_review');
     expect(createSquadStore(db).list()[0].status).toBe('in_review');
+  });
+
+  // M6 Task 6 (F10): workflow.run executes a DAG definition through the shared
+  // engine (the fake runAgentOnce stands in for the tasks.ts single-run). The
+  // handler owns JSON.parse + runWorkflow + runAgentOnce; any failure (bad
+  // JSON, cyclic graph, missing agent) returns { ok:false, error } and never
+  // rejects the channel.
+  describe('workflow.run (F10)', () => {
+    const wfJson = JSON.stringify({
+      nodes: [
+        { id: 'a', agentId: 'A', input: 'seed' },
+        { id: 'b', agentId: 'B', input: '' },
+        { id: 'c', agentId: 'C', input: '' }
+      ],
+      edges: [{ from: 'a', to: 'b' }, { from: 'a', to: 'c' }, { from: 'b', to: 'c' }]
+    });
+
+    it('executes in topo order and injects upstream output into downstream input', async () => {
+      register();
+      const run = handlers.get('workflow.run')!;
+      const r = await run({}, wfJson) as { ok: boolean; outputs: Record<string, string> };
+      expect(r.ok).toBe(true);
+      // runAgentOnce('B', ...) receives a's output injected as its context;
+      // c receives a and b's outputs.
+      expect(r.outputs.b).toContain('once(A)=seed');
+      expect(r.outputs.c).toContain('once(A)=');
+      expect(r.outputs.c).toContain('once(B)=');
+    });
+
+    it('returns { ok:false } for a cyclic definition', async () => {
+      register();
+      const run = handlers.get('workflow.run')!;
+      const cyc = JSON.stringify({ nodes: [{ id: 'x', agentId: 'X', input: '' }, { id: 'y', agentId: 'Y', input: '' }], edges: [{ from: 'x', to: 'y' }, { from: 'y', to: 'x' }] });
+      const r = await run({}, cyc) as { ok: boolean; error: string };
+      expect(r.ok).toBe(false);
+      expect(r.error).toContain('cycle');
+    });
+
+    it('returns { ok:false } for bad JSON', async () => {
+      register();
+      const run = handlers.get('workflow.run')!;
+      const r = await run({}, 'not json') as { ok: boolean; error: string };
+      expect(r.ok).toBe(false);
+      expect(r.error).toBeTruthy();
+    });
+
+    it('returns { ok:false } when a node agent is missing', async () => {
+      register({
+        ...fakeRunner(),
+        async runAgentOnce(agentId: string) { if (agentId === 'NOPE') throw new Error('agent not found: NOPE'); return 'x'; }
+      });
+      const run = handlers.get('workflow.run')!;
+      const bad = JSON.stringify({ nodes: [{ id: 'n', agentId: 'NOPE', input: 'hi' }], edges: [] });
+      const r = await run({}, bad) as { ok: boolean; error: string };
+      expect(r.ok).toBe(false);
+      expect(r.error).toContain('NOPE');
+    });
   });
 });
