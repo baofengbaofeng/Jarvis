@@ -237,6 +237,25 @@ export const MIGRATIONS: Migration[] = [
     ALTER TABLE agent_messages ADD COLUMN task_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_agent_messages_to_task ON agent_messages(to_agent, task_id);
     CREATE INDEX IF NOT EXISTS idx_agent_messages_task ON agent_messages(task_id);`
+  },
+  // M6 Task 3 (F8/F9): squad state machine persistence. The v1 schema created
+  // squads with a legacy `name TEXT NOT NULL` column and no member/task columns,
+  // which does NOT match the M6 squad model (leader + members + a bound task) —
+  // the createSquadStore INSERT never provides `name`, so a NOT NULL name would
+  // make every squad insert fail. ALTER in place like v4 did for agent_messages
+  // (the v1 CREATE TABLE IF NOT EXISTS would make a plain re-CREATE a no-op):
+  // drop the unused name column, add member_agent_ids_json + task_id, and index
+  // by status. schema_migrations version tracking guarantees the DROP/ADD run
+  // exactly once per database (SQLite has no idempotency guard for them, and
+  // better-sqlite3 bundles SQLite >= 3.35 so DROP COLUMN is supported). No
+  // squad rows exist yet, so dropping name loses nothing.
+  {
+    version: 5,
+    sql: `
+    ALTER TABLE squads DROP COLUMN name;
+    ALTER TABLE squads ADD COLUMN member_agent_ids_json TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE squads ADD COLUMN task_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_squads_status ON squads(status);`
   }
 ];
 

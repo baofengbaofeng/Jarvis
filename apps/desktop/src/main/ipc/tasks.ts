@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type SessionStoreAdapter, type SessionMessage } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -12,6 +12,7 @@ import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
 import type { SettingsStore } from './settings';
 import { webSearch } from './search';
+import { getMessageBus } from './squad';
 import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
@@ -43,6 +44,36 @@ export interface TaskHandlerDeps {
 
 export function registerTaskHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, agentStore = createAgentStore(db), deps: TaskHandlerDeps = {}) {
   const workspace = createWorkspaceService(db);
+  // M6 Task 3 (F8/F9): shared per-agent run resolution. Both the direct task
+  // path (create) and the squad member path (delegate_agent / runSquad) resolve
+  // the agent's model binding, env, sandbox policy and workspace root the same
+  // way, then run through the SAME shared engine — safe because the M4 fix
+  // scoped the approval gate per-run via input.agent, not module-level state.
+  const resolveAgentRun = async (agentId: string, prompt: string) => {
+    const agent = agentStore.get(agentId);
+    const ctx = workspace.loadContext(agentId);
+    const workspaceRoot = agent.workspaceId ?? '.';
+    const messages = buildTaskMessages(ctx, agent, prompt, workspaceRoot, db, agent.id);
+    const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
+    if (!modelRow) throw new Error('agent has no valid model binding');
+    const apiKey = await secrets.get(modelRow.api_key_ref);
+    if (!apiKey) throw new Error('missing api key');
+    // AgentConfig does not expose env_vars_json, so read the raw row to feed
+    // the agent's env vars into the engine (I1).
+    const agentRow = db.prepare('SELECT env_vars_json FROM agents WHERE id = ?').get(agentId) as { env_vars_json: string } | undefined;
+    const agentEnv = agentRow ? (JSON.parse(agentRow.env_vars_json ?? '{}') as Record<string, string>) : {};
+    const env = mergeEnv({}, {}, agentEnv, {});
+    // C6/J6: read the per-agent sandbox policy the PermissionsSettingsPage
+    // saved under settings.permissions.{agentId}; fall back to the shared
+    // default readwrite policy (the one the tool registry was built with).
+    const savedPolicy = deps.settings?.get(`permissions.${agentId}`) as { level?: 'readonly' | 'readwrite' | 'system'; allowCommands?: string[]; allowDomains?: string[] } | undefined;
+    const policy: SandboxPolicy = {
+      level: savedPolicy?.level ?? 'readwrite',
+      allowCommands: savedPolicy?.allowCommands ?? [],
+      allowDomains: savedPolicy?.allowDomains ?? []
+    };
+    return { agent, messages, env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot, policy };
+  };
   const chatService = createChatService(createChatDbAdapter(db));
   // Map task id -> chat session id so task completion can persist the assistant
   // turn into the same session that launched it (M1 session list + reload stays
@@ -164,6 +195,97 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       return ok;
     }
   });
+
+  // M6 Task 3 (F8/F9): squad delegation + runner. The shared engine has no
+  // per-run identity channel to tools (AgentEngine passes only args + ToolContext
+  // to a tool handler), so the delegate_agent tool reads the CURRENT squad run
+  // from squadCtx, set by runLeader before the leader's engine run and kept
+  // alive through runSquad's member loop — so a member result the tool computed
+  // inline during the leader run is reused instead of re-run. Squad runs are
+  // single-active in this milestone (squad.start drives one leader at a time);
+  // M7's Multica queue will own a proper per-run context.
+  let squadCtx: { guard: DelegateGuardState; leaderAgentId: string; taskId: string; memberResults: Map<string, string> } | null = null;
+
+  // E14 isolation: each member runs with its OWN resolved config + workspace
+  // root through the shared engine — the approval gate is per-run via
+  // input.agent, so concurrent leader and member runs cannot leak into each
+  // other (same rationale as the M4 approval-gate fix).
+  const runMemberAgent = async (agentId: string, subtask: string): Promise<string> => {
+    const run = await resolveAgentRun(agentId, subtask);
+    await registerAgentMcpTools(db, toolRegistry, agentId);
+    const result = await engine.run({ ...run, cwd: run.workspaceRoot });
+    return result.text;
+  };
+
+  // The delegate_agent route: verify the delegation is within a live squad, run
+  // the member inline (Multica SOP: members REACT and the result returns to the
+  // leader), and persist the delegate/response/complete lifecycle on the bus
+  // (L12). Throwing on an invalid delegation fails the leader's run loudly
+  // rather than silently producing a bogus member result.
+  const delegateRoute = async (to: string, subtask: string, from: string, taskId: string): Promise<string> => {
+    if (!squadCtx) throw new Error('delegate_agent called outside a squad run');
+    const squadRow = db.prepare('SELECT leader_agent_id, member_agent_ids_json FROM squads WHERE id = ?').get(taskId) as { leader_agent_id: string; member_agent_ids_json: string } | undefined;
+    if (!squadRow || squadRow.leader_agent_id !== from) throw new Error(`agent ${from} is not a squad leader`);
+    const members = JSON.parse(squadRow.member_agent_ids_json ?? '[]') as string[];
+    if (!members.includes(to)) throw new Error(`agent ${to} is not a member of squad ${taskId}`);
+    const bus = getMessageBus();
+    bus.post({ kind: 'delegate', from, to, taskId, payload: { subtask } });
+    try {
+      const text = await runMemberAgent(to, subtask);
+      squadCtx.memberResults.set(to, text);
+      bus.post({ kind: 'response', from: to, to: from, taskId, payload: { text } });
+      bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: true } });
+      return text;
+    } catch (e) {
+      bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: e instanceof Error ? e.message : String(e) } });
+      throw e;
+    }
+  };
+
+  // Task 2's registerDelegateTool binds fromAgent/guard statically; the getters
+  // read the CURRENT squad run so the one shared tool serves whichever leader is
+  // running. Non-leader task runs never touch squadCtx (route rejects them).
+  registerDelegateTool(toolRegistry, {
+    get guard() { return squadCtx?.guard ?? createGuard(); },
+    get fromAgent() { return squadCtx?.leaderAgentId ?? ''; },
+    taskHash: () => squadCtx?.taskId ?? '',
+    taskId: () => squadCtx?.taskId ?? '',
+    route: delegateRoute
+  });
+
+  // SquadRunner (consumed by squad.start in ./squad): runLeader runs the leader
+  // engine and collects the delegate_agent calls it makes as delegations;
+  // runMember returns the inline member result when the tool already computed it
+  // (avoiding a double member run), else runs the member fresh.
+  const squadRunner: SquadRouterDeps & { prepare(squad: Squad): void; teardown(): void } = {
+    prepare(squad: Squad): void {
+      squadCtx = { guard: createGuard(), leaderAgentId: squad.leaderAgentId, taskId: squad.id, memberResults: new Map() };
+    },
+    teardown(): void { squadCtx = null; },
+    async runLeader(input: string): Promise<{ text: string; delegations: Array<{ to: string; subtask: string }> }> {
+      if (!squadCtx) throw new Error('squad runner used without prepare');
+      const leader = await resolveAgentRun(squadCtx.leaderAgentId, input);
+      await registerAgentMcpTools(db, toolRegistry, squadCtx.leaderAgentId);
+      const delegations: Array<{ to: string; subtask: string }> = [];
+      const result = await engine.run({
+        ...leader, cwd: leader.workspaceRoot,
+        onTool: (call) => {
+          if (call.name === 'delegate_agent') {
+            delegations.push({ to: String(call.arguments.agent), subtask: String(call.arguments.subtask) });
+          }
+        }
+      });
+      return { text: result.text, delegations };
+    },
+    async runMember(agentId: string, subtask: string, _context: string): Promise<string> {
+      const cached = squadCtx?.memberResults.get(agentId);
+      if (cached !== undefined) return cached;
+      return runMemberAgent(agentId, subtask);
+    },
+    buildContext: async (result: string): Promise<string> => result,
+    summarize: async (members: Array<{ agent: string; result: string }>): Promise<string> => members.map(m => m.result).join('\n')
+  };
+
   const store = {
     async create(id: string, agentId: string) {
       db.prepare('INSERT INTO tasks (id, agent_id, status, payload_json, created_at) VALUES (?,?,?,?,?)').run(id, agentId, 'queued', '{}', new Date().toISOString());
@@ -197,33 +319,17 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
 
   return {
     approvalCenter: approval,
+    // M6 Task 3 (F8/F9): squad runner handed to the squad IPC (./squad) so
+    // squad.start can orchestrate the leader/member engine runs through the
+    // SAME shared engine and per-agent resolution as the direct task path.
+    squad: squadRunner,
     async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string; sessionId?: string }) {
       const { agentId, prompt, sessionId } = args;
       const id = randomUUID();
-      const agent = agentStore.get(agentId);
-      const ctx = workspace.loadContext(agentId);
       // M4 review (finding 1): the agent's identity flows to the shared engine's
       // approval gate through ApprovalRequest.agent (set per tool call in
       // AgentEngine.run) — no module-level currentAgentId/currentPlanOnly.
-      const messages = buildTaskMessages(ctx, agent, prompt, agent.workspaceId ?? '.', db, agent.id);
-      const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
-      if (!modelRow) throw new Error('agent has no valid model binding');
-      const apiKey = await secrets.get(modelRow.api_key_ref);
-      if (!apiKey) throw new Error('missing api key');
-      // AgentConfig does not expose env_vars_json, so read the raw row to feed
-      // the agent's env vars into the engine (I1).
-      const agentRow = db.prepare('SELECT env_vars_json FROM agents WHERE id = ?').get(agentId) as { env_vars_json: string } | undefined;
-      const agentEnv = agentRow ? (JSON.parse(agentRow.env_vars_json ?? '{}') as Record<string, string>) : {};
-      const env = mergeEnv({}, {}, agentEnv, {});
-      // C6/J6: read the per-agent sandbox policy the PermissionsSettingsPage
-      // saved under settings.permissions.{agentId}; fall back to the shared
-      // default readwrite policy (the one the tool registry was built with).
-      const savedPolicy = deps.settings?.get(`permissions.${agentId}`) as { level?: 'readonly' | 'readwrite' | 'system'; allowCommands?: string[]; allowDomains?: string[] } | undefined;
-      const policy: SandboxPolicy = {
-        level: savedPolicy?.level ?? 'readwrite',
-        allowCommands: savedPolicy?.allowCommands ?? [],
-        allowDomains: savedPolicy?.allowDomains ?? []
-      };
+      const { agent, messages, env, apiKey, provider, modelId, workspaceRoot, policy } = await resolveAgentRun(agentId, prompt);
       await store.create(id, agentId);
       // G6: register the agent's bound MCP servers' tools into the shared
       // engine registry (filtered by config_json.agentIds). Clients are cached
@@ -254,7 +360,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (agent.workspaceId) {
         await snapshotBeforeTask(agent.workspaceId, id, snapshotStore);
       }
-      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot: agent.workspaceId ?? '.', policy });
+      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider, modelId, workspaceRoot, policy });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),

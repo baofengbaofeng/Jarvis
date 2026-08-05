@@ -11,7 +11,7 @@ import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
-import { createBusPersist, getMessageBus } from './squad';
+import { createBusPersist, getMessageBus, registerSquadIpc } from './squad';
 import { globalSearch } from './search';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
@@ -135,6 +135,11 @@ export class IpcRouter {
     this.register(IpcChannel.taskRetry, (_e, id) => tasks.retry(_e, id as string));
     this.register('task.rollback', (_e, id) => tasks.rollback(_e, id as string));
     this.register('approval.resolve', (_e, id, ok) => { tasks.approvalCenter.resolve(id as string, ok as boolean); return { ok: true }; });
+    // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
+    // the leader/member engine runs through the SAME shared engine; the store
+    // persists to the squads table (migration v5). The `{ ok, error }` contract
+    // is enforced inside registerSquadIpc, so no ipcMain rejection leaks.
+    registerSquadIpc((ch, h) => this.register(ch, h), { db: this.db, getWindow: () => BrowserWindow.getFocusedWindow(), runner: tasks.squad });
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
     this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });

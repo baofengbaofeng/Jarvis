@@ -31,6 +31,7 @@ export const IpcEvent = {
   taskState: 'task:state',
   taskComplete: 'task:complete',
   taskFailed: 'task:failed',
+  squadStatus: 'squad:status',
 } as const;
 
 export type ProviderType = 'openai-compatible' | 'anthropic-compatible';
