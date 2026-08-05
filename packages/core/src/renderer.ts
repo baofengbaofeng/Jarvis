@@ -55,3 +55,9 @@ export * from './config/index';
 // shortcuts IPC and the renderer settings view/hook share one normalize/lookup.
 // Kept in sync with the main barrel's ./shortcuts/index.
 export * from './shortcuts/index';
+// F10 (M8 Task 9): workflow DAG types + topoSort + runWorkflow are pure (no
+// node:*), so the renderer workflow editor imports AgentNode/Edge/Workflow from
+// this entry. NOTE: only the pure Workflow module is re-exported — the full
+// squad barrel (./squad/index) re-exports the engine (Bus, SquadRouter, etc.)
+// which is NOT renderer-safe, so it stays out of this entry.
+export * from './squad/Workflow';

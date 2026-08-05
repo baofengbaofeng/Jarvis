@@ -189,6 +189,14 @@
     "saved": "已保存"
   },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" },
+  "workflow": {
+    "title": "工作流编辑器",
+    "run": "运行",
+    "add": "+ {{name}}",
+    "edge": "→ {{to}}",
+    "remove": "删除",
+    "inputPlaceholder": "输入模板"
+  },
   "shortcuts": {
     "title": "键盘快捷键",
     "press_key": "按下按键…",

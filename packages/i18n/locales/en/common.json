@@ -189,6 +189,14 @@
     "saved": "Saved"
   },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" },
+  "workflow": {
+    "title": "Workflow Editor",
+    "run": "Run",
+    "add": "+ {{name}}",
+    "edge": "→ {{to}}",
+    "remove": "Remove",
+    "inputPlaceholder": "Input template"
+  },
   "shortcuts": {
     "title": "Keyboard Shortcuts",
     "press_key": "Press a key…",

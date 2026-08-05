@@ -17,6 +17,7 @@ import { AgentListView } from './pages/AgentListView';
 import { SquadViewPage } from './pages/SquadViewPage';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
 import { TaskBoardPage } from './pages/TaskBoardPage';
+import { WorkflowPage } from './pages/WorkflowPage';
 import { ApprovalModal } from './components/approval/ApprovalModal';
 import { SelectionMenu } from './components/office/SelectionMenu';
 import { ToastHost } from './components/squad/ToastHost';
@@ -53,6 +54,8 @@ export default function App() {
           <Route path="/squad" element={<SquadViewPage />} />
           {/* K4 (M8 Task 1): six-column task kanban. */}
           <Route path="/board" element={<TaskBoardPage />} />
+          {/* F10 (M8 Task 9): DAG workflow visual editor + runner. */}
+          <Route path="/workflow" element={<WorkflowPage />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />
