@@ -25,6 +25,10 @@ type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unkno
 
 export class IpcRouter {
   private handlers = new Map<string, Handler>();
+  // Teardown handles for resources registerAll subscribes to (the bus persist
+  // subscription). dispose() drops them so a discarded router never fires into
+  // a stale db (M6 Task 1 review fix — the singleton persists across routers).
+  private disposeFns: Array<() => void> = [];
   constructor(private db: Database.Database) {}
 
   register(channel: string, handler: Handler): void {
@@ -196,13 +200,21 @@ export class IpcRouter {
     // M6 Task 1 (L12): agent message bus. getMessageBus returns the shared
     // in-memory bus singleton; createBusPersist subscribes it to agent_messages
     // so every posted message is durable (main-owned table, §13.3). No IPC
-    // channels yet — the renderer does not consume the bus in this task.
-    createBusPersist(this.db, getMessageBus());
+    // channels yet — the renderer does not consume the bus in this task. The
+    // unsubscribe is retained so dispose() can drop it (see disposeFns).
+    this.disposeFns.push(createBusPersist(this.db, getMessageBus()));
   }
 
   listen(): void {
     for (const [channel, handler] of this.handlers) {
       ipcMain.handle(channel, handler);
     }
+  }
+
+  // Releases resources registerAll subscribed (currently the bus persist
+  // subscription). Safe to call once; no-op afterwards.
+  dispose(): void {
+    for (const fn of this.disposeFns) fn();
+    this.disposeFns = [];
   }
 }

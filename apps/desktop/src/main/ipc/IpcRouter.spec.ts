@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { applyMigrations } from '../db/migrations';
 import { IpcRouter } from './IpcRouter';
 import { createProviderStore } from './providers';
+import { getMessageBus, __resetBusForTests } from './squad';
 import type { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 
 // IpcRouter imports electron at runtime; stub it so the router can be
@@ -14,6 +15,13 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
   BrowserWindow: { getFocusedWindow: () => null }
 }));
+
+// M6 Task 1 (L12) review fix: IpcRouter.registerAll subscribes the SHARED bus
+// singleton to persist agent_messages. Reset that singleton before every test
+// so a previous test's persist subscription can never fire into this test's db
+// (cross-test contamination). dispose() (exercised in the teardown describe
+// below) is the production-side release for that subscription.
+beforeEach(() => { __resetBusForTests(); });
 
 describe('IpcRouter provider model channels', () => {
   let db: Database.Database;
@@ -153,5 +161,29 @@ describe('IpcRouter search.global channel (L21)', () => {
     // An empty query returns [] instead of a FTS5 MATCH '' throw.
     const empty = await searchGlobal({}, { query: '' }) as { ok: boolean; results: unknown[] };
     expect(empty.results).toEqual([]);
+  });
+});
+
+// M6 Task 1 (L12) review fix: registerAll's persist subscription must not leak
+// across router instances. Two routers on the shared singleton are registered
+// against different dbs; after the first is disposed, posting on the singleton
+// must only reach the live router's db.
+describe('IpcRouter bus persist teardown (L12)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('dispose() unsubscribes the persist subscription so routers do not leak', () => {
+    const db2 = new Database(':memory:'); applyMigrations(db2);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    const router1 = new IpcRouter(db);
+    router1.registerAll(daemon);
+    router1.dispose();
+    const router2 = new IpcRouter(db2);
+    router2.registerAll(daemon);
+    getMessageBus().post({ kind: 'log', from: 'a', to: '*', payload: { note: 1 } });
+    const c1 = (db.prepare('SELECT COUNT(*) AS c FROM agent_messages').get() as { c: number }).c;
+    const c2 = (db2.prepare('SELECT COUNT(*) AS c FROM agent_messages').get() as { c: number }).c;
+    expect(c1).toBe(0);
+    expect(c2).toBe(1);
   });
 });

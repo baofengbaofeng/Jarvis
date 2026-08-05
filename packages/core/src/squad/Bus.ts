@@ -20,7 +20,13 @@ export class MessageBus {
       id: this.deps.id?.() ?? Math.random().toString(36).slice(2),
       ts: this.deps.now?.() ?? Date.now()
     };
-    for (const s of [...this.subs]) s(full);
+    // A throwing subscriber must not abort post for the remaining subscribers
+    // nor for the response-waiter resolution below — otherwise the requester
+    // hangs until timeout, masking the real error. Swallow per-subscriber
+    // errors and continue.
+    for (const s of [...this.subs]) {
+      try { s(full); } catch { /* continue on subscriber throw */ }
+    }
     if (msg.kind === 'response') {
       const key = waiterKey(msg.to, msg.taskId);
       const w = this.waiters.get(key);
@@ -42,6 +48,15 @@ export class MessageBus {
       // (the brief's original) would never match: the response's `to` is the
       // requester, not the destination the request was sent to.
       const key = waiterKey(req.from, req.taskId);
+      // (to, taskId) keying cannot distinguish two concurrent requests from the
+      // same requester for the same taskId — a second pending waiter would
+      // overwrite the first and the first timer would reject the wrong promise.
+      // L12 assumes taskId is unique per requester, so reject the duplicate
+      // instead of silently corrupting the waiters map.
+      if (this.waiters.has(key)) {
+        reject(new BusError(`duplicate pending request for waiter ${key}`));
+        return;
+      }
       const timer = setTimeout(() => {
         this.waiters.delete(key);
         reject(new BusError(`timeout: no response from ${req.to} within ${timeoutMs}ms`));

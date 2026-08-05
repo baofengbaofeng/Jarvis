@@ -10,6 +10,11 @@ export function getMessageBus(): MessageBus {
   return bus;
 }
 
+// Test-only teardown: discards the cached singleton so specs start each test
+// with a fresh bus and never accumulate persist subscriptions across tests
+// (IpcRouter.registerAll subscribes this singleton; see IpcRouter.spec).
+export function __resetBusForTests(): void { bus = null; }
+
 // Subscribes the bus to the main-owned agent_messages table so EVERY posted
 // message is durable. Returns the unsubscribe handle. Column names must match
 // migration v4 (id, kind, from_agent, to_agent, task_id, payload_json,

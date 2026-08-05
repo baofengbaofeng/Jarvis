@@ -31,4 +31,25 @@ describe('MessageBus', () => {
     bus.post({ kind: 'log', from: 'a', to: '*', payload: {} });
     expect(n).toBe(0);
   });
+
+  it('a throwing subscriber does not block other subscribers or response resolution', async () => {
+    const bus = new MessageBus();
+    const seen: string[] = [];
+    bus.subscribe(() => { throw new Error('boom'); });
+    bus.subscribe(m => seen.push(m.kind));
+    const p = bus.request({ kind: 'delegate', from: 'a', to: 'b', taskId: 't', payload: {} }, 1000);
+    bus.post({ kind: 'response', from: 'b', to: 'a', taskId: 't', payload: { ok: 1 } });
+    const r = await p;
+    expect(seen).toEqual(['delegate', 'response']);
+    expect(r.payload).toEqual({ ok: 1 });
+  });
+
+  it('rejects a duplicate pending request from the same requester + taskId', async () => {
+    const bus = new MessageBus();
+    const p1 = bus.request({ kind: 'delegate', from: 'a', to: 'b', taskId: 't', payload: {} }, 1000);
+    await expect(bus.request({ kind: 'delegate', from: 'a', to: 'b', taskId: 't', payload: {} }, 1000)).rejects.toThrow('duplicate');
+    // The duplicate must not corrupt the first waiter: it still resolves.
+    bus.post({ kind: 'response', from: 'b', to: 'a', taskId: 't', payload: { ok: 1 } });
+    await expect(p1).resolves.toMatchObject({ payload: { ok: 1 } });
+  });
 });
