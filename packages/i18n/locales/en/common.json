@@ -62,5 +62,13 @@
   "diff": { "title": "Diff", "accept": "Accept", "reject": "Reject", "apply": "Apply" },
   "mention": { "placeholder": "@file or @symbol" },
   "plan": { "badge": "Plan" },
+  "selection": {
+    "translate": "Translate",
+    "explain": "Explain",
+    "summarize": "Summarize",
+    "search": "Search",
+    "resultEmpty": "No result",
+    "error": "Failed"
+  },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

@@ -12,6 +12,7 @@ import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
+import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
@@ -141,6 +142,11 @@ export class IpcRouter {
       const rows = this.db.prepare('SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY created_at').all(sessionId as string) as Array<{ role: string; content: string }>;
       return exportSessionMarkdown(rows);
     });
+    // M5 Task 1 (D4): 划词 analysis channel. The office router's `register`
+    // shape accepts a generic handler; IpcRouter.register expects the electron
+    // Handler (event first), so wrap it. The modelRouter is a streaming adapter
+    // bridge over the first agent's model binding (see ./office).
+    registerOfficeIpc({ register: (ch, h) => this.register(ch, h) }, createOfficeChatStream(this.db, secrets));
   }
 
   listen(): void {

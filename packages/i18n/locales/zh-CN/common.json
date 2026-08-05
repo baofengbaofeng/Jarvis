@@ -62,5 +62,13 @@
   "diff": { "title": "改动", "accept": "接受", "reject": "拒绝", "apply": "应用改动" },
   "mention": { "placeholder": "@文件或 @符号" },
   "plan": { "badge": "Plan" },
+  "selection": {
+    "translate": "翻译",
+    "explain": "解释",
+    "summarize": "总结",
+    "search": "搜索",
+    "resultEmpty": "暂无结果",
+    "error": "处理失败"
+  },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }
