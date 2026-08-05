@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -204,7 +204,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // inline during the leader run is reused instead of re-run. Squad runs are
   // single-active in this milestone (squad.start drives one leader at a time);
   // M7's Multica queue will own a proper per-run context.
-  let squadCtx: { guard: DelegateGuardState; leaderAgentId: string; taskId: string; memberResults: Map<string, string> } | null = null;
+  let squadCtx: { guard: DelegateGuardState; leaderAgentId: string; taskId: string; memberResults: Map<string, string>; memberActive: boolean } | null = null;
 
   // E14 isolation: each member runs with its OWN resolved config + workspace
   // root through the shared engine — the approval gate is per-run via
@@ -224,21 +224,27 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // rather than silently producing a bogus member result.
   const delegateRoute = async (to: string, subtask: string, from: string, taskId: string): Promise<string> => {
     if (!squadCtx) throw new Error('delegate_agent called outside a squad run');
+    // Capture the context in a const so the async body keeps a stable reference
+    // (squadCtx is a mutable closure let; narrowing does not survive awaits).
+    const ctx = squadCtx;
     const squadRow = db.prepare('SELECT leader_agent_id, member_agent_ids_json FROM squads WHERE id = ?').get(taskId) as { leader_agent_id: string; member_agent_ids_json: string } | undefined;
     if (!squadRow || squadRow.leader_agent_id !== from) throw new Error(`agent ${from} is not a squad leader`);
     const members = JSON.parse(squadRow.member_agent_ids_json ?? '[]') as string[];
     if (!members.includes(to)) throw new Error(`agent ${to} is not a member of squad ${taskId}`);
     const bus = getMessageBus();
     bus.post({ kind: 'delegate', from, to, taskId, payload: { subtask } });
+    ctx.memberActive = true;
     try {
       const text = await runMemberAgent(to, subtask);
-      squadCtx.memberResults.set(to, text);
+      ctx.memberResults.set(to, text);
       bus.post({ kind: 'response', from: to, to: from, taskId, payload: { text } });
       bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: true } });
       return text;
     } catch (e) {
       bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: e instanceof Error ? e.message : String(e) } });
       throw e;
+    } finally {
+      ctx.memberActive = false;
     }
   };
 
@@ -247,7 +253,15 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // running. Non-leader task runs never touch squadCtx (route rejects them).
   registerDelegateTool(toolRegistry, {
     get guard() { return squadCtx?.guard ?? createGuard(); },
-    get fromAgent() { return squadCtx?.leaderAgentId ?? ''; },
+    // Members are leaves (Multica SOP). This getter is evaluated as an argument
+    // to checkDelegate, so throwing HERE blocks a member-initiated delegate_agent
+    // BEFORE any guard depth is attributed to the leader — a recursive member
+    // call fails loudly with a clear DelegateGuardError instead of being
+    // credited to the leader and passing the cycle guard.
+    get fromAgent() {
+      if (squadCtx?.memberActive) throw new DelegateGuardError('members cannot delegate');
+      return squadCtx?.leaderAgentId ?? '';
+    },
     taskHash: () => squadCtx?.taskId ?? '',
     taskId: () => squadCtx?.taskId ?? '',
     route: delegateRoute
@@ -257,11 +271,14 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // engine and collects the delegate_agent calls it makes as delegations;
   // runMember returns the inline member result when the tool already computed it
   // (avoiding a double member run), else runs the member fresh.
-  const squadRunner: SquadRouterDeps & { prepare(squad: Squad): void; teardown(): void } = {
+  const squadRunner: SquadRouterDeps & { prepare(squad: Squad): void; teardown(): void; isActive(): boolean } = {
     prepare(squad: Squad): void {
-      squadCtx = { guard: createGuard(), leaderAgentId: squad.leaderAgentId, taskId: squad.id, memberResults: new Map() };
+      squadCtx = { guard: createGuard(), leaderAgentId: squad.leaderAgentId, taskId: squad.id, memberResults: new Map(), memberActive: false };
     },
     teardown(): void { squadCtx = null; },
+    // Single-active guard used by squad.start: reject a second concurrent run
+    // before it can overwrite squadCtx and corrupt the first run.
+    isActive(): boolean { return squadCtx !== null; },
     async runLeader(input: string): Promise<{ text: string; delegations: Array<{ to: string; subtask: string }> }> {
       if (!squadCtx) throw new Error('squad runner used without prepare');
       const leader = await resolveAgentRun(squadCtx.leaderAgentId, input);

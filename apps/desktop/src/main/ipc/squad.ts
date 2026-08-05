@@ -59,6 +59,9 @@ export function createSquadStore(db: Database.Database) {
 export interface SquadRunner extends SquadRouterDeps {
   prepare(squad: Squad): void;
   teardown(): void;
+  // True while a squad run holds the shared runner context (single-active
+  // enforcement in squad.start; see tasks.ts).
+  isActive(): boolean;
 }
 
 export interface SquadIpcDeps {
@@ -92,12 +95,21 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
       const { id, input } = (args ?? {}) as { id: string; input: string };
       const cur = store.list().find(s => s.id === id);
       if (!cur) return { ok: false as const, error: `squad not found: ${id}` };
-      // start before prepare so a duplicate start on a running squad fails
-      // cleanly (invalid transition) without touching the runner context.
+      // Single-active enforcement (F8/F9 review finding 1): the runner context
+      // is process-global for the shared engine, so a second concurrent start
+      // would silently corrupt the active run (leader A's delegate_agent reads
+      // squad B's context; the first to finish nulls squadCtx mid-flight).
+      // Reject before any transition or prepare.
+      if (deps.runner.isActive()) return { ok: false as const, error: 'another squad run is in progress' };
+      // start before prepare so a duplicate start on an already-started squad
+      // fails cleanly (invalid transition) without touching the runner context.
       store.transition(id, 'start');
       const squad: Squad = { id: cur.id, leaderAgentId: cur.leaderAgentId, memberAgentIds: cur.memberAgentIds, status: 'in_progress', taskId: cur.taskId ?? undefined };
-      deps.runner.prepare(squad);
       try {
+        // prepare inside the try so a throw still reaches the finally teardown
+        // (the DB would otherwise sit in_progress with a leaked runner context).
+        deps.runner.prepare(squad);
+        emit(id, 'in_progress');
         const result = await runSquad(squad, input, deps.runner);
         store.transition(id, 'summarized');
         emit(id, result.status);

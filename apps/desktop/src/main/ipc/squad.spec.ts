@@ -104,18 +104,36 @@ describe('squad IPC (F8/F9)', () => {
       async buildContext(s: string) { return s; },
       async summarize(members: Array<{ agent: string; result: string }>) { return members.map(m => m.result).join(';'); }
     };
-    return { prepare() {}, teardown() {}, ...deps };
+    return { prepare() {}, teardown() {}, isActive: () => false, ...deps };
   };
+
+  // A runner whose runLeader stays pending until released, so the IPC single-
+  // active check can be exercised while the first run is still in flight.
+  function deferredRunner() {
+    let release!: (v: { text: string; delegations: Array<{ to: string; subtask: string }> }) => void;
+    const gate = new Promise<{ text: string; delegations: Array<{ to: string; subtask: string }> }>((res) => { release = res; });
+    let active = false;
+    const runner: SquadRunner = {
+      prepare() { active = true; },
+      teardown() { active = false; },
+      isActive: () => active,
+      async runLeader() { return gate; },
+      async runMember(agentId: string) { return `result of ${agentId}`; },
+      async buildContext(s: string) { return s; },
+      async summarize() { return 'summary'; }
+    };
+    return { runner, release };
+  }
 
   beforeEach(() => {
     db = new Database(':memory:'); applyMigrations(db);
     handlers = new Map();
   });
 
-  function register() {
+  function register(runner: SquadRunner = fakeRunner()) {
     const events: Array<{ channel: string; payload: unknown }> = [];
     const fakeWindow = { webContents: { send: (channel: string, payload: unknown) => events.push({ channel, payload }) } };
-    registerSquadIpc((ch, h) => handlers.set(ch, h), { db, getWindow: () => fakeWindow as unknown as import('electron').BrowserWindow, runner: fakeRunner() });
+    registerSquadIpc((ch, h) => handlers.set(ch, h), { db, getWindow: () => fakeWindow as unknown as import('electron').BrowserWindow, runner });
     return events;
   }
 
@@ -166,5 +184,36 @@ describe('squad IPC (F8/F9)', () => {
     const r = await start({}, { id: 'nope', input: 'x' }) as { ok: boolean; error: string };
     expect(r.ok).toBe(false);
     expect(r.error).toContain('nope');
+  });
+
+  it('emits an in_progress squad:status event when the run begins', async () => {
+    const events = register();
+    const create = handlers.get('squad.create')!;
+    const start = handlers.get('squad.start')!;
+    const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1', 'm2'] }) as { id: string };
+    await start({}, { id, input: 'do it' });
+    const states = events.filter(e => e.channel === 'squad:status').map(e => (e.payload as { state: string }).state);
+    expect(states).toContain('in_progress');
+    expect(states).toContain('in_review');
+  });
+
+  it('rejects a second squad.start while a run is in progress (single-active)', async () => {
+    const { runner, release } = deferredRunner();
+    register(runner);
+    const create = handlers.get('squad.create')!;
+    const start = handlers.get('squad.start')!;
+    const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1'] }) as { id: string };
+    // The first start's prepare runs synchronously before its runLeader awaits
+    // the gate, so the runner is active before the second start is dispatched.
+    const first = start({}, { id, input: 'run one' });
+    const second = await start({}, { id, input: 'run two' }) as { ok: boolean; error?: string };
+    expect(second.ok).toBe(false);
+    expect(second.error).toContain('another squad run is in progress');
+    // Releasing the first run lets it complete unaffected.
+    release({ text: 'plan', delegations: [] });
+    const firstRes = await first as { ok: boolean; result?: { status: string } };
+    expect(firstRes.ok).toBe(true);
+    expect(firstRes.result?.status).toBe('in_review');
+    expect(createSquadStore(db).list()[0].status).toBe('in_review');
   });
 });

@@ -201,6 +201,77 @@ describe('task handlers', () => {
     // Both chat turns fit the agent budget, so the full history is returned.
     expect(r.messages.map(m => m.content)).toEqual(['hi', 'Hello']);
   });
+
+  // M6 Task 3 (F8/F9) review finding 2: members are leaves (Multica SOP). During
+  // a member run the delegate_agent tool must throw a clear DelegateGuardError
+  // instead of being attributed to the leader and passing the cycle guard.
+  it('blocks a member from delegating during a squad run (members are leaves)', async () => {
+    const leaderId = seedAgent();
+    const m1 = seedAgent();
+    const m2 = seedAgent();
+    db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run('sq-mem', leaderId, JSON.stringify([m1, m2]), 'in_progress', null, new Date().toISOString());
+    let leaderRan = false;
+    const fn: EngineChatFn = async (req, opts) => {
+      if (req.provider.id === leaderId) {
+        if (!leaderRan) {
+          leaderRan = true;
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'delegate_agent', arguments: { agent: m1, subtask: 'do x' } }] });
+        }
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      if (req.provider.id === m1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '2', name: 'delegate_agent', arguments: { agent: m2, subtask: 'do y' } }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: '', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-mem', leaderAgentId: leaderId, memberAgentIds: [m1, m2], status: 'in_progress' });
+    try {
+      await expect(runner.runLeader('do the whole thing')).rejects.toThrow('members cannot delegate');
+    } finally {
+      runner.teardown();
+    }
+  });
+
+  // The leader path is unaffected by the member-leaf guard: a leader delegation
+  // runs a member through the shared engine and collects the delegation; the
+  // member result is cached so runSquad's member loop does not re-run it.
+  it('a leader delegation runs a member and collects the delegation', async () => {
+    const leaderId = seedAgent();
+    const m1 = seedAgent();
+    db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run('sq-ok', leaderId, JSON.stringify([m1]), 'in_progress', null, new Date().toISOString());
+    let leaderRan = false;
+    const fn: EngineChatFn = async (req, opts) => {
+      if (req.provider.id === leaderId) {
+        if (!leaderRan) {
+          leaderRan = true;
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'delegate_agent', arguments: { agent: m1, subtask: 'do x' } }] });
+        }
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'delta', delta: 'member result text' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'member result text', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-ok', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
+    try {
+      const r = await runner.runLeader('do it');
+      expect(r.delegations).toEqual([{ to: m1, subtask: 'do x' }]);
+      await expect(runner.runMember(m1, 'do x', 'ctx')).resolves.toBe('member result text');
+    } finally {
+      runner.teardown();
+    }
+  });
 });
 
 describe('approval gate wiring (M3 Task 7)', () => {
