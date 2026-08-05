@@ -332,6 +332,31 @@ describe('IpcRouter audit + saveText channels (J5)', () => {
   });
 });
 
+// M8 Task 10 (K6): canvas artifact channels registered on the router. The
+// onDone capture path writes rows directly via the SAME createArtifactsIpc (in
+// tasks.ts); these channels let the renderer CanvasView read them back.
+describe('IpcRouter artifact channels (K6)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers artifacts.list/artifacts.save over the task_artifacts table', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const list = handlers.get('artifacts.list')!;
+    const save = handlers.get('artifacts.save')!;
+    expect(list).toBeTruthy();
+    expect(save).toBeTruthy();
+
+    const saved = await save({}, { taskId: 't1', kind: 'table', content: '| A |\n|---|\n| 1 |' }) as { id: string };
+    expect(saved.id).toBeTruthy();
+    const rows = await list({}, 't1') as Array<{ taskId: string; kind: string; content: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ taskId: 't1', kind: 'table', content: '| A |\n|---|\n| 1 |' });
+  });
+});
+
 // M8 Task 4 (L18): backup channels registered on the router when a BackupService
 // is threaded in, plus the app.relaunch channel (restore closes the db, so the
 // renderer relaunches right after).

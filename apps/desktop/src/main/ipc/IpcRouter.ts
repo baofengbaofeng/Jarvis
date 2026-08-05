@@ -21,6 +21,7 @@ import { createTaskboardIpc } from './taskboard';
 import { createUsageIpc } from './usage';
 import { createShortcutsIpc } from './shortcuts';
 import { createAuditIpc } from './audit';
+import { createArtifactsIpc } from './artifacts';
 import { createBackupIpc } from './backup';
 import { createWipeIpc } from './wipe';
 import { createConfigIpc } from './config';
@@ -254,6 +255,14 @@ export class IpcRouter {
     const audit = createAuditIpc(this.db);
     this.register('audit.list', (_e, filter) => audit.list(filter as { kind?: string; result?: string }));
     this.register('audit.export', (_e, filter) => audit.exportAudit(filter as { kind?: string; result?: string; format?: 'csv' | 'jsonl' }));
+    // M8 Task 10 (K6): canvas workspace artifact data plane. The task
+    // completion path writes rows directly via the SAME createArtifactsIpc (in
+    // tasks.ts onDone); these channels let the renderer CanvasView read them
+    // back. `save` exists as an IPC channel for completeness/debugging, but the
+    // production write path is the in-process onDone capture.
+    const artifacts = createArtifactsIpc(this.db);
+    this.register('artifacts.list', (_e, taskId) => artifacts.list(_e, taskId as string));
+    this.register('artifacts.save', (_e, a) => artifacts.save(_e, a as Parameters<typeof artifacts.save>[1]));
     // L18 (M8 Task 4): SQLite auto-backup + restore. The BackupService is
     // constructed in bootstrap (it also drives the interval + quit backup) and
     // threaded in here so the renderer can list/create/restore backups. restore

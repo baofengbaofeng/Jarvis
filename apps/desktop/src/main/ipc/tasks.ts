@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { IpcEvent } from '@jarvis/protocol';
-import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, buildTaskNotification, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, MemoryStore, buildMemoryInjection, registerMemoryTools, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
+import { AgentEngine, ToolRegistry, TaskOrchestrator, createAdapter, buildContextMessages, buildPassedContext, buildTaskNotification, mergeEnv, createChatService, createFileTools, createShellTool, createGitTools, registerRunTestsTool, registerSearchCodeTool, registerDelegateTool, createGuard, createApprovalGate, DelegateGuardError, scanSkillsDir, buildSkillInjection, restoreSnapshot, parseMentions, resolveFileMention, buildMentionBlock, isPlanBlocked, planVisibleTools, IndexStore, hashEmbedding, resumeSession, MemoryStore, buildMemoryInjection, registerMemoryTools, captureArtifacts, type DelegateGuardState, type SessionStoreAdapter, type SessionMessage, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { registerAgentMcpTools } from './mcp';
+import { createArtifactsIpc } from './artifacts';
 import { createMemoryAdapter } from './memory';
 import { sqliteAuditSink } from '../audit/sqliteAuditSink';
 import type { EngineChatFn, SandboxPolicy, Usage, ContextAttachment } from '@jarvis/core';
@@ -123,6 +124,13 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // (ToolRegistry has no sandbox/permission concept, so execute() can never emit
   // 'denied' itself — the gate is the single source of that result).
   const auditSink = sqliteAuditSink(db);
+  // K6 (M8 Task 10): in-process artifact store over the task_artifacts table
+  // (migration v12). The onDone completion path captures the final result text
+  // (tables/mermaid/markdown) and saves each artifact here; the renderer reads
+  // them back via the artifacts.list IPC channel (see IpcRouter). db is in
+  // scope, so the SAME createArtifactsIpc the router uses is constructed
+  // inline — no extra wiring through TaskHandlerDeps needed.
+  const artifacts = createArtifactsIpc(db);
   const toolRegistry = new ToolRegistry({ onExec: (e) => auditSink.write({ ts: new Date(e.ts).toISOString(), kind: 'tool_call', actor: 'agent', action: e.tool, target: String(e.args).slice(0, 200), result: e.result }) });
   // F11: one shared MemoryStore over the main-owned agent_memory table (the
   // adapter is keyed by agent_id, so a single store serves every agent). The
@@ -454,6 +462,15 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
         const run = taskRuns.get(id);
         deps.usageTracker?.track({ taskId: id, agentId: run?.agentId, modelId: run?.modelId, ...usage });
       }
+      // K6 (M8 Task 10): capture markdown tables / ```mermaid blocks from the
+      // final result into task_artifacts so the /canvas view can render them.
+      // Best-effort with the SAME contract as the token telemetry above: a
+      // capture/save failure must NEVER break task completion. Empty/failed
+      // results degrade per captureArtifacts — [] for empty text, a single
+      // markdown artifact for prose.
+      try {
+        for (const a of captureArtifacts(id, text)) artifacts.save(null, a);
+      } catch { /* best-effort artifact capture */ }
       // M6 Task 8 (I5): a terminal task outcome fires a desktop notification
       // plus an in-app toast. buildTaskNotification is the unit-tested decision
       // logic (complete/failed only). NotificationBridge is lazy-imported so

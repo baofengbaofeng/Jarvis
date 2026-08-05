@@ -371,6 +371,26 @@ export const MIGRATIONS: Migration[] = [
       detail TEXT,
       task_id TEXT
     );`
+  },
+  // M8 Task 10 (K6): canvas workspace artifact store. The task completion path
+  // (tasks.ts onDone) calls captureArtifacts on the final result text and saves
+  // each markdown table / ```mermaid / markdown fallback here, so the /canvas
+  // view can render a task's artifacts after completion. Brand-new table, so
+  // plain IF NOT EXISTS CREATE is idempotent (no in-place ALTER needed like
+  // v10/v11). The `kind` is a free-form TEXT matching the ArtifactKind union
+  // (table/chart/mermaid/markdown) — validated at the IPC boundary, not by
+  // SQLite CHECK, matching the env_vars_json/cli_args_json precedent.
+  {
+    version: 12,
+    sql: `
+    CREATE TABLE IF NOT EXISTS task_artifacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`
   }
 ];
 

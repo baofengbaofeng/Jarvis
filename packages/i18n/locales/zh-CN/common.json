@@ -55,6 +55,7 @@
     "title": "任务看板",
     "col": { "queued": "排队", "running": "运行中", "paused": "已暂停", "completed": "已完成", "failed": "失败", "cancelled": "已取消" }
   },
+  "canvas": { "title": "画布", "no_artifacts": "暂无任务产物" },
   "daemon": {
     "running": "运行中",
     "stopped": "已停止",

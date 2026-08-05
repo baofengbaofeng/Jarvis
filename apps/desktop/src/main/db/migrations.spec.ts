@@ -32,8 +32,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 11 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table)', () => {
-    expect(latestVersion()).toBe(11);
+  it('reports latestVersion as 12 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table)', () => {
+    expect(latestVersion()).toBe(12);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
@@ -186,6 +186,26 @@ describe('db migrations', () => {
       .run('tool_call', 'agent', 'read_file', 'a.txt', 'ok', null, null);
     const row = db.prepare('SELECT kind, action, target, result, task_id FROM audit_logs WHERE action = ?').get('read_file') as { kind: string; action: string; target: string; result: string; task_id: string | null };
     expect(row).toEqual({ kind: 'tool_call', action: 'read_file', target: 'a.txt', result: 'ok', task_id: null });
+    // Idempotent: re-applying migrations must not throw.
+    applyMigrations(db);
+  });
+
+  // M8 Task 10 (K6): v12 creates the task_artifacts table the canvas workspace
+  // reads. The onDone capture path (tasks.ts) INSERTs rows omitting id/title/
+  // created_at — id autoincrements, title is NULL when absent, created_at
+  // defaults to datetime('now') — so the table must accept that shape.
+  it('v12 creates the K6 task_artifacts table', () => {
+    applyMigrations(db);
+    const cols = db.prepare('PRAGMA table_info(task_artifacts)').all() as Array<{ name: string; notnull: number }>;
+    expect(cols.map(c => c.name)).toEqual(expect.arrayContaining(['id', 'task_id', 'kind', 'title', 'content', 'created_at']));
+    // The createArtifactsIpc INSERT shape (omits id/created_at) must work.
+    db.prepare('INSERT INTO task_artifacts (task_id, kind, title, content) VALUES (?,?,?,?)')
+      .run('t1', 'table', 'results', '| A |\n|---|\n| 1 |');
+    const row = db.prepare('SELECT task_id, kind, title, content FROM task_artifacts WHERE task_id = ?').get('t1') as { task_id: string; kind: string; title: string; content: string };
+    expect(row).toEqual({ task_id: 't1', kind: 'table', title: 'results', content: '| A |\n|---|\n| 1 |' });
+    // The title-less INSERT (tasks.ts onDone fallback) must work too.
+    db.prepare('INSERT INTO task_artifacts (task_id, kind, content) VALUES (?,?,?)').run('t1', 'markdown', 'prose');
+    expect((db.prepare('SELECT COUNT(*) c FROM task_artifacts').get() as { c: number }).c).toBe(2);
     // Idempotent: re-applying migrations must not throw.
     applyMigrations(db);
   });

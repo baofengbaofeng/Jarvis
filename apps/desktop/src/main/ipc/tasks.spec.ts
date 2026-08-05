@@ -74,6 +74,60 @@ describe('task handlers', () => {
     expect(JSON.parse(finished.result_json)).toEqual({ text: 'Hello' });
   });
 
+  // M8 Task 10 (K6): a completed task's final text is captured into
+  // task_artifacts (markdown tables + ```mermaid blocks) so the /canvas view can
+  // render them. Best-effort — a capture/save failure must never break task
+  // completion (the task row is written before the capture runs).
+  it('captures tables and mermaid blocks from the result text into task_artifacts (K6)', async () => {
+    const fn: EngineChatFn = async (_req, opts) => {
+      opts.onChunk?.({ kind: 'delta', delta: '| H |\n|---|\n| 9 |\n\n```mermaid\ngraph LR; A-->B\n```' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: '| H |\n|---|\n| 9 |\n\n```mermaid\ngraph LR; A-->B\n```', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const agentId = seedAgent();
+    const { id } = await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status FROM tasks WHERE id = ?').get(id) as { status: string };
+      expect(row.status).toBe('completed');
+    });
+    const arts = db.prepare('SELECT task_id, kind, content FROM task_artifacts ORDER BY id').all() as Array<{ task_id: string; kind: string; content: string }>;
+    expect(arts.map(a => a.kind)).toEqual(['table', 'mermaid']);
+    expect(arts[0].task_id).toBe(id);
+    expect(arts[0].content).toBe('| H |\n|---|\n| 9 |');
+    expect(arts[1].content).toBe('graph LR; A-->B');
+  });
+
+  // M8 Task 10 (K6): a task with plain prose result degrades to a single
+  // markdown artifact; an empty result writes nothing (captureArtifacts []).
+  it('captures a markdown fallback for prose and nothing for empty results (K6)', async () => {
+    let run = 0;
+    const fn: EngineChatFn = async (_req, opts) => {
+      // First run returns prose; the second task run returns empty text.
+      run++;
+      const text = run === 1 ? 'prose result' : '';
+      opts.onChunk?.({ kind: 'delta', delta: text });
+      opts.onChunk?.({ kind: 'done' });
+      return { text, usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const agentId = seedAgent();
+    const first = await tasks.create(fakeEvent, { agentId, prompt: 'go' });
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status FROM tasks WHERE id = ?').get(first.id) as { status: string };
+      expect(row.status).toBe('completed');
+    });
+    const second = await tasks.create(fakeEvent, { agentId, prompt: 'go again' });
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT status FROM tasks WHERE id = ?').get(second.id) as { status: string };
+      expect(row.status).toBe('completed');
+    });
+    const arts = db.prepare('SELECT task_id, kind FROM task_artifacts ORDER BY id').all() as Array<{ task_id: string; kind: string }>;
+    // The prose run produced a markdown artifact; the empty run produced none.
+    expect(arts.filter(a => a.task_id === first.id).map(a => a.kind)).toEqual(['markdown']);
+    expect(arts.some(a => a.task_id === second.id)).toBe(false);
+  });
+
   // M6 Task 7 (F11): each run starts with the agent's persisted memories
   // appended to the system prompt. The injection is built fresh in
   // resolveAgentRun -> buildTaskMessages, so it reflects whatever was persisted

@@ -55,6 +55,7 @@
     "title": "Task Board",
     "col": { "queued": "Queued", "running": "Running", "paused": "Paused", "completed": "Completed", "failed": "Failed", "cancelled": "Cancelled" }
   },
+  "canvas": { "title": "Canvas", "no_artifacts": "No task artifacts yet" },
   "daemon": {
     "running": "Running",
     "stopped": "Stopped",

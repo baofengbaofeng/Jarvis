@@ -61,3 +61,7 @@ export * from './shortcuts/index';
 // squad barrel (./squad/index) re-exports the engine (Bus, SquadRouter, etc.)
 // which is NOT renderer-safe, so it stays out of this entry.
 export * from './squad/Workflow';
+// K6 (M8 Task 10): canvas artifact parsing is pure (no node:*), so the renderer
+// CanvasView imports parseTable/Artifact/captureArtifacts from this entry. Kept
+// in sync with the main barrel's ./canvas/index.
+export * from './canvas/index';
