@@ -165,9 +165,13 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
       // in_progress (NOT a terminal failure), so the toast kind is 'info' for
       // reject and 'success' for approve. Lazy import keeps the 'electron'
       // module out of the Node spec graph (same rationale as the tasks.ts hook).
+      // The notification body is a natural-language label, not the bare squad
+      // UUID (the summary text lives only on the squad.start invoke result, not
+      // on the persisted row, so it is unavailable here).
       const message = ok ? 'Squad approved' : 'Squad rejected';
-      void import('../notify/NotificationBridge').then(({ showSystemNotification }) => showSystemNotification(message, id)).catch(() => {});
-      deps.getWindow()?.webContents.send('toast:push', { kind: ok ? 'success' : 'info', message });
+      const body = ok ? `Squad ${id} was approved` : `Squad ${id} was sent back to review`;
+      void import('../notify/NotificationBridge').then(({ showSystemNotification }) => showSystemNotification(message, body)).catch(() => {});
+      deps.getWindow()?.webContents.send(IpcEvent.toastPush, { kind: ok ? 'success' : 'info', message });
       return { ok: true as const, status: next };
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };

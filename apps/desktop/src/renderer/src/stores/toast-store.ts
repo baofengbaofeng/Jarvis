@@ -1,3 +1,5 @@
+import { IpcEvent } from '@jarvis/protocol';
+
 export interface Toast { id: string; kind: 'info' | 'success' | 'error'; message: string }
 let toasts: Toast[] = [];
 const listeners = new Set<(ts: Toast[]) => void>();
@@ -21,7 +23,7 @@ export function clearToasts(): void {
 // matches chat-store/task-store so the subscription only installs in the real
 // preload bridge (specs without window.jarvis skip it silently).
 if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
-  window.jarvis.onDidReceive('toast:push', (payload) => {
+  window.jarvis.onDidReceive(IpcEvent.toastPush, (payload) => {
     const { kind, message } = payload as { kind: Toast['kind']; message: string };
     toast(kind, message);
   });

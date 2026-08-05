@@ -32,6 +32,8 @@ export const IpcEvent = {
   taskComplete: 'task:complete',
   taskFailed: 'task:failed',
   squadStatus: 'squad:status',
+  // I5 (M6 Task 8): main pushes terminal task/squad outcomes as in-app toasts.
+  toastPush: 'toast:push',
 } as const;
 
 export type ProviderType = 'openai-compatible' | 'anthropic-compatible';

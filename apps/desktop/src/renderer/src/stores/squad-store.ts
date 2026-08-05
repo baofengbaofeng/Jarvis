@@ -32,8 +32,10 @@ export const useSquadStore = create<SquadState>((set) => ({
 // F15 (M6 Task 8): a squad reaching in_review shows the ApprovalPanel; leaving
 // it (approve → completed, reject → in_progress, cancel/fail) clears it. The
 // squad:status event only carries { id, state }, so when it arrives WITHOUT a
-// start() through this store the summary falls back to the squad id and the
-// member list stays empty — the squad.start invoke result is the richer source.
+// start() through this store the summary/members are left EMPTY — the
+// ApprovalPanel then renders a clean "pending approval" state (title + buttons)
+// instead of showing the raw squad UUID, and the squad.start invoke result
+// remains the richer source when Task 10's squad view drives start().
 if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
   window.jarvis.onDidReceive('squad:status', (payload) => {
     const { id, state } = payload as { id: string; state: string };
@@ -41,7 +43,7 @@ if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
     if (state === 'in_review') {
       // Don't clobber a start()-provided review that already carries the full
       // detail for this id; only seed when the event is the first signal.
-      if (!cur || cur.id !== id) useSquadStore.setState({ review: { id, summary: id, members: [] } });
+      if (!cur || cur.id !== id) useSquadStore.setState({ review: { id, summary: '', members: [] } });
     } else if (cur?.id === id) {
       useSquadStore.setState({ review: null });
     }

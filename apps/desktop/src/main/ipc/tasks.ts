@@ -395,7 +395,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const d = buildTaskNotification(ok ? 'complete' : 'failed', { title: summarizeForNotification(text) });
       if (d.notify) {
         void import('../notify/NotificationBridge').then(({ showSystemNotification }) => showSystemNotification(d.title, d.body)).catch(() => {});
-        getWindow()?.webContents.send('toast:push', { kind: ok ? 'success' : 'error', message: d.body });
+        getWindow()?.webContents.send(IpcEvent.toastPush, { kind: ok ? 'success' : 'error', message: d.body });
       }
     }
   }, 6);
