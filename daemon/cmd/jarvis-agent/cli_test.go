@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
 )
 
 type fakeVersion string
@@ -57,3 +59,27 @@ func TestHealthCmdFailsWhenNotOK(t *testing.T) {
 		t.Fatal("expected error when report !OK")
 	}
 }
+
+func TestListModelsCmd(t *testing.T) {
+	var buf bytes.Buffer
+	root := NewRootCmd(&buf)
+	root.AddCommand(NewListModelsCmd(fakeLister{models: []db.ModelInfo{{ID: "m1", ProviderID: "p1", ModelID: "claude-sonnet-4-6", Name: "Sonnet"}}}, &buf))
+	root.SetArgs([]string{"list-models"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got []db.ModelInfo
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ModelID != "claude-sonnet-4-6" {
+		t.Fatalf("unexpected: %+v", got)
+	}
+}
+
+type fakeLister struct {
+	models []db.ModelInfo
+	err    error
+}
+
+func (f fakeLister) ListModels(context.Context) ([]db.ModelInfo, error) { return f.models, f.err }

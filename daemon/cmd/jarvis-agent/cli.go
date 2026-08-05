@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -90,6 +91,31 @@ func NewHealthCmd(hc HealthChecker, out io.Writer) *cobra.Command {
 				return fmt.Errorf("health check failed")
 			}
 			return nil
+		},
+	}
+}
+
+// ModelLister lists models available to the runtime (H1.9 --list-models).
+type ModelLister interface {
+	ListModels(ctx context.Context) ([]db.ModelInfo, error)
+}
+
+func NewListModelsCmd(lister ModelLister, out io.Writer) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list-models",
+		Short: "List models available to the runtime",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if lister == nil {
+				return fmt.Errorf("model lister not configured")
+			}
+			models, err := lister.ListModels(cmd.Context())
+			if err != nil {
+				return err
+			}
+			enc := json.NewEncoder(out)
+			enc.SetIndent("", "  ")
+			return enc.Encode(models)
 		},
 	}
 }
