@@ -5,9 +5,60 @@ import type Database from 'better-sqlite3';
 // throws. The legacy build is the Node entry point — same getDocument API, no
 // DOM at import time. The renderer keeps the browser build (see PdfReaderPage).
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction } from '@jarvis/core';
+import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, isHttpUrl, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
+
+// Minimal surface the office.webview channels need from the WebView host. Kept
+// as a structural type so office.ts does NOT statically import WebViewHost
+// (which pulls 'electron' — see getWebViewHost below) and so tests can inject a
+// fake. The real WebViewHost satisfies it.
+export interface WebViewLike {
+  open(url: string): Promise<void>;
+  extract(): Promise<string>;
+  close(): void;
+  isOpen(): boolean;
+}
+
+// Lazy singleton: WebViewHost imports 'electron' (BrowserWindow/session), which
+// Node cannot load, and office.spec.ts imports this module — so the import must
+// stay out of the module graph until a webview channel actually runs. The
+// dynamic import below is only reached from the Electron main process.
+let cachedWebViewHost: WebViewLike | null = null;
+async function getWebViewHost(): Promise<WebViewLike> {
+  if (cachedWebViewHost) return cachedWebViewHost;
+  const { WebViewHost } = await import('../webview/WebViewHost');
+  cachedWebViewHost = new WebViewHost();
+  return cachedWebViewHost;
+}
+
+// M5 Task 4 (I8/D8) one-click page summary orchestration: open → extract → clean
+// → chat → close. The WebViewHost itself is Electron-only and manually verified
+// in the running app, so the orchestration is extracted here as a pure-ish
+// helper that takes the host + summarizer as injected deps — the try/finally
+// close (no window leak on throw) and the empty-extract guard are unit-tested
+// against a fake host in office.spec.ts.
+export async function summarizeWebPage(
+  url: string,
+  web: { open(url: string): Promise<void>; extract(): Promise<string>; close(): void },
+  summarize: (text: string) => Promise<string>
+): Promise<{ ok: true; result: string } | { ok: false; error: string }> {
+  try {
+    if (!isHttpUrl(url)) return { ok: false, error: '只支持 http/https 网页地址' };
+    await web.open(url);
+    const raw = await web.extract();
+    // extract() returns the rendered innerText (usually cleaner than raw HTML);
+    // extractMainText is the pure-function fallback for when only HTML is around.
+    const text = extractMainText(raw) || raw;
+    if (!text) return { ok: false, error: '页面无可提取的正文内容' };
+    const result = await summarize(text.slice(0, 12000));
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    web.close();
+  }
+}
 
 // The office channels need a *streaming* chat surface (AsyncIterable of
 // { deltaText }) that chatText drains, but the M4 ModelRouter.chat returns a
@@ -124,7 +175,10 @@ export async function extractPdf(path: string): Promise<{ pages: number; pageTex
   return { pages, pageTexts };
 }
 
-export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }) {
+export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike> } = {}) {
+  // deps.getWebViewHost lets tests inject a fake host; production uses the lazy
+  // dynamic-import singleton (see getWebViewHost above).
+  const getWeb = deps.getWebViewHost ?? getWebViewHost;
   // The router's generic handler type is (...a: unknown[]) => unknown, but the
   // handler below narrows its second arg; cast it so strictFunctionTypes accepts
   // the assignment (the IpcRouter wrapper passes the electron event + payload).
@@ -178,5 +232,28 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
+  }) as (...a: unknown[]) => unknown);
+  // M5 Task 4 (I8/D8): session-isolated WebView + one-click page summary. Both
+  // channels accept a user URL — gate it to http(s) so file:/javascript:/data:
+  // can't be loaded into the sandboxed window. open leaves the window up (the
+  // feature is "open this page"); summarize drives the full open → extract →
+  // chat → close cycle through summarizeWebPage (which always closes, even on
+  // error).
+  router.register('office.webview.open', (async (_e, url: string) => {
+    if (!isHttpUrl(url)) return { ok: false, error: '只支持 http/https 网页地址' };
+    const web = await getWeb();
+    try {
+      await web.open(url);
+      return { ok: true };
+    } catch (e) {
+      web.close();
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }) as (...a: unknown[]) => unknown);
+  router.register('office.webview.summarize', (async (_e, url: string) => {
+    const web = await getWeb();
+    return summarizeWebPage(url, web, async (text) => {
+      return chatText(modelRouter, [{ role: 'user', content: `请总结下面网页内容,给出要点:\n\n${text}` }]);
+    });
   }) as (...a: unknown[]) => unknown);
 }

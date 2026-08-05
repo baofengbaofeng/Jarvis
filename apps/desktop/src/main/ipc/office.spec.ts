@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ChatRequest, ProviderAdapter } from '@jarvis/core';
-import { streamAdapter } from './office';
+import { streamAdapter, summarizeWebPage } from './office';
 
 const req: ChatRequest = {
   provider: { id: 'p1', name: 'P', type: 'openai-compatible', baseUrl: 'https://x.com', apiKeyRef: 'ref', createdAt: '', updatedAt: '' },
@@ -58,5 +58,54 @@ describe('streamAdapter', () => {
     await expect(async () => {
       for await (const _c of gen) { /* drain */ }
     }).rejects.toThrow('boom');
+  });
+});
+
+// M5 Task 4 (I8/D8): summarizeWebPage orchestrates open → extract → clean →
+// chat → close. The real WebViewHost is Electron-only and manually verified; the
+// orchestration (incl. try/finally close and URL validation) is covered here
+// with an injected fake host.
+describe('summarizeWebPage', () => {
+  const html = '<html><body><nav>menu menu menu menu</nav><article><p>这是正文第一段,包含足够多的文字内容以便被选中为正文主体。</p><p>这是正文第二段,继续提供更多有意义的句子来支撑正文提取逻辑的判断。</p></article></body></html>';
+
+  it('opens, extracts, cleans, summarizes and always closes', async () => {
+    const calls: string[] = [];
+    const web = {
+      open: async () => { calls.push('open'); },
+      extract: async () => html,
+      close: () => { calls.push('close'); }
+    };
+    const result = await summarizeWebPage('https://example.com/article', web, async (text) => {
+      calls.push('summarize');
+      expect(text).toContain('这是正文第一段');
+      expect(text).not.toContain('menu menu');
+      return 'summary';
+    });
+    expect(result).toEqual({ ok: true, result: 'summary' });
+    expect(calls).toEqual(['open', 'summarize', 'close']);
+  });
+
+  it('rejects non-http URLs without opening the window', async () => {
+    let opened = false;
+    const web = { open: async () => { opened = true; }, extract: async () => '', close: () => {} };
+    const result = await summarizeWebPage('file:///etc/passwd', web, async () => 'x');
+    expect(result).toEqual({ ok: false, error: '只支持 http/https 网页地址' });
+    expect(opened).toBe(false);
+  });
+
+  it('still closes the host when extraction throws', async () => {
+    let closed = 0;
+    const web = { open: async () => {}, extract: async () => { throw new Error('boom'); }, close: () => { closed++; } };
+    const result = await summarizeWebPage('https://example.com', web, async () => 'x');
+    expect(result).toEqual({ ok: false, error: 'boom' });
+    expect(closed).toBe(1);
+  });
+
+  it('returns an error when no text is extractable', async () => {
+    let closed = 0;
+    const web = { open: async () => {}, extract: async () => '', close: () => { closed++; } };
+    const result = await summarizeWebPage('https://example.com', web, async () => 'x');
+    expect(result).toEqual({ ok: false, error: '页面无可提取的正文内容' });
+    expect(closed).toBe(1);
   });
 });
