@@ -89,5 +89,14 @@
     "error": "Failed to process PDF",
     "loading": "Processing…"
   },
+  "templates": {
+    "title": "Prompt Templates",
+    "name": "Name",
+    "textPlaceholder": "Template body",
+    "variables": "Variables",
+    "save": "Save",
+    "preview": "Preview",
+    "insert": "Insert into input"
+  },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

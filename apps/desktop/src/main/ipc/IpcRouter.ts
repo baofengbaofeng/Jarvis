@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding, type TreeNode } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
@@ -10,6 +10,7 @@ import { createAgentStore, type AgentInput } from './agents';
 import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
+import { createTemplatesStore } from './templates';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
@@ -152,6 +153,22 @@ export class IpcRouter {
     // settings + secrets let the office.image.generate channel resolve its API
     // key the same way other channels do (settings `image.api_key_ref` → keychain).
     registerOfficeIpc({ register: (ch, h) => this.register(ch, h) }, createOfficeChatStream(this.db, secrets), { settings, secrets });
+    // M5 Task 9 (D15): prompt template library. The store is main-owned; the
+    // render channel substitutes {{var}} placeholders against the template body.
+    // An unknown id returns { ok:false } instead of an ipcMain rejection so the
+    // renderer can surface it without an unhandled promise rejection (same
+    // contract as the office.* channels).
+    const templates = createTemplatesStore(this.db);
+    this.register('templates.list', () => templates.list());
+    this.register('templates.create', (_e, input) => templates.create(input as { name: string; content: string }));
+    this.register('templates.update', (_e, id, input) => templates.update(id as string, input as { name?: string; content?: string }));
+    this.register('templates.delete', (_e, id) => { templates.remove(id as string); return { ok: true }; });
+    this.register('templates.render', (_e, req) => {
+      const { id, vars } = req as { id: string; vars?: Record<string, string> };
+      const tpl = templates.list().find(t => t.id === id);
+      if (!tpl) return { ok: false as const, error: `template ${id} not found` };
+      return { ok: true as const, result: substituteTemplate(tpl.content, vars ?? {}) };
+    });
   }
 
   listen(): void {

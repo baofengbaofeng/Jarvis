@@ -89,5 +89,14 @@
     "error": "PDF 处理失败",
     "loading": "处理中…"
   },
+  "templates": {
+    "title": "提示词模板",
+    "name": "名称",
+    "textPlaceholder": "模板正文",
+    "variables": "变量",
+    "save": "保存",
+    "preview": "预览",
+    "insert": "插入到输入框"
+  },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

@@ -79,3 +79,43 @@ describe('IpcRouter code index channels (E1/L27)', () => {
     }
   });
 });
+
+// M5 Task 9 (D15): prompt template library channels registered on the router.
+describe('IpcRouter template channels (D15)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers templates.list/create/update/delete/render against the store', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const list = handlers.get('templates.list')!;
+    const create = handlers.get('templates.create')!;
+    const update = handlers.get('templates.update')!;
+    const del = handlers.get('templates.delete')!;
+    const render = handlers.get('templates.render')!;
+    expect(list).toBeTruthy();
+    expect(create).toBeTruthy();
+    expect(update).toBeTruthy();
+    expect(del).toBeTruthy();
+    expect(render).toBeTruthy();
+
+    const created = await create({}, { name: 'review', content: 'Review {{name}}' }) as { id: string };
+    expect(created.id).toBeTruthy();
+    expect((await list({}) as Array<{ id: string; name: string; content: string }>)).toHaveLength(1);
+
+    const rendered = await render({}, { id: created.id, vars: { name: 'Jarvis' } }) as { ok: boolean; result?: string };
+    expect(rendered.ok).toBe(true);
+    expect(rendered.result).toBe('Review Jarvis');
+
+    const missing = await render({}, { id: 'nope', vars: {} }) as { ok: boolean };
+    expect(missing.ok).toBe(false);
+
+    await update({}, created.id, { content: 'Review {{name}} carefully' });
+    expect((await list({}) as Array<{ content: string }>)[0].content).toBe('Review {{name}} carefully');
+
+    await del({}, created.id);
+    expect((await list({}) as unknown[])).toHaveLength(0);
+  });
+});

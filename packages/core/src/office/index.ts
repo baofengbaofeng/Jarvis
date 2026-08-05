@@ -9,3 +9,4 @@ export * from './image';
 export * from './speech';
 export * from './files';
 export * from './dropzone';
+export * from './templates';
