@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
 import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode } from '@jarvis/core';
@@ -19,6 +19,8 @@ import { registerTaskHandlers } from './tasks';
 import { createTaskboardIpc } from './taskboard';
 import { createUsageIpc } from './usage';
 import { createAuditIpc } from './audit';
+import { createBackupIpc } from './backup';
+import { BackupService } from '../backup/BackupService';
 import { UsageTracker } from '../usage/UsageTracker';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
@@ -40,7 +42,7 @@ export class IpcRouter {
     this.handlers.set(channel, handler);
   }
 
-  registerAll(daemon: DaemonSupervisor): void {
+  registerAll(daemon: DaemonSupervisor, backup?: BackupService): void {
     const settings = createSettingsStore(this.db);
     const secrets = new SecureStorage();
     const providers = createProviderStore(this.db, secrets);
@@ -212,6 +214,20 @@ export class IpcRouter {
     const audit = createAuditIpc(this.db);
     this.register('audit.list', (_e, filter) => audit.list(filter as { kind?: string; result?: string }));
     this.register('audit.export', (_e, filter) => audit.exportAudit(filter as { kind?: string; result?: string; format?: 'csv' | 'jsonl' }));
+    // L18 (M8 Task 4): SQLite auto-backup + restore. The BackupService is
+    // constructed in bootstrap (it also drives the interval + quit backup) and
+    // threaded in here so the renderer can list/create/restore backups. restore
+    // closes the db, so the service returns restart:true and the renderer
+    // relaunches via app.relaunch immediately after.
+    if (backup) {
+      const backupIpc = createBackupIpc(backup);
+      this.register('backup.list', () => backupIpc.list());
+      this.register('backup.create', async () => backupIpc.create());
+      this.register('backup.restore', async (_e, file) => backupIpc.restore(_e, file as string));
+    }
+    // L18: `app.relaunch` does not exist on the preload surface — the renderer's
+    // BackupPane invokes it after a restore, so expose it here (relaunch then quit).
+    this.register('app.relaunch', () => { app.relaunch(); app.quit(); return { ok: true }; });
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract

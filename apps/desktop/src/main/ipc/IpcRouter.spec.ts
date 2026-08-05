@@ -1,18 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyMigrations } from '../db/migrations';
 import { IpcRouter } from './IpcRouter';
 import { createProviderStore } from './providers';
 import { createAgentStore } from './agents';
+import { BackupService } from '../backup/BackupService';
 import { getMessageBus, __resetBusForTests } from './squad';
 import type { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 
 // IpcRouter imports electron at runtime; stub it so the router can be
 // constructed under vitest without a real Electron main process.
 vi.mock('electron', () => ({
+  app: { relaunch: vi.fn(), quit: vi.fn() },
   ipcMain: { handle: vi.fn() },
   BrowserWindow: { getFocusedWindow: () => null },
   dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() }
@@ -289,5 +291,63 @@ describe('IpcRouter audit + saveText channels (J5)', () => {
     } finally {
       rmSync(out, { recursive: true, force: true });
     }
+  });
+});
+
+// M8 Task 4 (L18): backup channels registered on the router when a BackupService
+// is threaded in, plus the app.relaunch channel (restore closes the db, so the
+// renderer relaunches right after).
+describe('IpcRouter backup channels (L18)', () => {
+  let db: Database.Database;
+  let dir: string;
+  beforeEach(() => {
+    db = new Database(':memory:');
+    applyMigrations(db);
+    dir = mkdtempSync(join(tmpdir(), 'jarvis-ipc-backup-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('registers backup.list/create/restore against a real BackupService and app.relaunch', async () => {
+    const mainPath = join(dir, 'main.db');
+    const main = new Database(mainPath);
+    main.exec('CREATE TABLE t (v TEXT)');
+    main.prepare("INSERT INTO t (v) VALUES ('x')").run();
+    const backup = new BackupService(main, join(dir, 'backups'), mainPath);
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon, backup);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const list = handlers.get('backup.list')!;
+    const create = handlers.get('backup.create')!;
+    const restore = handlers.get('backup.restore')!;
+    const relaunch = handlers.get('app.relaunch')!;
+    expect(list).toBeTruthy();
+    expect(create).toBeTruthy();
+    expect(restore).toBeTruthy();
+    expect(relaunch).toBeTruthy();
+
+    const created = await create({}) as { file: string };
+    expect(existsSync(created.file)).toBe(true);
+    expect((await list({}) as unknown[]).length).toBeGreaterThan(0);
+
+    // restore copies the backup back over mainPath and closes main (the app is
+    // expected to relaunch); the channel answers { ok, restart }.
+    const res = await restore({}, created.file) as { ok: boolean; restart: boolean };
+    expect(res.ok).toBe(true);
+    expect(res.restart).toBe(true);
+
+    const rl = relaunch({}) as { ok: boolean };
+    expect(rl.ok).toBe(true);
+  });
+
+  it('does not register backup.* when no BackupService is threaded in', () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    expect(handlers.get('backup.list')).toBeUndefined();
+    expect(handlers.get('backup.create')).toBeUndefined();
+    // app.relaunch is registered unconditionally.
+    expect(handlers.get('app.relaunch')).toBeTruthy();
   });
 });

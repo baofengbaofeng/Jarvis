@@ -1,6 +1,8 @@
 import { app, BrowserWindow } from 'electron';
 import { spawn } from 'node:child_process';
-import { openDatabase } from './db/connection';
+import { join } from 'node:path';
+import { openDatabase, jarvisDataDir } from './db/connection';
+import { BackupService } from './backup/BackupService';
 import { runMigrations } from './db/migrations';
 import { IpcRouter } from './ipc/IpcRouter';
 import { createSettingsStore } from './ipc/settings';
@@ -22,6 +24,11 @@ const daemon = new DaemonSupervisor();
 // resolveFileInWorkspace below), but it is NOT a remote-safe endpoint.
 let ideBridge: IdeBridge | null = null;
 
+// L18 (M8 Task 4): SQLite auto-backup. Assigned in bootstrap (needs the db);
+// started on boot, a best-effort backup is taken on quit, and the same instance
+// is threaded into IpcRouter so the renderer can list/create/restore backups.
+let backup: BackupService | null = null;
+
 export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
@@ -29,8 +36,17 @@ export async function bootstrap(): Promise<void> {
   // C10: the daemon is sized from the saved settings.concurrency value on every
   // (re)start; the provider reads live so a save + daemon.restart picks it up.
   daemon.setConcurrencyProvider(() => (settings.get('concurrency') ?? {}) as { perAgent?: number; machine?: number });
+  // L18 (M8 Task 4): auto-backup every settings.backup_interval_min minutes
+  // (default 1440 = daily) into ~/.jarvis/backups; the same instance also backs
+  // up on quit and serves the backup.* IPC.
+  const dbPath = join(jarvisDataDir(), 'jarvis.db');
+  const backupService = new BackupService(db, join(jarvisDataDir(), 'backups'), dbPath);
+  const rawInterval = settings.get('backup_interval_min', 1440);
+  const intervalMin = typeof rawInterval === 'number' && rawInterval > 0 ? rawInterval : 1440;
+  backupService.start(intervalMin * 60_000);
+  backup = backupService;
   const ipc = new IpcRouter(db);
-  ipc.registerAll(daemon);
+  ipc.registerAll(daemon, backupService);
   ipc.listen();
 
   // M4 Task 9 (E12): start the external-IDE bridge. resolveFile is CONTAINED to
@@ -129,4 +145,8 @@ app.on('will-quit', () => {
   daemon.stop();
   closeAllMcpClients();
   void ideBridge?.close();
+  // L18 (M8 Task 4): best-effort backup on graceful quit. The backup is async,
+  // so this is fire-and-forget (a partial backup on hard-quit is acceptable;
+  // the periodic backups are the durable copy).
+  void backup?.createBackup();
 });

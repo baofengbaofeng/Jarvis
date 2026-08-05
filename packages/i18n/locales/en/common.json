@@ -75,6 +75,13 @@
     "activeTasks": "Active Multica tasks",
     "skillsMerger": { "title": "Skills/MCP injection conflicts", "none": "No conflicts", "local": "Local", "multica": "Remote", "merge": "Merge (rename)" }
   },
+  "safety": {
+    "title": "Data Safety",
+    "backup_now": "Back up now",
+    "restore": "Restore",
+    "restore_confirm": "Restore this backup? The app will relaunch.",
+    "tab": { "backup": "Backup" }
+  },
   "coding": { "selectFile": "Select a file from the left to preview" },
   "usage": {
     "title": "Usage",

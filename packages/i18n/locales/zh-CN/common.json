@@ -75,6 +75,13 @@
     "activeTasks": "活跃 Multica 任务",
     "skillsMerger": { "title": "Skills/MCP 注入冲突", "none": "无冲突", "local": "本地", "multica": "下发", "merge": "合并(改名)" }
   },
+  "safety": {
+    "title": "数据安全",
+    "backup_now": "立即备份",
+    "restore": "恢复",
+    "restore_confirm": "确定要恢复该备份吗？应用将重启。",
+    "tab": { "backup": "备份" }
+  },
   "coding": { "selectFile": "从左侧选择文件预览" },
   "usage": {
     "title": "Token 统计",
