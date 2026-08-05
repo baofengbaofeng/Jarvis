@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
@@ -22,6 +23,7 @@ type ClaimHandler struct {
 	API       ClientAPI
 	Queue     *runtime.Queue
 	ClientID  func() string
+	AgentID   string // queue per-agent slot; defaults to "jarvis" (matches the advertised concurrency)
 	Exec      ExecFunc
 	Recorder  TaskRecorder
 	Conflicts *ConflictStore
@@ -29,9 +31,13 @@ type ClaimHandler struct {
 
 // HandleClaims parses each claimed task, acks, and submits to the Queue with
 // lifecycle queued→running→completed/failed (H1.13) and concurrency (H1.11).
-// The task's local ID is used as the per-agent slot so the queue's machine-wide
-// cap (and per-agent cap, when several tasks share an agent) are both enforced.
+// All tasks share one agent slot so the per-agent cap (JARVIS_CONCURRENCY_PER_AGENT)
+// binds across tasks and matches the concurrency advertised to the Multica server.
 func (h *ClaimHandler) HandleClaims(ctx context.Context, tasks []ClaimedTask) error {
+	agentID := h.AgentID
+	if agentID == "" {
+		agentID = "jarvis"
+	}
 	for _, tk := range tasks {
 		payload, err := acp.ParseTaskPayload(tk.Payload)
 		if err != nil {
@@ -40,8 +46,10 @@ func (h *ClaimHandler) HandleClaims(ctx context.Context, tasks []ClaimedTask) er
 		}
 		_ = h.API.Ack(ctx, h.ClientID(), tk.TaskID, true)
 		localID := tk.TaskID
-		h.Queue.Submit(localID, func() {
-			_ = h.runOne(ctx, payload, localID, tk.MulticaTaskID)
+		h.Queue.Submit(agentID, func() {
+			if err := h.runOne(ctx, payload, localID, tk.MulticaTaskID); err != nil {
+				log.Printf("multica runOne %s: %v", localID, err)
+			}
 		})
 	}
 	return nil

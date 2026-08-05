@@ -106,6 +106,55 @@ func TestHandleClaimsRejectsBadPayload(t *testing.T) {
 	}
 }
 
+// TestHandleClaimsPerAgentCap proves all claimed tasks share one queue agent slot
+// so the per-agent concurrency cap binds across tasks (H1.11, review round 1).
+func TestHandleClaimsPerAgentCap(t *testing.T) {
+	f := &recordingAPI{tasks: []ClaimedTask{
+		{TaskID: "t1", MulticaTaskID: "mt1", Payload: []byte(`{"taskId":"t1","instruction":"a"}`)},
+		{TaskID: "t2", MulticaTaskID: "mt2", Payload: []byte(`{"taskId":"t2","instruction":"b"}`)},
+	}}
+	q := runtime.NewQueue(1, 2) // per-agent cap 1, machine cap 2
+	var mu sync.Mutex
+	active, maxActive := 0, 0
+	h := &ClaimHandler{
+		API:      f,
+		Queue:    q,
+		ClientID: func() string { return "c1" },
+		AgentID:  "jarvis",
+		Exec: func(_ context.Context, _ *acp.TaskPayload, _ func(runtime.StreamChunk)) (TaskResult, error) {
+			mu.Lock()
+			active++
+			if active > maxActive {
+				maxActive = active
+			}
+			mu.Unlock()
+			time.Sleep(50 * time.Millisecond)
+			mu.Lock()
+			active--
+			mu.Unlock()
+			return TaskResult{Status: "completed", Result: "ok", FinishedAt: time.Now().Unix()}, nil
+		},
+		Recorder: &fakeRecorder{},
+	}
+	if err := h.HandleClaims(context.Background(), f.tasks); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(2 * time.Second)
+	for f.resultCount() < 2 {
+		select {
+		case <-deadline:
+			t.Fatal("not all results sent")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	mu.Lock()
+	got := maxActive
+	mu.Unlock()
+	if got > 1 {
+		t.Fatalf("per-agent cap violated: max concurrent execs = %d", got)
+	}
+}
+
 type fakeSkillFS struct {
 	dirs   map[string]bool
 	copies [][2]string

@@ -38,6 +38,7 @@ func main() {
 			API:       api,
 			Queue:     q,
 			ClientID:  func() string { return "jarvis" },
+			AgentID:   "jarvis",
 			Exec:      agentExec(&client.SubprocessAgentInvoker{}, st),
 			Recorder:  &sqliteRecorder{},
 			Conflicts: cs,
@@ -48,7 +49,7 @@ func main() {
 				st.mu.Lock()
 				defer st.mu.Unlock()
 				st.registered = true
-				return client.HeartbeatStatus{Status: heartbeatStatus(q), ActiveTasks: q.Status().ActiveTasks}
+				return client.HeartbeatStatus{Status: heartbeatStatus(q), ActiveTasks: q.Status().ActiveTasks, UpdatedAt: time.Now().Unix()}
 			}, func(tasks []client.ClaimedTask) { _ = handler.HandleClaims(ctx, tasks) }); err != nil {
 				log.Printf("multica client stopped: %v", err)
 			}
@@ -56,8 +57,19 @@ func main() {
 	}
 
 	srv := httpapi.NewServer("0.1.1", q)
+	httpSrv := &http.Server{Addr: "127.0.0.1:" + port, Handler: srv.Handler()}
+	// SIGTERM/SIGINT cancels ctx, which stops the Multica Serve goroutine; the
+	// shutdown goroutine then drains the HTTP listener so the daemon terminates.
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
+	}()
 	log.Printf("jarvis-daemon on 127.0.0.1:%s concurrency %d/%d", port, perAgent, machine)
-	if err := http.ListenAndServe("127.0.0.1:"+port, srv.Handler()); err != nil {
+	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }
