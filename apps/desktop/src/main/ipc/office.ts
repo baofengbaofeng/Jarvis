@@ -33,6 +33,21 @@ async function getWebViewHost(): Promise<WebViewLike> {
   return cachedWebViewHost;
 }
 
+// SheetJS (xlsx) and JSZip are CommonJS packages. Under Node's ESM/CJS interop,
+// dynamic `await import()` exposes the `module.exports` object as the `default`
+// property, and the named exports (readFile/loadAsync) are NOT reliably hoisted
+// onto the ESM namespace — `mod.readFile` can be `undefined` at runtime even
+// though the package's .d.ts declares it as a named export. Resolving
+// `mod.default ?? mod` uses the real export in both interop environments (Node
+// CJS interop, where `default` carries the functions, and bundler/vite module
+// runners, where the namespace itself may carry them). The type cast is only
+// structural: the namespace type already declares the members we call. Exported
+// so the office.spec interop regression test exercises the exact resolution the
+// extractors use.
+export function resolveCjsDefault<T>(mod: T): T {
+  return (mod as T & { default?: T }).default ?? mod;
+}
+
 // M5 Task 4 (I8/D8) one-click page summary orchestration: open → extract → clean
 // → chat → close. The WebViewHost itself is Electron-only and manually verified
 // in the running app, so the orchestration is extracted here as a pure-ish
@@ -332,13 +347,17 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
         xlsx: async () => {
           // sheet_to_csv renders each sheet's cell grid as comma-separated rows —
           // the simplest faithful text surface for a spreadsheet (formulae come
-          // through as their cached values, matching what a human sees).
-          const XLSX = await import('xlsx');
+          // through as their cached values, matching what a human sees). The
+          // ESM/CJS interop bug: `mod.readFile` is undefined on the namespace, so
+          // resolve the CJS `default` (see resolveCjsDefault).
+          const XLSX = resolveCjsDefault(await import('xlsx'));
           const wb = XLSX.readFile(path);
           return wb.SheetNames.map(sn => XLSX.utils.sheet_to_csv(wb.Sheets[sn])).filter(Boolean).join('\n');
         },
         pptx: async () => {
-          const JSZip = await import('jszip');
+          // Same interop resolution as xlsx: `mod.loadAsync` is undefined on the
+          // ESM namespace; the real function is on the CJS `default`.
+          const JSZip = resolveCjsDefault(await import('jszip'));
           // extractPptx takes an injected unzip so core never depends on jszip.
           const unzip = async (b: ArrayBuffer) => {
             const zip = await JSZip.loadAsync(b);

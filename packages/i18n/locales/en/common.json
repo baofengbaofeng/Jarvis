@@ -107,8 +107,26 @@
       "pdf": "PDF",
       "composer": "Composer",
       "templates": "Templates",
-      "search": "Search Sources"
+      "search": "Search Sources",
+      "web": "Web Summary",
+      "video": "Video Summary",
+      "image": "Image Gen",
+      "globalsearch": "Global Search"
     }
+  },
+  "officeTools": {
+    "urlPlaceholder": "Enter a web page URL",
+    "summarize": "Summarize",
+    "videoUrlPlaceholder": "Paste a video link",
+    "promptPlaceholder": "Describe the image you want",
+    "generate": "Generate",
+    "size": "Size",
+    "queryPlaceholder": "Search messages/agents/tasks…",
+    "search": "Search",
+    "noResult": "No matching results",
+    "error": "Failed",
+    "analysis": "File analysis",
+    "table": { "message": "Message", "agent": "Agent", "task": "Task" }
   },
   "searchProviders": {
     "title": "Web Search Sources",

@@ -53,7 +53,19 @@ export function normalizeContent(content: MessageContent, adapter: 'openai' | 'a
   // anthropic: image_url parts become image content blocks
   // { type:'image', source:{ type:'base64', media_type, data } } — media_type is
   // taken from the data URL's `data:<mime>;base64,<data>` header pair.
-  return content.map(p => p.type === 'image_url'
-    ? { type: 'image', source: { type: 'base64', media_type: p.image_url.url.split(';')[0].replace('data:', ''), data: p.image_url.url.split(',')[1] ?? '' } }
-    : { type: 'text', text: p.text });
+  return content.map(p => p.type === 'image_url' ? toAnthropicImage(p.image_url.url) : { type: 'text', text: p.text });
+}
+
+// Anthropic's image source block only accepts base64 data URLs. A remote https
+// URL (or any non-data URL) cannot be represented as a base64 image — the old
+// code naively split the URL and produced the WHOLE url as `media_type` with
+// empty `data` (a broken request). Minimal safe behavior: degrade a non-data URL
+// to a text placeholder that names the URL, so the message still sends and the
+// user sees exactly what could not be attached as an image (instead of a silent
+// empty-data block or a hard throw that drops the whole message).
+function toAnthropicImage(url: string): unknown {
+  if (!url.startsWith('data:image/')) {
+    return { type: 'text', text: `[图片: ${url}]` };
+  }
+  return { type: 'image', source: { type: 'base64', media_type: url.split(';')[0].replace('data:', ''), data: url.split(',')[1] ?? '' } };
 }

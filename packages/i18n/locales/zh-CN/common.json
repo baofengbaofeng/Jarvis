@@ -107,8 +107,26 @@
       "pdf": "PDF 伴读",
       "composer": "语音/快捷输入",
       "templates": "模板库",
-      "search": "搜索源"
+      "search": "搜索源",
+      "web": "网页总结",
+      "video": "视频总结",
+      "image": "文生图",
+      "globalsearch": "全局搜索"
     }
+  },
+  "officeTools": {
+    "urlPlaceholder": "输入网页地址",
+    "summarize": "总结",
+    "videoUrlPlaceholder": "粘贴视频链接",
+    "promptPlaceholder": "描述你想生成的图片",
+    "generate": "生成",
+    "size": "尺寸",
+    "queryPlaceholder": "搜索消息/Agent/任务…",
+    "search": "搜索",
+    "noResult": "没有匹配结果",
+    "error": "操作失败",
+    "analysis": "文件分析",
+    "table": { "message": "消息", "agent": "Agent", "task": "任务" }
   },
   "searchProviders": {
     "title": "联网搜索源",

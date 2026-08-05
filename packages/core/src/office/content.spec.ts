@@ -25,6 +25,23 @@ describe('multimodal content', () => {
     expect(JSON.stringify(anth)).toContain('image');
   });
 
+  it('degrades a non-data image url to a text placeholder for anthropic (media_type guard)', () => {
+    // Regression: the pre-fix anthropic mapping did `url.split(';')[0]
+    // .replace('data:','')` for ANY image_url, so an https URL produced the whole
+    // URL as `media_type` with empty `data` (a broken base64 source block).
+    const c = toContentArray('hi', ['https://x.com/a.png']);
+    const anth = normalizeContent(c, 'anthropic') as Array<{ type: string; text?: string }>;
+    expect(anth[1]).toEqual({ type: 'text', text: '[图片: https://x.com/a.png]' });
+  });
+
+  it('keeps a base64 data image as an anthropic image block', () => {
+    const c = toContentArray('', ['data:image/jpeg;base64,AAA']);
+    const anth = normalizeContent(c, 'anthropic') as Array<{ type: string; source?: { media_type?: string; data?: string } }>;
+    expect(anth[0].type).toBe('image');
+    expect(anth[0].source?.media_type).toBe('image/jpeg');
+    expect(anth[0].source?.data).toBe('AAA');
+  });
+
   it('returns a plain string when there are no parts', () => {
     const c = toContentArray('', []);
     expect(typeof c).toBe('string');
