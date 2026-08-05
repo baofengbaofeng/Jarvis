@@ -5,9 +5,10 @@ import type Database from 'better-sqlite3';
 // throws. The legacy build is the Node entry point — same getDocument API, no
 // DOM at import time. The renderer keeps the browser build (see PdfReaderPage).
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, isHttpUrl, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction } from '@jarvis/core';
+import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, isHttpUrl, parseVideoUrl, fetchVideoMeta, summarizeVideo, createOpenAiImageAdapter, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction, type VideoMeta } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
+import type { SettingsStore } from './settings';
 
 // Minimal surface the office.webview channels need from the WebView host. Kept
 // as a structural type so office.ts does NOT statically import WebViewHost
@@ -178,7 +179,27 @@ export async function extractPdf(path: string): Promise<{ pages: number; pageTex
   return { pages, pageTexts };
 }
 
-export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike> } = {}) {
+// D9 transcript (Whisper/API) is an OPTIONAL integration, out of scope for M5.
+// Until a transcript source is configured this returns undefined, so
+// summarizeVideo throws its clear "no transcript" error and the
+// office.video.summarize channel returns { ok:false } instead of silently
+// sending an empty prompt to chatText.
+export async function getTranscript(_meta: VideoMeta): Promise<string | undefined> {
+  return undefined;
+}
+
+// D10 image-generation API key. There is no image-provider settings UI yet, so
+// the key is configured as a keychain ref under settings `image.api_key_ref`
+// (the same api_key_ref → SecureStorage pattern providers.ts uses for provider
+// keys). No ref configured → null → the channel returns a clear { ok:false }
+// error (D10: do not silently fail).
+async function resolveImageApiKey(settings: SettingsStore | undefined, secrets: Pick<SecureStorage, 'get'> | undefined): Promise<string | null> {
+  const ref = settings?.get('image.api_key_ref') as string | undefined;
+  if (!ref || !secrets) return null;
+  return (await secrets.get(ref)) ?? null;
+}
+
+export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike>; settings?: SettingsStore; secrets?: Pick<SecureStorage, 'get'>; imageFetch?: typeof fetch } = {}) {
   // deps.getWebViewHost lets tests inject a fake host; production uses the lazy
   // dynamic-import singleton (see getWebViewHost above).
   const getWeb = deps.getWebViewHost ?? getWebViewHost;
@@ -258,5 +279,41 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
     return summarizeWebPage(url, web, async (text) => {
       return chatText(modelRouter, [{ role: 'user', content: `请总结下面网页内容,给出要点:\n\n${text}` }]);
     });
+  }) as (...a: unknown[]) => unknown);
+  // M5 Task 5 (D9): video link summary. oEmbed (global fetch in main) pulls the
+  // video title; getTranscript is a stub (Whisper/API out of scope), so
+  // summarizeVideo throws the clear "no transcript" error and the catch returns
+  // { ok:false } instead of an unhandled rejection. chatText only runs when a
+  // transcript actually exists — no empty/undefined prompt is ever sent.
+  router.register('office.video.summarize', (async (_e, url: string) => {
+    try {
+      const meta = await fetchVideoMeta(url, parseVideoUrl, async (u) => {
+        const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(u)}&format=json`).catch(() => null);
+        return r && r.ok ? (await r.json() as { title?: string }) : null;
+      });
+      const transcript = await getTranscript(meta);
+      const prompt = summarizeVideo(meta, transcript);
+      const result = await chatText(modelRouter, [{ role: 'user', content: prompt }]);
+      return { ok: true, meta, result };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }) as (...a: unknown[]) => unknown);
+  // M5 Task 5 (D10): image generation via an OpenAI-compatible endpoint only
+  // (extensible behind the ImageAdapter interface). resolveImageApiKey reads the
+  // keychain ref from settings (no settings UI yet → clear { ok:false } error).
+  // The renderer sends size as a plain string; validate it against the adapter's
+  // allowed set rather than casting. imageFetch is injected for tests; production
+  // falls back to the global fetch.
+  router.register('office.image.generate', (async (_e, req: { prompt: string; size?: string }) => {
+    try {
+      const key = await resolveImageApiKey(deps.settings, deps.secrets);
+      if (!key) return { ok: false, error: '未配置图像生成 API Key(见设置→办公→图像)。' };
+      const size = req.size === '256x256' || req.size === '512x512' || req.size === '1024x1024' ? req.size : undefined;
+      const urls = await createOpenAiImageAdapter({ apiKey: key, fetchImpl: deps.imageFetch }).generate({ prompt: req.prompt, size });
+      return { ok: true, urls };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   }) as (...a: unknown[]) => unknown);
 }

@@ -146,7 +146,9 @@ export class IpcRouter {
     // shape accepts a generic handler; IpcRouter.register expects the electron
     // Handler (event first), so wrap it. The modelRouter is a streaming adapter
     // bridge over the first agent's model binding (see ./office).
-    registerOfficeIpc({ register: (ch, h) => this.register(ch, h) }, createOfficeChatStream(this.db, secrets));
+    // settings + secrets let the office.image.generate channel resolve its API
+    // key the same way other channels do (settings `image.api_key_ref` → keychain).
+    registerOfficeIpc({ register: (ch, h) => this.register(ch, h) }, createOfficeChatStream(this.db, secrets), { settings, secrets });
   }
 
   listen(): void {

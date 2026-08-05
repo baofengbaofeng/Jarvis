@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ChatRequest, ProviderAdapter } from '@jarvis/core';
-import { streamAdapter, summarizeWebPage } from './office';
+import { streamAdapter, summarizeWebPage, registerOfficeIpc } from './office';
 
 const req: ChatRequest = {
   provider: { id: 'p1', name: 'P', type: 'openai-compatible', baseUrl: 'https://x.com', apiKeyRef: 'ref', createdAt: '', updatedAt: '' },
@@ -137,5 +137,62 @@ describe('summarizeWebPage', () => {
     const result = await summarizeWebPage('https://example.com', web, async () => 'x');
     expect(result).toEqual({ ok: false, error: '页面无可提取的正文内容' });
     expect(closed).toBe(1);
+  });
+});
+
+// M5 Task 5 (D9/D10): the video.summarize and image.generate channels.
+// registerOfficeIpc registers handlers against a captured fake router so we can
+// invoke them directly — no Electron, no network (unknown-platform URL makes
+// fetchVideoMeta short-circuit before the injected youtube oEmbed fetch).
+function makeRouter() {
+  const handlers = new Map<string, (...a: unknown[]) => unknown>();
+  return { handlers, register: (ch: string, h: (...a: unknown[]) => unknown) => { handlers.set(ch, h); } };
+}
+
+describe('office video/image channels', () => {
+  it('video.summarize returns the clear no-transcript error and never calls chatText', async () => {
+    const router = makeRouter();
+    const chatCalls: unknown[] = [];
+    const modelRouter = { async *chat(req: unknown) { chatCalls.push(req); } };
+    registerOfficeIpc(router, modelRouter);
+    const h = router.handlers.get('office.video.summarize')!;
+    // Unknown platform short-circuits the oEmbed fetch, so this never hits the
+    // network — the channel still surfaces the D9 transcript error via getTranscript stub.
+    const res = await h({} as never, 'https://example.com/x');
+    expect(res).toEqual({ ok: false, error: expect.stringContaining('transcript') });
+    expect(chatCalls).toHaveLength(0);
+  });
+
+  it('image.generate returns a clear error when no image API key is configured', async () => {
+    const router = makeRouter();
+    registerOfficeIpc(router, { async *chat() {} });
+    const h = router.handlers.get('office.image.generate')!;
+    const res = await h({} as never, { prompt: 'a cat' });
+    expect(res).toEqual({ ok: false, error: expect.stringContaining('API Key') });
+  });
+
+  it('image.generate returns urls when an image API key is configured', async () => {
+    const router = makeRouter();
+    const settings = { get: (key: string) => (key === 'image.api_key_ref' ? 'img:key' : undefined), set: () => {}, getAll: () => ({}) };
+    const secrets = { get: async (ref: string) => (ref === 'img:key' ? 'sk-img' : null) };
+    const imageFetch = async () => ({ ok: true, status: 200, json: async () => ({ data: [{ url: 'https://img/y.png' }] }), text: async () => '' }) as Response;
+    registerOfficeIpc(router, { async *chat() {} }, { settings, secrets, imageFetch });
+    const h = router.handlers.get('office.image.generate')!;
+    const res = await h({} as never, { prompt: 'a cat', size: '512x512' });
+    expect(res).toEqual({ ok: true, urls: [{ url: 'https://img/y.png' }] });
+  });
+
+  it('image.generate rejects an invalid size rather than casting it', async () => {
+    const router = makeRouter();
+    let capturedInit: RequestInit | undefined;
+    const imageFetch = async (_input: RequestInfo | URL, init?: RequestInit) => { capturedInit = init; return { ok: true, status: 200, json: async () => ({ data: [{ url: 'https://img/z.png' }] }), text: async () => '' } as Response; };
+    const settings = { get: (key: string) => (key === 'image.api_key_ref' ? 'img:key' : undefined), set: () => {}, getAll: () => ({}) };
+    const secrets = { get: async (ref: string) => (ref === 'img:key' ? 'sk-img' : null) };
+    registerOfficeIpc(router, { async *chat() {} }, { settings, secrets, imageFetch });
+    const h = router.handlers.get('office.image.generate')!;
+    const res = await h({} as never, { prompt: 'a cat', size: 'garbage' });
+    expect(res).toEqual({ ok: true, urls: [{ url: 'https://img/z.png' }] });
+    const body = JSON.parse(String(capturedInit?.body)) as { size?: string };
+    expect(body.size).toBe('1024x1024');
   });
 });
