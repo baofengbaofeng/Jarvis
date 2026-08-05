@@ -51,6 +51,10 @@
   "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat" },
   "approval": { "title": "Approval Required", "approve": "Approve", "deny": "Deny", "reject": "Reject", "summary": "Summary" },
   "agent": { "bindWorkspace": "Bind workspace", "systemPrompt": "System Prompt", "modelId": "Model ID" },
+  "board": {
+    "title": "Task Board",
+    "col": { "queued": "Queued", "running": "Running", "paused": "Paused", "completed": "Completed", "failed": "Failed", "cancelled": "Cancelled" }
+  },
   "daemon": {
     "running": "Running",
     "stopped": "Stopped",

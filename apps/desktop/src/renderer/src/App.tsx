@@ -16,6 +16,7 @@ import { CodingPanelPage } from './pages/CodingPanelPage';
 import { AgentListView } from './pages/AgentListView';
 import { SquadViewPage } from './pages/SquadViewPage';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
+import { TaskBoardPage } from './pages/TaskBoardPage';
 import { ApprovalModal } from './components/approval/ApprovalModal';
 import { SelectionMenu } from './components/office/SelectionMenu';
 import { ToastHost } from './components/squad/ToastHost';
@@ -50,6 +51,8 @@ export default function App() {
           {/* K5/L14 (M6 Task 10): the squad view — timeline + call graph +
               ApprovalPanel driven by the FULL squad.current state. */}
           <Route path="/squad" element={<SquadViewPage />} />
+          {/* K4 (M8 Task 1): six-column task kanban. */}
+          <Route path="/board" element={<TaskBoardPage />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />

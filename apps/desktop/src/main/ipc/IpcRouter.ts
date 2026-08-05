@@ -16,6 +16,7 @@ import { globalSearch } from './search';
 import { registerChatHandlers } from './chat';
 import { registerRuntimeHandlers } from './runtime';
 import { registerTaskHandlers } from './tasks';
+import { createTaskboardIpc } from './taskboard';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
@@ -173,6 +174,10 @@ export class IpcRouter {
     this.register(IpcChannel.taskRetry, (_e, id) => tasks.retry(_e, id as string));
     this.register('task.rollback', (_e, id) => tasks.rollback(_e, id as string));
     this.register('approval.resolve', (_e, id, ok) => { tasks.approvalCenter.resolve(id as string, ok as boolean); return { ok: true }; });
+    // K4 Task 看板 (M8 Task 1): read-only board list. Mutations reuse the
+    // task.cancel/pause/resume/retry channels above.
+    const taskboard = createTaskboardIpc(this.db);
+    this.register('taskboard.list', () => taskboard.list());
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract

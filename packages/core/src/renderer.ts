@@ -33,3 +33,6 @@ export * from './coding/snapshot';
 export * from './coding/fixloop';
 export * from './coding/index/chunker';
 export * from './coding/index/IndexStore';
+// K4 Task 看板 (M8 Task 1): board is pure (no node:*), so the kanban columns
+// logic is renderer-safe. Kept in sync with the main barrel's ./tasks/index.
+export * from './tasks/index';
