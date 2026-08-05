@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
 )
@@ -89,8 +90,17 @@ func ApplyInjection(ctx context.Context, p *acp.TaskPayload, local acp.Injection
 	remote := acp.Injection{MCPServers: p.MCPServers, Env: p.Env, CLIArgs: p.CLIArgs}
 	// Represent Multica-injected skills as SkillSpecs so L38 name collisions with
 	// local skills are surfaced as SkillConflicts (C2: H1.7 skill-copy + L38).
+	// Skill names are server-controlled input, so each name is validated before
+	// any path is built (J3: injected skills act only within the task workspace);
+	// an invalid name is skipped with a log, not fatal (round-3 re-review).
+	var toCopy []string
 	for _, name := range p.Skills {
+		if err := validSkillName(name); err != nil {
+			log.Printf("multica: skipping invalid skill name %q: %v", name, err)
+			continue
+		}
 		remote.Skills = append(remote.Skills, acp.SkillSpec{Source: "multica", Name: name, Path: filepath.Join(dst, name)})
+		toCopy = append(toCopy, name)
 	}
 	merged, sc, mc := acp.MergeInjections(local, remote)
 
@@ -99,11 +109,11 @@ func ApplyInjection(ctx context.Context, p *acp.TaskPayload, local acp.Injection
 	out.Env = merged.Env
 	out.CLIArgs = merged.CLIArgs
 
-	if len(p.Skills) > 0 {
+	if len(toCopy) > 0 {
 		if err := fs.MkdirAll(dst); err != nil {
 			return nil, nil, nil, fmt.Errorf("mkdir skills: %w", err)
 		}
-		for _, name := range p.Skills {
+		for _, name := range toCopy {
 			src := filepath.Join(workspace, name)
 			target := filepath.Join(dst, name)
 			if err := fs.Copy(src, target); err != nil {
@@ -120,4 +130,23 @@ func ApplyInjection(ctx context.Context, p *acp.TaskPayload, local acp.Injection
 		out.Skills = nil // Skill 内容已落盘 .jarvis/skills/,由 M3 SkillsLoader 扫描
 	}
 	return &out, sc, mc, nil
+}
+
+// validSkillName rejects server-supplied skill names that could escape the task
+// workspace (J3) — the same discipline WorkspacePool.validTaskID applies to task
+// ids: empty, path separators, ".", "..", and absolute paths are all rejected.
+func validSkillName(name string) error {
+	if name == "" {
+		return fmt.Errorf("empty skill name")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("skill name %q contains path separator", name)
+	}
+	if name == "." || name == ".." {
+		return fmt.Errorf("skill name %q is a reserved path", name)
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("skill name %q is an absolute path", name)
+	}
+	return nil
 }

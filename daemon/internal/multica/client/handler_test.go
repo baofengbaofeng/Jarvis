@@ -227,3 +227,38 @@ func TestApplyInjectionRealSkillFSBestEffort(t *testing.T) {
 		t.Fatalf("missing skill should not have been copied (err=%v)", err)
 	}
 }
+
+// TestApplyInjectionSkipsTraversalSkillName is the round-3 security regression:
+// a server-supplied skill name containing ".." must never reach a path-building
+// or copy call (J3 — injected skills act only within the task workspace). The
+// invalid name is skipped with a log; the task still succeeds and a valid
+// sibling skill is still copied.
+func TestApplyInjectionSkipsTraversalSkillName(t *testing.T) {
+	fs := &fakeSkillFS{dirs: map[string]bool{}}
+	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"../evil", "ok"}}
+	merged, sc, mc, err := ApplyInjection(context.Background(), p, acp.Injection{}, "/ws/t1", fs)
+	if err != nil {
+		t.Fatalf("invalid skill name must be skipped, not fail the task: %v", err)
+	}
+	if len(fs.copies) != 1 || fs.copies[0][0] != "/ws/t1/ok" || fs.copies[0][1] != "/ws/t1/.jarvis/skills/ok" {
+		t.Fatalf("only the valid skill should be copied; no path may escape the workspace, got %v", fs.copies)
+	}
+	if merged == nil || merged.Skills != nil {
+		t.Fatalf("expected merged payload with skills cleared, got %+v", merged)
+	}
+	_ = sc
+	_ = mc
+}
+
+func TestValidSkillNameRejectsTraversal(t *testing.T) {
+	for _, name := range []string{"", ".", "..", "../evil", "a/b", `a\b`, "/abs", "..\\evil"} {
+		if err := validSkillName(name); err == nil {
+			t.Fatalf("expected %q to be rejected", name)
+		}
+	}
+	for _, name := range []string{"ok", "review", "my-skill"} {
+		if err := validSkillName(name); err != nil {
+			t.Fatalf("expected %q to be accepted, got %v", name, err)
+		}
+	}
+}
