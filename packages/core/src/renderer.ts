@@ -20,6 +20,8 @@ export * from './office/speech';
 export * from './office/files';
 export * from './office/dropzone';
 export * from './office/templates';
+export * from './office/search';
+export * from './office/searchProvider';
 export * from './coding/diff';
 export * from './coding/mention';
 export * from './coding/filetree';

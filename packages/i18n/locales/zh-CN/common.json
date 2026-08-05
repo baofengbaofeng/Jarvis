@@ -6,6 +6,7 @@
     "settings": "设置",
     "workspace": "工作区",
     "coding": "代码面板",
+    "office": "办公增强",
     "quit": "退出",
     "open": "打开 JARVIS",
     "daemonStatus": "Daemon 状态",
@@ -98,6 +99,22 @@
     "preview": "预览",
     "insert": "插入到输入框",
     "error": "操作失败"
+  },
+  "office": {
+    "title": "办公增强",
+    "tabs": {
+      "writing": "写作",
+      "pdf": "PDF 伴读",
+      "composer": "语音/快捷输入",
+      "templates": "模板库",
+      "search": "搜索源"
+    }
+  },
+  "searchProviders": {
+    "title": "联网搜索源",
+    "apiKeyPlaceholder": "API Key",
+    "enabled": "启用",
+    "saved": "已保存"
   },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

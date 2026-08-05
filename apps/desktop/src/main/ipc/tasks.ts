@@ -11,6 +11,7 @@ import { createAgentStore } from './agents';
 import { createChatDbAdapter } from './chat';
 import { createWorkspaceService } from './workspace';
 import type { SettingsStore } from './settings';
+import { webSearch } from './search';
 import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig } from '@jarvis/protocol';
@@ -99,6 +100,25 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // to the deterministic local hashEmbedding; production Provider embedding (M1
   // ModelRouter extension) is a later swap at construction.
   registerSearchCodeTool(toolRegistry, new IndexStore(createCodeIndexAdapter(db), hashEmbedding));
+  // M5 Task 10 (L25): web_search routes through settings.search_providers (the
+  // SearchProvidersPage form) and falls back to the M1 legacy implementation.
+  // The tool is a thin adapter over the main-side webSearch helper — fetch and
+  // parse live in main; the model only sees the ranked text. deps.settings may
+  // be absent in tests, so fall back to an empty store that yields
+  // "not configured" (a clear { ok:false } instead of a throw).
+  const searchSettings = deps.settings ?? { get: () => undefined, set: () => {}, getAll: () => ({}) };
+  toolRegistry.register({
+    name: 'web_search',
+    description: 'Search the web and return ranked results with title, url and snippet',
+    parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+  }, async (args) => {
+    try {
+      const results = await webSearch(searchSettings, String(args.query ?? ''));
+      return { ok: true, output: results.map(r => `${r.title}\n${r.url}\n${r.snippet}`).join('\n---\n') || 'no results' };
+    } catch (e) {
+      return { ok: false, output: e instanceof Error ? e.message : String(e) };
+    }
+  });
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
   const engine = new AgentEngine({

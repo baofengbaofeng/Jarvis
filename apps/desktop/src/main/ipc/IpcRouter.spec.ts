@@ -125,3 +125,33 @@ describe('IpcRouter template channels (D15)', () => {
     expect((await list({}) as unknown[])).toHaveLength(0);
   });
 });
+
+// M5 Task 10 (L21): search.global answers against the real FTS5 tables
+// (migration v3) seeded through the trigger-populated source tables.
+describe('IpcRouter search.global channel (L21)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers search.global and searches across the FTS tables', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const searchGlobal = handlers.get('search.global')!;
+    expect(searchGlobal).toBeTruthy();
+
+    // Seed rows through the real tables so the v3 FTS triggers populate the
+    // virtual tables (no manual FTS insert).
+    db.prepare("INSERT INTO chat_sessions (id, title, created_at, updated_at) VALUES ('s1', 't', '2026-01-01', '2026-01-01')").run();
+    db.prepare("INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES ('m1', 's1', 'user', 'jarvis router search test', '2026-01-01')").run();
+
+    const r = await searchGlobal({}, { query: 'router search' }) as { ok: boolean; results?: Array<{ table: string }> };
+    expect(r.ok).toBe(true);
+    expect(r.results).toHaveLength(1);
+    expect(r.results![0].table).toBe('message');
+
+    // An empty query returns [] instead of a FTS5 MATCH '' throw.
+    const empty = await searchGlobal({}, { query: '' }) as { ok: boolean; results: unknown[] };
+    expect(empty.results).toEqual([]);
+  });
+});

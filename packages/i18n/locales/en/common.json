@@ -6,6 +6,7 @@
     "settings": "Settings",
     "workspace": "Workspace",
     "coding": "Code Panel",
+    "office": "Office",
     "quit": "Quit",
     "open": "Open JARVIS",
     "daemonStatus": "Daemon Status",
@@ -98,6 +99,22 @@
     "preview": "Preview",
     "insert": "Insert into input",
     "error": "Failed"
+  },
+  "office": {
+    "title": "Office",
+    "tabs": {
+      "writing": "Writing",
+      "pdf": "PDF",
+      "composer": "Composer",
+      "templates": "Templates",
+      "search": "Search Sources"
+    }
+  },
+  "searchProviders": {
+    "title": "Web Search Sources",
+    "apiKeyPlaceholder": "API key",
+    "enabled": "Enabled",
+    "saved": "Saved"
   },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

@@ -24,6 +24,7 @@ export function ChatPage() {
         <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
           <button data-testid="chat-new" title={t('chat.newSession')} onClick={() => void useChatStore.getState().newSession()}>+</button>
           <button data-testid="chat-to-coding" onClick={() => (window.location.href = '/coding')}>{t('menu.coding')}</button>
+          <button data-testid="chat-to-office" onClick={() => (window.location.href = '/office')}>{t('menu.office')}</button>
           <button data-testid="chat-to-settings" onClick={() => (window.location.href = '/settings')}>{t('settings.title')}</button>
         </div>
         <LanguageSwitcher />

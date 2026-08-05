@@ -11,6 +11,7 @@ import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
+import { globalSearch } from './search';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
@@ -177,6 +178,19 @@ export class IpcRouter {
       const tpl = templates.list().find(t => t.id === id);
       if (!tpl) return { ok: false as const, error: `template ${id} not found` };
       return { ok: true as const, result: substituteTemplate(tpl.content, vars ?? {}) };
+    });
+    // M5 Task 10 (L21): global FTS5 search across chat_messages/agents/tasks.
+    // Wrap the MATCH so a malformed query returns { ok:false, error } instead
+    // of rejecting the channel. The renderer writes search_providers through the
+    // existing settings.set channel (SearchProvidersPage), so no extra write IPC
+    // is needed here.
+    this.register('search.global', (_e, args) => {
+      try {
+        const { query } = (args ?? {}) as { query?: string };
+        return { ok: true as const, results: globalSearch(this.db, query ?? '') };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
     });
   }
 

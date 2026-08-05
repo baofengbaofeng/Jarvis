@@ -161,6 +161,67 @@ export const MIGRATIONS: Migration[] = [
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_code_chunks_path ON code_chunks(path);`
+  },
+  // M5 Task 10 (L21): global FTS5 search. The brief's tasks_fts(title,
+  // description) does NOT match the real schema — `tasks` has no title/
+  // description columns, it carries payload_json/result_json/error_json (the
+  // agents table has name+description, chat_messages has content — those two
+  // match). So the FTS tables here index the ACTUAL columns: chat_messages
+  // content, agents name+description, tasks payload+result. All three source
+  // tables have an implicit INTEGER rowid (TEXT PK, not WITHOUT ROWID), so the
+  // `new.rowid`/`old.rowid` triggers and `SELECT rowid` backfills are valid.
+  //
+  // tokenize='trigram': the default unicode61 tokenizer treats a CJK run as ONE
+  // token, so a Chinese substring query (the app is zh-CN first) can never match
+  // inside a longer string. Trigram indexes 3-char substrings, which makes
+  // Chinese substring search actually work (queries < 3 chars just match
+  // nothing, they do not throw). SQLite 3.49.2 (bundled with better-sqlite3)
+  // supports it.
+  //
+  // Unlike the brief, UPDATE triggers (_au) are included: a regular FTS5 table
+  // does not follow source-row updates, so agents/tasks/chat edits would leave
+  // stale rows searchable. Idempotent: the virtual tables/triggers use IF NOT
+  // EXISTS and applyMigrations records the version once, so the backfills below
+  // run exactly once per database.
+  {
+    version: 3,
+    sql: `
+    CREATE VIRTUAL TABLE IF NOT EXISTS chat_messages_fts USING fts5(content, tokenize='trigram');
+    CREATE VIRTUAL TABLE IF NOT EXISTS agents_fts USING fts5(name, description, tokenize='trigram');
+    CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(payload, result, tokenize='trigram');
+    CREATE TRIGGER IF NOT EXISTS chat_messages_fts_ai AFTER INSERT ON chat_messages BEGIN
+      INSERT INTO chat_messages_fts(rowid, content) VALUES (new.rowid, new.content);
+    END;
+    CREATE TRIGGER IF NOT EXISTS chat_messages_fts_ad AFTER DELETE ON chat_messages BEGIN
+      DELETE FROM chat_messages_fts WHERE rowid = old.rowid;
+    END;
+    CREATE TRIGGER IF NOT EXISTS chat_messages_fts_au AFTER UPDATE OF content ON chat_messages BEGIN
+      DELETE FROM chat_messages_fts WHERE rowid = old.rowid;
+      INSERT INTO chat_messages_fts(rowid, content) VALUES (new.rowid, new.content);
+    END;
+    CREATE TRIGGER IF NOT EXISTS agents_fts_ai AFTER INSERT ON agents BEGIN
+      INSERT INTO agents_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+    END;
+    CREATE TRIGGER IF NOT EXISTS agents_fts_ad AFTER DELETE ON agents BEGIN
+      DELETE FROM agents_fts WHERE rowid = old.rowid;
+    END;
+    CREATE TRIGGER IF NOT EXISTS agents_fts_au AFTER UPDATE OF name, description ON agents BEGIN
+      DELETE FROM agents_fts WHERE rowid = old.rowid;
+      INSERT INTO agents_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+    END;
+    CREATE TRIGGER IF NOT EXISTS tasks_fts_ai AFTER INSERT ON tasks BEGIN
+      INSERT INTO tasks_fts(rowid, payload, result) VALUES (new.rowid, new.payload_json, new.result_json);
+    END;
+    CREATE TRIGGER IF NOT EXISTS tasks_fts_ad AFTER DELETE ON tasks BEGIN
+      DELETE FROM tasks_fts WHERE rowid = old.rowid;
+    END;
+    CREATE TRIGGER IF NOT EXISTS tasks_fts_au AFTER UPDATE OF payload_json, result_json ON tasks BEGIN
+      DELETE FROM tasks_fts WHERE rowid = old.rowid;
+      INSERT INTO tasks_fts(rowid, payload, result) VALUES (new.rowid, new.payload_json, new.result_json);
+    END;
+    INSERT INTO chat_messages_fts(rowid, content) SELECT rowid, content FROM chat_messages;
+    INSERT INTO agents_fts(rowid, name, description) SELECT rowid, name, description FROM agents;
+    INSERT INTO tasks_fts(rowid, payload, result) SELECT rowid, payload_json, result_json FROM tasks;`
   }
 ];
 

@@ -11,6 +11,7 @@ import { PermissionsSettingsPage } from './pages/settings/PermissionsSettingsPag
 import { EnvSettingsPage } from './pages/settings/EnvSettingsPage';
 import { ConcurrencySettingsPage } from './pages/settings/ConcurrencySettingsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { OfficePage } from './pages/OfficePage';
 import { CodingPanelPage } from './pages/CodingPanelPage';
 import { AgentListView } from './pages/AgentListView';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/agents" element={<AgentListView />} />
           <Route path="/coding" element={<CodingPanelPage />} />
+          <Route path="/office" element={<OfficePage />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />

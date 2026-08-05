@@ -10,3 +10,5 @@ export * from './speech';
 export * from './files';
 export * from './dropzone';
 export * from './templates';
+export * from './search';
+export * from './searchProvider';
