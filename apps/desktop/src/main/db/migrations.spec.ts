@@ -32,7 +32,18 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 3 (v3 adds FTS5 chat/agent/task index)', () => {
-    expect(latestVersion()).toBe(3);
+  it('reports latestVersion as 4 (v4 adds agent_messages.task_id + bus indexes)', () => {
+    expect(latestVersion()).toBe(4);
+  });
+
+  // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
+  // in v1 with squad_id, which the bus persist INSERT does not use) plus the
+  // (to_agent, task_id) and (task_id) lookup indexes the bus needs.
+  it('v4 adds agent_messages.task_id and the bus lookup indexes', () => {
+    applyMigrations(db);
+    const cols = db.prepare('PRAGMA table_info(agent_messages)').all() as Array<{ name: string }>;
+    expect(cols.map(c => c.name)).toEqual(expect.arrayContaining(['id','kind','from_agent','to_agent','task_id','payload_json','created_at']));
+    const idxs = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agent_messages'").all() as Array<{ name: string }>;
+    expect(idxs.map(i => i.name)).toEqual(expect.arrayContaining(['idx_agent_messages_to_task','idx_agent_messages_task']));
   });
 });

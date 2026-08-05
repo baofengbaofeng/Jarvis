@@ -222,6 +222,21 @@ export const MIGRATIONS: Migration[] = [
     INSERT INTO chat_messages_fts(rowid, content) SELECT rowid, content FROM chat_messages;
     INSERT INTO agents_fts(rowid, name, description) SELECT rowid, name, description FROM agents;
     INSERT INTO tasks_fts(rowid, payload, result) SELECT rowid, payload_json, result_json FROM tasks;`
+  },
+  // M6 Task 1 (L12): agent message bus persistence. The agent_messages table
+  // ALREADY exists from v1 — but with squad_id, not the task_id the bus INSERT
+  // (main/ipc/squad.ts createBusPersist) needs to match responses to pending
+  // waiters by (to, taskId). So v4 ALTERs the column in and creates the two
+  // lookup indexes instead of re-CREATEing the table (which the v1 IF NOT
+  // EXISTS would have made a no-op). schema_migrations version tracking
+  // guarantees the ALTER runs exactly once per database, so it needs no
+  // idempotency guard — SQLite has no IF NOT EXISTS for ADD COLUMN.
+  {
+    version: 4,
+    sql: `
+    ALTER TABLE agent_messages ADD COLUMN task_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_agent_messages_to_task ON agent_messages(to_agent, task_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_messages_task ON agent_messages(task_id);`
   }
 ];
 

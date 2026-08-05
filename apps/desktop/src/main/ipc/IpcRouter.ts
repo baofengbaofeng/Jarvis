@@ -11,6 +11,7 @@ import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
+import { createBusPersist, getMessageBus } from './squad';
 import { globalSearch } from './search';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
@@ -192,6 +193,11 @@ export class IpcRouter {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
       }
     });
+    // M6 Task 1 (L12): agent message bus. getMessageBus returns the shared
+    // in-memory bus singleton; createBusPersist subscribes it to agent_messages
+    // so every posted message is durable (main-owned table, §13.3). No IPC
+    // channels yet — the renderer does not consume the bus in this task.
+    createBusPersist(this.db, getMessageBus());
   }
 
   listen(): void {
