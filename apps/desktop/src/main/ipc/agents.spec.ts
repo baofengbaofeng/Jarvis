@@ -56,4 +56,38 @@ describe('agent store', () => {
     expect(JSON.parse(row.env_vars_json)).toEqual({ FOO: 'bar', BAZ: '1' });
     expect(JSON.parse(row.cli_args_json)).toEqual(['--verbose', 'run']);
   });
+
+  // M6 Task 9 (L31): update snapshots the OLD config before the write so the
+  // version history always retains the pre-update state. The snapshot happens
+  // inside createAgentStore.update (not in the IPC layer), so ANY update path
+  // (agent.update IPC, skills import, future flows) is versioned.
+  it('snapshots the pre-update config before each update', () => {
+    const store = createAgentStore(db);
+    const a = store.create({ name: 'A', systemPrompt: 'v1', modelId: null, workspaceId: null });
+    store.update(a.id, { systemPrompt: 'v2' });
+    store.update(a.id, { systemPrompt: 'v3' });
+
+    // Two updates -> two snapshots, each holding the config BEFORE that update.
+    const rows = db.prepare('SELECT snapshot_json FROM agent_config_versions ORDER BY created_at').all() as Array<{ snapshot_json: string }>;
+    expect(rows).toHaveLength(2);
+    expect(JSON.parse(rows[0].snapshot_json).systemPrompt).toBe('v1');
+    expect(JSON.parse(rows[1].snapshot_json).systemPrompt).toBe('v2');
+    // The live agent is the post-update head, not a snapshot.
+    expect(store.get(a.id).systemPrompt).toBe('v3');
+  });
+
+  // L31 rollback restores a snapshot's config through the snapshot-free raw
+  // write (applyRaw), so the history count does NOT grow on every rollback.
+  it('rolls back to a snapshot and restores the config', () => {
+    const store = createAgentStore(db);
+    const a = store.create({ name: 'A', systemPrompt: 'v1', modelId: null, workspaceId: null });
+    store.update(a.id, { systemPrompt: 'v2' });
+
+    const [version] = store.versions.list(a.id);
+    store.versions.rollback(version.id);
+    expect(store.get(a.id).systemPrompt).toBe('v1');
+    // No new snapshot was written by the rollback itself.
+    const rows = db.prepare('SELECT COUNT(*) AS c FROM agent_config_versions').get() as { c: number };
+    expect(rows.c).toBe(1);
+  });
 });

@@ -24,3 +24,4 @@ export * from './plugins/PluginHost';
 export * from './util/debounce';
 export * from './memory/index';
 export * from './squad/index';
+export * from './squad/agents/index';

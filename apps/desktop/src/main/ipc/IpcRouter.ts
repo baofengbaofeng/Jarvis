@@ -44,6 +44,37 @@ export class IpcRouter {
     this.register(IpcChannel.agentCreate, (_e, input) => agents.create(input as AgentInput));
     this.register(IpcChannel.agentUpdate, (_e, id, patch) => agents.update(id as string, patch as Partial<AgentInput>));
     this.register(IpcChannel.agentDelete, (_e, id) => agents.remove(id as string));
+    // M6 Task 9 (L31): agent config version history + rollback. Both channels
+    // take a SINGLE object payload ({ id } / { id, versionId }) — the preload
+    // spreads positional args, so the object shape is the contract (a two-arg
+    // call would leave the destructure undefined; see VersionHistoryPage).
+    // Handlers return { ok, ... } / { ok, error } so an ipcMain rejection never
+    // leaks (same contract as squad.*/templates.*). The version store lives on
+    // the agent store (agents.versions) so the update path and these channels
+    // share ONE snapshot history.
+    this.register('agents.versions', (_e, args) => {
+      try {
+        const { id } = (args ?? {}) as { id: string };
+        return { ok: true as const, versions: agents.versions.list(id) };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('agents.rollback', (_e, args) => {
+      try {
+        const { id, versionId } = (args ?? {}) as { id: string; versionId: string };
+        // Cross-agent guard: the version must belong to the payload agent id so
+        // a stale client cannot roll an agent to another agent's snapshot. The
+        // rollback itself applies the snapshot through a snapshot-free raw write
+        // (applyRaw in agents.ts), so it restores the config without recording a
+        // brand-new version.
+        if (!agents.versions.list(id).some(v => v.id === versionId)) return { ok: false as const, error: `version ${versionId} not found for agent ${id}` };
+        agents.versions.rollback(versionId);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     const mcpStore = createMcpStore(this.db);
     // Pass the agents store so skills.import can copy SKILL.md into every bound
     // workspace's .jarvis/skills/ (the runtime injection surface), J2 fix.

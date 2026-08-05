@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { applyMigrations } from '../db/migrations';
 import { IpcRouter } from './IpcRouter';
 import { createProviderStore } from './providers';
+import { createAgentStore } from './agents';
 import { getMessageBus, __resetBusForTests } from './squad';
 import type { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 
@@ -161,6 +162,51 @@ describe('IpcRouter search.global channel (L21)', () => {
     // An empty query returns [] instead of a FTS5 MATCH '' throw.
     const empty = await searchGlobal({}, { query: '' }) as { ok: boolean; results: unknown[] };
     expect(empty.results).toEqual([]);
+  });
+});
+
+// M6 Task 9 (L31): agents.versions / agents.rollback channels. Both take a
+// SINGLE object payload ({ id } / { id, versionId }) — the preload spreads
+// positional args, so a two-arg call would leave the handler's destructure
+// undefined and rollback would silently no-op (Task 8 review finding). The
+// handlers return { ok, ... } / { ok, error }, never reject.
+describe('IpcRouter agent version channels (L31)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('lists versions and rolls back through the { id } / { id, versionId } object contract', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const versions = handlers.get('agents.versions')!;
+    const rollback = handlers.get('agents.rollback')!;
+    expect(versions).toBeTruthy();
+    expect(rollback).toBeTruthy();
+
+    const agentStore = createAgentStore(db);
+    const a = agentStore.create({ name: 'A', systemPrompt: 'v1', modelId: null, workspaceId: null });
+    agentStore.update(a.id, { systemPrompt: 'v2' });
+
+    // versions: { id } object payload -> { ok, versions }.
+    const vres = await versions({}, { id: a.id }) as { ok: boolean; versions: Array<{ id: string }> };
+    expect(vres.ok).toBe(true);
+    expect(vres.versions).toHaveLength(1);
+
+    // rollback: { id, versionId } object payload -> { ok: true }, config restored.
+    const rres = await rollback({}, { id: a.id, versionId: vres.versions[0].id }) as { ok: boolean };
+    expect(rres.ok).toBe(true);
+    expect(agentStore.get(a.id).systemPrompt).toBe('v1');
+
+    // Cross-agent guard: a version that does not belong to the payload agent id
+    // is rejected (the rollback channel must not apply someone else's snapshot).
+    const cross = await rollback({}, { id: 'other', versionId: vres.versions[0].id }) as { ok: boolean; error?: string };
+    expect(cross.ok).toBe(false);
+    expect(cross.error).toContain('not found for agent');
+
+    // A malformed (missing) payload returns { ok:false } rather than rejecting.
+    const bad = await rollback({}, undefined) as { ok: boolean; error?: string };
+    expect(bad.ok).toBe(false);
   });
 });
 
