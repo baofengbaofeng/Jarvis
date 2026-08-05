@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { MessageBus, createSquad, squadTransition, runSquad, type Squad, type SquadEvent, type SquadRouterDeps, type SquadStatus } from '@jarvis/core';
+import { MessageBus, CallGraph, createSquad, detectCycle, squadTransition, runSquad, type Squad, type SquadEvent, type SquadRouterDeps, type SquadStatus } from '@jarvis/core';
 import { IpcEvent } from '@jarvis/protocol';
 
 // The bus is a module-level singleton: every M6 squad feature (task
@@ -85,6 +85,28 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
       const squad = createSquad({ id, leaderAgentId, memberAgentIds, taskId });
       store.create({ id: squad.id, leaderAgentId: squad.leaderAgentId, memberAgentIds: squad.memberAgentIds, taskId: squad.taskId });
       return { ok: true as const, id, squad };
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  // M6 Task 5 (L14): squad.graph returns a squad's delegation call chain
+  // (leader -> member edges recorded by delegateRoute in tasks.ts) as
+  // react-flow rows plus a cycle flag from detectCycle. Querying by squad_id
+  // (migration v7) decouples the graph from the delegation taskId — in this
+  // single-active milestone the delegation taskId equals the squad row id, but
+  // the squad's bound task_id is a separate optional column, so keying on it
+  // would miss edges. toRows() keeps the renderer contract to {from,to,label};
+  // the cycle flag is cheap extra signal for a repeated (from,to,taskId)
+  // delegation the UI can surface immediately.
+  register('squad.graph', (_e, args) => {
+    try {
+      const { squadId } = (args ?? {}) as { squadId: string };
+      if (!store.list().some(s => s.id === squadId)) return { ok: false as const, error: `squad not found: ${squadId}` };
+      const rows = deps.db.prepare('SELECT from_agent, to_agent, task_id, ok, created_at FROM agent_call_edges WHERE squad_id = ? ORDER BY created_at').all(squadId) as Array<{ from_agent: string; to_agent: string; task_id: string | null; ok: number; created_at: string }>;
+      const graph = new CallGraph();
+      for (const r of rows) graph.addEdge(r.from_agent, r.to_agent, { taskId: r.task_id ?? undefined, ok: r.ok === 1 });
+      return { ok: true as const, rows: graph.toRows(), cycle: detectCycle(graph.getEdges()) };
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }

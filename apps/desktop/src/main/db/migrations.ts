@@ -266,6 +266,25 @@ export const MIGRATIONS: Migration[] = [
     version: 6,
     sql: `
     ALTER TABLE agents ADD COLUMN context_passing TEXT NOT NULL DEFAULT 'full';`
+  },
+  // M6 Task 5 (L14): call-graph tracking. The v1 schema already created
+  // agent_call_edges with a legacy shape (task_hash TEXT NOT NULL, no ok, no
+  // squad_id) that does NOT match the L14 model — the brief's INSERT passes
+  // task_id + ok, and squad.graph must find a squad's edges by squad_id (the
+  // delegation's task_id equals the squad row id here, not the squad's bound
+  // task_id). So v7 ALTERs in place like v4/v5 did for agent_messages/squads
+  // (the v1 CREATE TABLE IF NOT EXISTS would make a re-CREATE a no-op): rename
+  // task_hash -> task_id, add ok (default 1 for legacy rows) + squad_id, and
+  // index by squad_id for the graph lookup. schema_migrations version tracking
+  // guarantees the RENAME/ADD run exactly once per database (better-sqlite3
+  // bundles SQLite >= 3.25 so RENAME COLUMN is supported).
+  {
+    version: 7,
+    sql: `
+    ALTER TABLE agent_call_edges RENAME COLUMN task_hash TO task_id;
+    ALTER TABLE agent_call_edges ADD COLUMN ok INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE agent_call_edges ADD COLUMN squad_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_agent_call_edges_squad ON agent_call_edges(squad_id);`
   }
 ];
 

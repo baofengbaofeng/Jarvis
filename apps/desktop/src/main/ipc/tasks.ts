@@ -217,6 +217,22 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     return result.text;
   };
 
+  // M6 Task 5 (L14): persist one delegation edge (leader -> member) when a
+  // delegate_agent completes, so squad.graph can render the call chain. The
+  // edge's squad_id is the ACTIVE squad row id (squadCtx.taskId IS the squad id
+  // per prepare) — passed explicitly because squadCtx is a mutable closure let
+  // and the call happens inside an async body. squad.graph queries by squad_id
+  // because the delegation taskId here is the squad row id, not the squad's
+  // bound task_id (a separate optional column). A graph-write failure must
+  // NEVER fail the delegation: the bus messages are the run's source of truth,
+  // the graph is derived telemetry.
+  const recordCallEdge = (from: string, to: string, taskId: string, squadId: string | null, ok: boolean): void => {
+    try {
+      db.prepare('INSERT INTO agent_call_edges (id, from_agent, to_agent, task_id, squad_id, ok, created_at) VALUES (?,?,?,?,?,?,?)')
+        .run(randomUUID(), from, to, taskId, squadId, ok ? 1 : 0, new Date().toISOString());
+    } catch { /* best-effort telemetry: a graph-write failure never breaks the delegation */ }
+  };
+
   // The delegate_agent route: verify the delegation is within a live squad, run
   // the member inline (Multica SOP: members REACT and the result returns to the
   // leader), and persist the delegate/response/complete lifecycle on the bus
@@ -239,9 +255,13 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       ctx.memberResults.set(to, text);
       bus.post({ kind: 'response', from: to, to: from, taskId, payload: { text } });
       bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: true } });
+      // L14: record the successful leader->member call edge.
+      recordCallEdge(from, to, taskId, ctx.taskId, true);
       return text;
     } catch (e) {
       bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: e instanceof Error ? e.message : String(e) } });
+      // L14: record the failed leader->member call edge too (label 'failed').
+      recordCallEdge(from, to, taskId, ctx.taskId, false);
       throw e;
     } finally {
       ctx.memberActive = false;

@@ -186,6 +186,49 @@ describe('squad IPC (F8/F9)', () => {
     expect(r.error).toContain('nope');
   });
 
+  // M6 Task 5 (L14): squad.graph returns the squad's delegation chain as
+  // react-flow rows ({from,to,label}) plus a cycle flag. Edges are seeded
+  // directly — the delegation route in tasks.ts writes them on completion.
+  it('squad.graph returns edges as react-flow rows plus a cycle flag (L14)', async () => {
+    register();
+    const create = handlers.get('squad.create')!;
+    const graph = handlers.get('squad.graph')!;
+    const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1', 'm2'] }) as { id: string };
+    db.prepare('INSERT INTO agent_call_edges (id, from_agent, to_agent, task_id, squad_id, ok, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run('e1', 'leader', 'm1', id, id, 1, '2026-01-01T00:00:00.000Z');
+    db.prepare('INSERT INTO agent_call_edges (id, from_agent, to_agent, task_id, squad_id, ok, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run('e2', 'm1', 'm2', id, id, 0, '2026-01-02T00:00:00.000Z');
+    const r = graph({}, { squadId: id }) as { ok: boolean; rows: Array<{ from: string; to: string; label: string }>; cycle: boolean };
+    expect(r.ok).toBe(true);
+    expect(r.rows).toEqual([
+      { from: 'leader', to: 'm1', label: 'ok' },
+      { from: 'm1', to: 'm2', label: 'failed' }
+    ]);
+    expect(r.cycle).toBe(false);
+  });
+
+  it('squad.graph flags a repeated delegation as a cycle', async () => {
+    register();
+    const create = handlers.get('squad.create')!;
+    const graph = handlers.get('squad.graph')!;
+    const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1'] }) as { id: string };
+    db.prepare('INSERT INTO agent_call_edges (id, from_agent, to_agent, task_id, squad_id, ok, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run('e1', 'leader', 'm1', 't1', id, 1, '2026-01-01T00:00:00.000Z');
+    db.prepare('INSERT INTO agent_call_edges (id, from_agent, to_agent, task_id, squad_id, ok, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run('e2', 'leader', 'm1', 't1', id, 1, '2026-01-02T00:00:00.000Z');
+    const r = graph({}, { squadId: id }) as { ok: boolean; cycle: boolean };
+    expect(r.ok).toBe(true);
+    expect(r.cycle).toBe(true);
+  });
+
+  it('squad.graph on a missing squad returns { ok:false }', async () => {
+    register();
+    const graph = handlers.get('squad.graph')!;
+    const r = graph({}, { squadId: 'nope' }) as { ok: boolean; error: string };
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('nope');
+  });
+
   it('emits an in_progress squad:status event when the run begins', async () => {
     const events = register();
     const create = handlers.get('squad.create')!;

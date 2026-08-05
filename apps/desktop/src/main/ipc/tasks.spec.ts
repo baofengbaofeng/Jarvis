@@ -273,6 +273,71 @@ describe('task handlers', () => {
     }
   });
 
+  // M6 Task 5 (L14): a completed delegation writes one agent_call_edges row
+  // (leader -> member, squad-scoped, ok=1) so squad.graph can render the chain.
+  it('records a successful agent_call_edges row when a delegation completes (L14)', async () => {
+    const leaderId = seedAgent();
+    const m1 = seedAgent();
+    db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run('sq-edge', leaderId, JSON.stringify([m1]), 'in_progress', null, new Date().toISOString());
+    let leaderRan = false;
+    const fn: EngineChatFn = async (req, opts) => {
+      if (req.provider.id === leaderId) {
+        if (!leaderRan) {
+          leaderRan = true;
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'delegate_agent', arguments: { agent: m1, subtask: 'do x' } }] });
+        }
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'delta', delta: 'member result text' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'member result text', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-edge', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
+    try {
+      await runner.runLeader('do it');
+    } finally {
+      runner.teardown();
+    }
+    const edge = db.prepare('SELECT from_agent, to_agent, task_id, squad_id, ok FROM agent_call_edges').get() as { from_agent: string; to_agent: string; task_id: string; squad_id: string; ok: number };
+    expect(edge).toEqual({ from_agent: leaderId, to_agent: m1, task_id: 'sq-edge', squad_id: 'sq-edge', ok: 1 });
+  });
+
+  // M6 Task 5 (L14): a member run failure still records the edge with ok=0 so
+  // squad.graph can label it 'failed'; the error rethrows so the leader's run
+  // fails loudly (the graph write must never swallow the delegation error).
+  it('records a failed agent_call_edges row when a member run throws (L14)', async () => {
+    const leaderId = seedAgent();
+    const m1 = seedAgent();
+    db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run('sq-fail', leaderId, JSON.stringify([m1]), 'in_progress', null, new Date().toISOString());
+    let leaderRan = false;
+    const fn: EngineChatFn = async (req, opts) => {
+      if (req.provider.id === leaderId) {
+        if (!leaderRan) {
+          leaderRan = true;
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'delegate_agent', arguments: { agent: m1, subtask: 'do x' } }] });
+        }
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      throw new Error('member crashed');
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-fail', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
+    try {
+      await expect(runner.runLeader('do it')).rejects.toThrow('member crashed');
+    } finally {
+      runner.teardown();
+    }
+    const edge = db.prepare('SELECT from_agent, to_agent, task_id, squad_id, ok FROM agent_call_edges').get() as { from_agent: string; to_agent: string; task_id: string; squad_id: string; ok: number };
+    expect(edge).toEqual({ from_agent: leaderId, to_agent: m1, task_id: 'sq-fail', squad_id: 'sq-fail', ok: 0 });
+  });
+
   // M6 Task 4 (L13): the squad runner's buildContext applies the RECEIVING
   // member's context_passing strategy to the leader's delegation context.
   it('applies the member context_passing strategy in buildContext', async () => {
