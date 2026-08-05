@@ -16,6 +16,8 @@ export * from './office/writing';
 export * from './office/pdf';
 export * from './office/webpage';
 export * from './office/speech';
+export * from './office/files';
+export * from './office/dropzone';
 export * from './coding/diff';
 export * from './coding/mention';
 export * from './coding/filetree';

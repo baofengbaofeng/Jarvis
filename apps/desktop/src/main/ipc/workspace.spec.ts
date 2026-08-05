@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { applyMigrations } from '../db/migrations';
-import { createWorkspaceService } from './workspace';
+import { createWorkspaceService, createWorkspaceIpc } from './workspace';
 import { createAgentStore } from './agents';
 
 describe('workspace service', () => {
@@ -83,5 +83,42 @@ describe('workspace service', () => {
     const agent = agents.create({ name: 'Solo', systemPrompt: '', modelId: null, workspaceId: null });
     const workspace = createWorkspaceService(db);
     expect(workspace.loadContext(agent.id)).toEqual({ jarvisMd: '', agentMd: null });
+  });
+});
+
+// M5 Task 7 (L22): createWorkspaceIpc.copyFiles copies dropped "other" files
+// into the bound workspace by basename. The getWorkspace closure is injected so
+// these tests exercise the handler in isolation (no agent store needed).
+describe('workspace copyFiles IPC', () => {
+  let tmp: string;
+  const tmpDirs: string[] = [];
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'jv-copy-'));
+    tmpDirs.push(tmp);
+  });
+
+  afterAll(() => {
+    for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('copies source files into the workspace by basename', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'jv-src-'));
+    tmpDirs.push(srcDir);
+    const src = join(srcDir, 'notes.txt');
+    writeFileSync(src, 'hello');
+    const ipc = createWorkspaceIpc(() => tmp);
+    expect(ipc.copyFiles([src])).toEqual({ ok: true });
+    expect(readFileSync(join(tmp, 'notes.txt'), 'utf8')).toBe('hello');
+  });
+
+  it('returns an error when no workspace is bound', () => {
+    const ipc = createWorkspaceIpc(() => null);
+    expect(ipc.copyFiles(['/tmp/x.txt'])).toEqual({ ok: false, error: 'no workspace' });
+  });
+
+  it('rejects a missing source path and copies nothing', () => {
+    const ipc = createWorkspaceIpc(() => tmp);
+    expect(ipc.copyFiles([join(tmp, 'nope.txt')])).toEqual({ ok: false, error: expect.stringContaining('not a file') });
   });
 });

@@ -59,6 +59,9 @@ export class IpcRouter {
     const workspaceIpc = createWorkspaceIpc(getWorkspace);
     this.register('workspace.tree', () => workspaceIpc.tree());
     this.register('workspace.read', (_e, rel) => workspaceIpc.read(rel as string));
+    // M5 Task 7 (L22): dropped non-attach files are copied into the active
+    // workspace (see createWorkspaceIpc.copyFiles).
+    this.register('workspace.copyFiles', (_e, paths) => workspaceIpc.copyFiles(paths as string[]));
     // M4 Task 6 (E1/L27): code index IPC. The embeddingFn defaults to the
     // deterministic local hashEmbedding; production Provider embedding (M1
     // ModelRouter extension) is a later swap — construct IndexStore with a

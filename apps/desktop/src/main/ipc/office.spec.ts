@@ -196,3 +196,22 @@ describe('office video/image channels', () => {
     expect(body.size).toBe('1024x1024');
   });
 });
+
+// M5 Task 7 (D12): office.file.analyze routes by the ORIGINAL file name (drops
+// may carry a temp path), extracts text with the main-side parsers, then drains
+// it through chatText. Unsupported kinds must surface the clear extractFileText
+// error and never call chatText (no empty/undefined prompt). A real docx/xlsx/
+// pptx extraction would need binary fixtures — the routing contract is covered
+// here and in packages/core/src/office/files.spec.ts.
+describe('office.file.analyze', () => {
+  it('returns the unsupported-type error for an unclassifiable file and never calls chatText', async () => {
+    const router = makeRouter();
+    const chatCalls: unknown[] = [];
+    const modelRouter = { async *chat(req: unknown) { chatCalls.push(req); } };
+    registerOfficeIpc(router, modelRouter);
+    const h = router.handlers.get('office.file.analyze')!;
+    const res = await h({} as never, '/tmp/notes.txt', 'notes.txt');
+    expect(res).toEqual({ ok: false, error: 'unsupported file type: other' });
+    expect(chatCalls).toHaveLength(0);
+  });
+});

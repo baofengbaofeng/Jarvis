@@ -5,7 +5,7 @@ import type Database from 'better-sqlite3';
 // throws. The legacy build is the Node entry point — same getDocument API, no
 // DOM at import time. The renderer keeps the browser build (see PdfReaderPage).
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, isHttpUrl, parseVideoUrl, fetchVideoMeta, summarizeVideo, createOpenAiImageAdapter, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction, type VideoMeta } from '@jarvis/core';
+import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, isHttpUrl, parseVideoUrl, fetchVideoMeta, summarizeVideo, createOpenAiImageAdapter, extractFileText, extractPptx, type ChatChunk, type ChatRequest, type Extractor, type ModelMessage, type ModelRole, type OfficeFileKind, type ProviderAdapter, type SelectionAction, type WritingAction, type VideoMeta } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { SettingsStore } from './settings';
@@ -312,6 +312,45 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
       const size = req.size === '256x256' || req.size === '512x512' || req.size === '1024x1024' ? req.size : undefined;
       const urls = await createOpenAiImageAdapter({ apiKey: key, fetchImpl: deps.imageFetch }).generate({ prompt: req.prompt, size });
       return { ok: true, urls };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }) as (...a: unknown[]) => unknown);
+  // M5 Task 7 (D12): file upload analysis. The renderer sends the OS path plus
+  // the ORIGINAL name (a dropped file can arrive under a temp name), so
+  // classification keys on `name`, not `path`. Every extractor runs on the MAIN
+  // side (pdfjs-dist, mammoth, xlsx, jszip are Node deps; core stays
+  // parser-agnostic via extractFileText's injected-extractor design). Any
+  // failure — missing file, parser error, chatText error, unsupported kind — is
+  // caught and returned as { ok:false, error } so the IPC never rejects.
+  router.register('office.file.analyze', (async (_e, path: string, name: string) => {
+    try {
+      const extractors: Partial<Record<OfficeFileKind, Extractor>> = {
+        // extractPdf (Task 3) returns per-page texts; join for a flat document.
+        pdf: async () => (await extractPdf(path)).pageTexts.join('\n'),
+        docx: async () => (await import('mammoth')).extractRawText({ path }).then(r => r.value),
+        xlsx: async () => {
+          // sheet_to_csv renders each sheet's cell grid as comma-separated rows —
+          // the simplest faithful text surface for a spreadsheet (formulae come
+          // through as their cached values, matching what a human sees).
+          const XLSX = await import('xlsx');
+          const wb = XLSX.readFile(path);
+          return wb.SheetNames.map(sn => XLSX.utils.sheet_to_csv(wb.Sheets[sn])).filter(Boolean).join('\n');
+        },
+        pptx: async () => {
+          const JSZip = await import('jszip');
+          // extractPptx takes an injected unzip so core never depends on jszip.
+          const unzip = async (b: ArrayBuffer) => {
+            const zip = await JSZip.loadAsync(b);
+            return { file: async (n: string) => { const f = zip.file(n); return f ? await f.async('string') : null; } };
+          };
+          const data = readFileSync(path);
+          return extractPptx(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), unzip);
+        },
+      };
+      const text = await extractFileText({ path, name }, extractors);
+      const result = await chatText(modelRouter, [{ role: 'user', content: `请分析下面文件内容并给出要点:\n\n${text.slice(0, 12000)}` }]);
+      return { ok: true, result };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

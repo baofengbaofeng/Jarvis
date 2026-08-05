@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
-import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, copyFileSync, statSync } from 'node:fs';
+import { join, basename } from 'node:path';
 import { buildTree, isIgnored, parseIgnorePatterns, Sandbox } from '@jarvis/core';
 import { createAgentStore } from './agents';
 
@@ -57,5 +57,20 @@ export function createWorkspaceIpc(getWorkspace: () => string | null) {
     try { sb.assertRead(abs); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
     return { ok: true as const, content: readFileSync(abs, 'utf8') };
   };
-  return { tree, read };
+  // M5 Task 7 (L22): drag-dropped "other" files are copied into the workspace.
+  // basename() puts the destination INSIDE the workspace root no matter where the
+  // source lives (no escaping). The isFile() pre-pass serves double duty: it
+  // rejects missing/directory paths before any copy, and since '.'/'..' never
+  // stat as files, a hostile source path cannot smuggle a destination outside
+  // the workspace. Basename collisions are allowed per L22 (the later drop wins).
+  const copyFiles = (paths: string[]): { ok: boolean; error?: string } => {
+    const ws = getWorkspace();
+    if (!ws) return { ok: false, error: 'no workspace' };
+    for (const p of paths) {
+      if (!existsSync(p) || !statSync(p).isFile()) return { ok: false, error: `not a file: ${p}` };
+    }
+    for (const p of paths) copyFileSync(p, join(ws, basename(p)));
+    return { ok: true };
+  };
+  return { tree, read, copyFiles };
 }
