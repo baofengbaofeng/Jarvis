@@ -67,7 +67,6 @@
     "explain": "Explain",
     "summarize": "Summarize",
     "search": "Search",
-    "resultEmpty": "No result",
     "error": "Failed"
   },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }

@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { createAdapter, chatText, buildSelectionPrompt, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type SelectionAction } from '@jarvis/core';
+import { createAdapter, chatText, buildSelectionPrompt, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
 
@@ -44,16 +44,27 @@ export function createOfficeChatStream(db: Database.Database, secrets: SecureSto
 // waiter. The waiter re-checks the queue/error/done flags inside its executor so
 // a chunk that lands between the checks above and the waiter assignment cannot
 // be missed (wake() would have seen waiter === null).
-function streamAdapter(req: ChatRequest, apiKey: string): AsyncGenerator<{ deltaText?: string }> {
+//
+// Cancellation: an AbortController is created per stream and its signal is
+// forwarded to the adapter (same as tasks.ts' defaultChatFn forwards opts.signal).
+// The consumer loop is wrapped in try/finally so the controller is aborted the
+// moment the generator closes — whether on normal completion, a thrown chunk
+// error, or an early consumer return/break. Without this, the detached
+// adapter.chat() would keep streaming into the queue after the consumer moved
+// on. The detached promise's rejection (an abort surfaces as a rejected fetch)
+// is swallowed by the .catch below, so no unhandled rejection leaks.
+export function streamAdapter(req: ChatRequest, apiKey: string, deps: { createAdapter?: (type: ChatRequest['provider']['type']) => ProviderAdapter } = {}): AsyncGenerator<{ deltaText?: string }> {
   const queue: string[] = [];
   let error: Error | null = null;
   let done = false;
   let waiter: (() => void) | null = null;
   const wake = () => { const w = waiter; waiter = null; w?.(); };
+  const controller = new AbortController();
 
-  const adapter = createAdapter(req.provider.type);
+  const adapter = (deps.createAdapter ?? createAdapter)(req.provider.type);
   void adapter.chat(req, {
     apiKey,
+    signal: controller.signal,
     onChunk: (c: ChatChunk) => {
       if (c.kind === 'delta') queue.push(c.delta);
       else if (c.kind === 'error') error = new Error(c.error);
@@ -63,14 +74,20 @@ function streamAdapter(req: ChatRequest, apiKey: string): AsyncGenerator<{ delta
   }).catch((e: unknown) => { error = e instanceof Error ? e : new Error(String(e)); wake(); });
 
   return (async function* () {
-    while (true) {
-      if (queue.length) yield { deltaText: queue.shift() };
-      if (error) throw error;
-      if (done) return;
-      await new Promise<void>((r) => {
-        waiter = r;
-        if (queue.length || error || done) { waiter = null; r(); }
-      });
+    try {
+      while (true) {
+        if (queue.length) yield { deltaText: queue.shift() };
+        if (error) throw error;
+        if (done) return;
+        await new Promise<void>((r) => {
+          waiter = r;
+          if (queue.length || error || done) { waiter = null; r(); }
+        });
+      }
+    } finally {
+      // Consumer closed (return/break/throw): stop the adapter from streaming
+      // into the queue any longer.
+      controller.abort();
     }
   })();
 }

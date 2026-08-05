@@ -67,7 +67,6 @@
     "explain": "解释",
     "summarize": "总结",
     "search": "搜索",
-    "resultEmpty": "暂无结果",
     "error": "处理失败"
   },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }

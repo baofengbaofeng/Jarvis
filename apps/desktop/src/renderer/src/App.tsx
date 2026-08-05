@@ -15,12 +15,16 @@ import { CodingPanelPage } from './pages/CodingPanelPage';
 import { AgentListView } from './pages/AgentListView';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
 import { ApprovalModal } from './components/approval/ApprovalModal';
+import { SelectionMenu } from './components/office/SelectionMenu';
 
 export default function App() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
   return (
     <ThemeProvider>
       <ApprovalModal />
+      {/* D4 划词: a global mouseup floating overlay, so mount it once at the app
+          root (next to the equally-global ApprovalModal) rather than per page. */}
+      <SelectionMenu />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />

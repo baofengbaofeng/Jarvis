@@ -1,6 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import { getResources } from '@jarvis/i18n';
 import { SelectionMenu } from './SelectionMenu';
+
+// Same i18n bootstrap as the sibling component specs: init i18next with the
+// real @jarvis/i18n resources so useTranslation('common') resolves and the
+// component emits no NO_I18NEXT_INSTANCE warning under test.
+beforeAll(async () => {
+  await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
+});
+
+// vitest globals are off here, so @testing-library/react does not auto-cleanup
+// between tests; two renders would pile up in the shared jsdom DOM and both
+// components would answer the same data-testid query (each also has a live
+// document mouseup listener). Unmount after every test.
+afterEach(cleanup);
+
+const mockSelection = () => {
+  window.getSelection = () => ({ toString: () => 'hello', getRangeAt: () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, right: 10 }) }) } as unknown as Selection);
+};
 
 describe('SelectionMenu', () => {
   it('invokes office.selection on action click', async () => {
@@ -11,10 +31,24 @@ describe('SelectionMenu', () => {
     // fireEvent.mouseUp (not a raw document.dispatchEvent) so the native event
     // is wrapped in act() — otherwise React 19 schedules the setPos flush on a
     // microtask and the menu button is not yet in the DOM when we query it.
-    window.getSelection = () => ({ toString: () => 'hello', getRangeAt: () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, right: 10 }) }) } as unknown as Selection);
+    mockSelection();
     fireEvent.mouseUp(document);
     const btn = screen.getByTestId('sel-translate');
     fireEvent.click(btn);
     expect(invoke).toHaveBeenCalledWith('office.selection', expect.objectContaining({ action: 'translate' }));
+  });
+
+  it('surfaces selection.error and closes the menu when the channel rejects', async () => {
+    const invoke = vi.fn(async () => { throw new Error('no agent with a valid model binding'); });
+    (window as unknown as { jarvis: unknown }).jarvis = { invoke, onDidReceive: () => () => {} };
+    render(<SelectionMenu />);
+    mockSelection();
+    fireEvent.mouseUp(document);
+    fireEvent.click(screen.getByTestId('sel-translate'));
+    // The error is surfaced via the wired selection.error key.
+    expect(await screen.findByTestId('selection-error')).toBeTruthy();
+    expect(screen.getByTestId('selection-error').textContent).toBe('处理失败');
+    // setPos(null) runs in finally, so the floating menu must be dismissed.
+    expect(screen.queryByTestId('sel-translate')).toBeNull();
   });
 });

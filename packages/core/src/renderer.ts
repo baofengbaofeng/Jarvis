@@ -7,8 +7,11 @@
 // (`@jarvis/core/renderer`) instead of the full barrel. Every module re-exported
 // here is dependency-free (pure logic), so it is safe to bundle.
 //
-// Keep this list in sync with the pure modules under `src/coding/`; anything
-// that imports `node:*` (transitively or not) does NOT belong here.
+// Keep this list in sync with the pure modules under `src/coding/` and
+// `src/office/`; anything that imports `node:*` (transitively or not) does NOT
+// belong here. officeChat/selection are pure prompt/stream helpers (no node:*).
+export * from './office/officeChat';
+export * from './office/selection';
 export * from './coding/diff';
 export * from './coding/mention';
 export * from './coding/filetree';
