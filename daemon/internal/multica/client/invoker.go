@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,6 +65,13 @@ func (s *SubprocessAgentInvoker) RunTask(ctx context.Context, p *acp.TaskPayload
 		return TaskResult{}, perr
 	}
 	if err := cmd.Wait(); err != nil {
+		// C1: don't discard a completed result because the child exited non-zero
+		// (e.g. a non-fatal id-mapping log). If the agent emitted a result frame,
+		// trust it; otherwise surface the wait error.
+		if res.Status != "" {
+			log.Printf("jarvis-agent: wait error %v but a %q result frame was parsed; using parsed result", err, res.Status)
+			return res, nil
+		}
 		return TaskResult{}, err
 	}
 	return res, nil

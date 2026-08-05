@@ -63,6 +63,8 @@
   "runtime": {
     "mode": { "local": "Local mode", "runtime_registered": "Runtime registered", "runtime_busy": "Runtime busy" },
     "registered": "Registered: {{v}}",
+    "registeredYes": "yes",
+    "registeredNo": "no",
     "protocol": "Protocol",
     "server": "Multica Server",
     "heartbeat": "Last heartbeat",

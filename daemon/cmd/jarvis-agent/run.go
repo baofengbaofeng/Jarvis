@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,9 +48,10 @@ type HistoryLoader interface {
 	Load(ctx context.Context, conversationID string) ([]acp.InitialMessage, error)
 }
 
-// TaskRecorder persists the local<->multica task id mapping (L36).
+// TaskRecorder persists the local<->multica task id mapping (L36). payloadJSON is
+// minimal task info stored on the daemon-written `tasks` row (§13.3, C1).
 type TaskRecorder interface {
-	Record(ctx context.Context, localTaskID, multicaTaskID string) error
+	Record(ctx context.Context, localTaskID, multicaTaskID, payloadJSON string) error
 }
 
 // ProfileStore loads a runtime profile by id (H1.14).
@@ -136,8 +138,16 @@ func ExecuteTask(ctx context.Context, deps RunDeps, payload *acp.TaskPayload, op
 	_ = stream.Result(payload.TaskID, res.Status, res.Result, res.Model, res.Error)
 
 	if deps.Recorder != nil && opts.LocalTaskID != "" && payload.MulticaTaskID != "" {
-		if err := deps.Recorder.Record(ctx, opts.LocalTaskID, payload.MulticaTaskID); err != nil {
-			return fmt.Errorf("record id mapping: %w", err)
+		// Minimal task info persisted on the daemon-written tasks row (§13.3, C1).
+		minimal, _ := json.Marshal(map[string]any{
+			"taskId":        payload.TaskID,
+			"multicaTaskId": payload.MulticaTaskID,
+			"instruction":   payload.Instruction,
+		})
+		// A Record failure must not nuke an otherwise-completed result: the mapping
+		// error is surfaced via the log but the task stays completed (C1).
+		if err := deps.Recorder.Record(ctx, opts.LocalTaskID, payload.MulticaTaskID, string(minimal)); err != nil {
+			log.Printf("jarvis-agent: record id mapping %s->%s: %v", opts.LocalTaskID, payload.MulticaTaskID, err)
 		}
 	}
 	return nil

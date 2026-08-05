@@ -3,13 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/client"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 )
 
@@ -32,10 +36,14 @@ type fakeRecorder struct {
 	calls [][2]string
 }
 
-func (f *fakeRecorder) Record(_ context.Context, local, multica string) error {
+func (f *fakeRecorder) Record(_ context.Context, local, multica, _ string) error {
 	f.calls = append(f.calls, [2]string{local, multica})
 	return nil
 }
+
+type failingRecorder struct{ err error }
+
+func (f *failingRecorder) Record(context.Context, string, string, string) error { return f.err }
 
 type fakeProfiles struct{ prof *db.Profile }
 
@@ -132,6 +140,158 @@ func TestExecuteTaskRunnerErrorStreamsFailed(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte(`"status":"failed"`)) {
 		t.Fatalf("no failed frame: %s", buf.String())
+	}
+}
+
+// mustTasksTable creates the main-owned tasks table (same shape migration v1 +
+// v9 produce) with NO pre-existing rows, for the C1 claim-chain regression.
+func mustTasksTable(t *testing.T, d *sql.DB) {
+	t.Helper()
+	if _, err := d.Exec(`CREATE TABLE tasks (
+		id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
+		payload_json TEXT NOT NULL, result_json TEXT, error_json TEXT,
+		multica_task_id TEXT UNIQUE, created_at TEXT NOT NULL, started_at TEXT, completed_at TEXT
+	)`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestExecuteTaskRecordsMappingAgainstRealSQLite is the C1 regression at the
+// ExecuteTask level: against a SQLite DB with NO pre-existing tasks row, the
+// L36 mapping must persist and the streamed result must be completed (not
+// failed). Before the fix, sqliteTaskRecorder.Record -> MapTaskIDs hit
+// RowsAffected==0 and ExecuteTask returned an error after streaming the result.
+func TestExecuteTaskRecordsMappingAgainstRealSQLite(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	mustTasksTable(t, d)
+
+	runner := &fakeRunner{res: RunResult{Status: "completed", Result: "done", Model: "m1"}}
+	deps, _ := testDeps(runner, &fakeHistory{}, &sqliteTaskRecorder{d: d}, &fakeProfiles{})
+	var buf bytes.Buffer
+	sw := runtime.NewStreamWriter(&buf)
+
+	payload := &acp.TaskPayload{TaskID: "t-9", MulticaTaskID: "mt-9", Instruction: "fix it"}
+	if err := ExecuteTask(context.Background(), deps, payload, TaskOpts{LocalTaskID: "local-9"}, sw); err != nil {
+		t.Fatalf("ExecuteTask should not fail when the recorder ensures the row: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte(`"status":"completed"`)) {
+		t.Fatalf("expected completed result frame: %s", buf.String())
+	}
+	got, err := db.MulticaTaskIDByLocal(context.Background(), d, "local-9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "mt-9" {
+		t.Fatalf("mapping not persisted: got %q", got)
+	}
+}
+
+// TestExecuteTaskRecordFailureIsNonFatal proves a Record failure logs but does
+// not fail an otherwise-completed task (C1 "Also reconsider").
+func TestExecuteTaskRecordFailureIsNonFatal(t *testing.T) {
+	runner := &fakeRunner{res: RunResult{Status: "completed", Result: "done", Model: "m1"}}
+	rec := &failingRecorder{err: errors.New("db closed")}
+	deps, _ := testDeps(runner, &fakeHistory{}, rec, &fakeProfiles{})
+	var buf bytes.Buffer
+	sw := runtime.NewStreamWriter(&buf)
+
+	payload := &acp.TaskPayload{TaskID: "t-10", MulticaTaskID: "mt-10", Instruction: "go"}
+	if err := ExecuteTask(context.Background(), deps, payload, TaskOpts{LocalTaskID: "local-10"}, sw); err != nil {
+		t.Fatalf("record failure should not fail the task: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte(`"status":"completed"`)) {
+		t.Fatalf("expected completed result frame despite record failure: %s", buf.String())
+	}
+}
+
+// chainAPI is a minimal client.ClientAPI that records the terminal result.
+type chainAPI struct {
+	mu      sync.Mutex
+	results []client.TaskResult
+}
+
+func (f *chainAPI) Register(context.Context, client.RegisterRequest) (client.RegisterResponse, error) {
+	return client.RegisterResponse{ClientID: "c1", HeartbeatSec: 15, PollSec: 3}, nil
+}
+func (f *chainAPI) Heartbeat(context.Context, string, client.HeartbeatStatus) error { return nil }
+func (f *chainAPI) Poll(context.Context, string) ([]client.ClaimedTask, error)      { return nil, nil }
+func (f *chainAPI) StreamProgress(context.Context, string, string, runtime.StreamChunk) error {
+	return nil
+}
+func (f *chainAPI) SendResult(_ context.Context, _, _ string, r client.TaskResult) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.results = append(f.results, r)
+	return nil
+}
+func (f *chainAPI) Ack(context.Context, string, string, bool) error { return nil }
+
+func (f *chainAPI) resultCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.results)
+}
+
+// TestClaimToExecuteTaskChainRealSQLite is the C1 regression over the real chain
+// (claim -> ExecuteTask -> Record -> result): a claimed task handled against a
+// SQLite DB with NO pre-existing tasks row must end with a completed result (not
+// failed) and a persisted L36 mapping.
+func TestClaimToExecuteTaskChainRealSQLite(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	mustTasksTable(t, d)
+
+	q := runtime.NewQueue(1, 2)
+	api := &chainAPI{}
+	handler := &client.ClaimHandler{
+		API:      api,
+		Queue:    q,
+		ClientID: func() string { return "c1" },
+		Exec: func(ctx context.Context, p *acp.TaskPayload, onChunk func(runtime.StreamChunk)) (client.TaskResult, error) {
+			// Emulate SubprocessAgentInvoker.RunTask: run ExecuteTask (which records
+			// the L36 mapping via sqliteTaskRecorder) and forward the outcome.
+			deps := RunDeps{
+				Runner:   &fakeRunner{res: RunResult{Status: "completed", Result: "done", Model: "m1"}},
+				History:  &fakeHistory{},
+				Recorder: &sqliteTaskRecorder{d: d},
+				Pool:     runtime.NewWorkspacePoolFS("/ws", &memPoolFS{}),
+				Profiles: &fakeProfiles{},
+			}
+			var buf bytes.Buffer
+			if err := ExecuteTask(ctx, deps, p, TaskOpts{LocalTaskID: p.TaskID}, runtime.NewStreamWriter(&buf)); err != nil {
+				return client.TaskResult{Status: "failed", Error: err.Error()}, err
+			}
+			return client.TaskResult{Status: "completed", Result: "done", Model: "m1", FinishedAt: time.Now().Unix()}, nil
+		},
+	}
+	task := client.ClaimedTask{TaskID: "t-chain", MulticaTaskID: "mt-chain", Payload: []byte(`{"taskId":"t-chain","multicaTaskId":"mt-chain","instruction":"fix it"}`)}
+	if err := handler.HandleClaims(context.Background(), []client.ClaimedTask{task}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(2 * time.Second)
+	for api.resultCount() < 1 {
+		select {
+		case <-deadline:
+			t.Fatal("no result sent")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if got := api.results[0].Status; got != "completed" {
+		t.Fatalf("result not completed: %+v", api.results[0])
+	}
+	got, err := db.MulticaTaskIDByLocal(context.Background(), d, "t-chain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "mt-chain" {
+		t.Fatalf("mapping not persisted: got %q", got)
 	}
 }
 

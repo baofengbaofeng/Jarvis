@@ -144,6 +144,21 @@ func UpsertProfile(ctx context.Context, d *sql.DB, p Profile) error {
 	return nil
 }
 
+// EnsureTaskRow creates the daemon-owned local `tasks` row for a Multica-claimed
+// task if it does not already exist (§13.3: the M7+ Multica path is daemon-written,
+// so the daemon legitimately writes `tasks` for claimed tasks). INSERT OR IGNORE
+// keeps a row the main app already created (or a retry) intact, and guarantees a
+// row exists so MapTaskIDs' UPDATE finds it (L36, C1).
+func EnsureTaskRow(ctx context.Context, d *sql.DB, id, agentID, payloadJSON string) error {
+	_, err := d.ExecContext(ctx, `
+		INSERT OR IGNORE INTO tasks (id, agent_id, status, payload_json, created_at)
+		VALUES (?, ?, 'queued', ?, datetime('now'))`, id, agentID, payloadJSON)
+	if err != nil {
+		return fmt.Errorf("ensure task row %s: %w", id, err)
+	}
+	return nil
+}
+
 // MapTaskIDs links a local task to its Multica task id (L36). A nonzero
 // RowsAffected is required: mapping a nonexistent local task would otherwise
 // silently succeed and lose the L36 mapping.

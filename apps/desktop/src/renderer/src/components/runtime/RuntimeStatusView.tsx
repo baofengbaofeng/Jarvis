@@ -20,10 +20,13 @@ export function RuntimeStatusView() {
   return (
     <div data-testid="runtime-status" className="space-y-2 p-4">
       <ModeIndicator mode={mode} />
-      <p data-testid="runtime-registered">{t('runtime.registered', { v: status.registered ? 'yes' : 'no' })}</p>
+      <p data-testid="runtime-registered">
+        {t('runtime.registered', { v: status.registered ? t('runtime.registeredYes') : t('runtime.registeredNo') })}
+      </p>
       <p>{t('runtime.protocol')}: {status.protocol}</p>
       <p>{t('runtime.server')}: {status.serverUrl || '-'}</p>
-      <p>{t('runtime.heartbeat')}: {status.lastHeartbeatAt ? new Date(status.lastHeartbeatAt).toLocaleTimeString() : '-'}</p>
+      {/* I2: the daemon emits lastHeartbeatAt in seconds (time.Now().Unix()); new Date expects ms. */}
+      <p>{t('runtime.heartbeat')}: {status.lastHeartbeatAt ? new Date(status.lastHeartbeatAt * 1000).toLocaleTimeString() : '-'}</p>
       <p>{t('runtime.activeTasks')}: {status.activeTasks}</p>
     </div>
   );

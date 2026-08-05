@@ -37,21 +37,33 @@ func main() {
 	if multicaURL != "" {
 		api := &client.HTTPClientAPI{BaseURL: multicaURL, HTTP: &http.Client{Timeout: 10 * time.Second}}
 		cs = client.NewConflictStore()
+		pool := runtime.NewWorkspacePool(defaultWorkspaces())
+		// cl is created before the handler so ClientID() can serve the
+		// server-assigned id from Register (I3) rather than the literal "jarvis".
+		cl := client.NewClient(api, client.ClientOptions{Name: "jarvis", Version: "0.1.0", Concurrency: perAgent})
 		handler := &client.ClaimHandler{
 			API:       api,
 			Queue:     q,
-			ClientID:  func() string { return "jarvis" },
+			ClientID:  func() string { return cl.RegisteredID() },
 			AgentID:   "jarvis",
-			Exec:      agentExec(&client.SubprocessAgentInvoker{}, st),
+			Exec:      agentExec(&client.SubprocessAgentInvoker{}, st, pool, client.DefaultSkillFS(), cs, acp.Injection{}),
 			Recorder:  &sqliteRecorder{},
 			Conflicts: cs,
 		}
-		cl := client.NewClient(api, client.ClientOptions{Name: "jarvis", Version: "0.1.0", Concurrency: perAgent})
 		go func() {
+			defer func() {
+				// I1: once the Serve loop exits, the client is no longer registered
+				// (a deferred clear keeps the L39 mode from lying).
+				st.mu.Lock()
+				st.registered = false
+				st.mu.Unlock()
+			}()
 			if err := cl.Serve(ctx, func() client.HeartbeatStatus {
 				st.mu.Lock()
 				defer st.mu.Unlock()
 				st.registered = true
+				// I4: an idle registered daemon still reports a fresh heartbeat.
+				st.heartbeat = time.Now().Unix()
 				return client.HeartbeatStatus{Status: heartbeatStatus(q), ActiveTasks: q.Status().ActiveTasks, UpdatedAt: time.Now().Unix()}
 			}, func(tasks []client.ClaimedTask) { _ = handler.HandleClaims(ctx, tasks) }); err != nil {
 				log.Printf("multica client stopped: %v", err)
@@ -153,8 +165,10 @@ func heartbeatStatus(q *runtime.Queue) string {
 	return "idle"
 }
 
-// agentExec 把任务交给 jarvis-agent 子进程执行并转发流帧(S6 端到端)。
-func agentExec(invoker client.AgentInvoker, st *runtimeState) client.ExecFunc {
+// agentExec 把任务交给 jarvis-agent 子进程执行并转发流帧(S6 端到端)。C2 接线:
+// 分配 task workspace → applyInjection(合并注入 + H1.7 skill 落盘)→ L38 冲突写入
+// ConflictStore → 把合并后的 payload(而非原始 payload)交给 invoker。
+func agentExec(invoker client.AgentInvoker, st *runtimeState, pool *runtime.WorkspacePool, skillFS client.SkillFS, conflicts *client.ConflictStore, local acp.Injection) client.ExecFunc {
 	return func(ctx context.Context, p *acp.TaskPayload, onChunk func(runtime.StreamChunk)) (client.TaskResult, error) {
 		st.mu.Lock()
 		st.busy = true
@@ -165,8 +179,28 @@ func agentExec(invoker client.AgentInvoker, st *runtimeState) client.ExecFunc {
 			st.busy = false
 			st.mu.Unlock()
 		}()
-		res, err := invoker.RunTask(ctx, p, onChunk)
-		return res, err
+
+		ws, err := pool.Allocate(p.TaskID)
+		if err != nil {
+			return client.TaskResult{Status: "failed", Error: err.Error()}, err
+		}
+		defer func() { _ = pool.Cleanup(p.TaskID) }()
+
+		merged, sc, mc, err := client.ApplyInjection(ctx, p, local, ws, skillFS)
+		if err != nil {
+			return client.TaskResult{Status: "failed", Error: err.Error()}, err
+		}
+		if conflicts != nil && (len(sc) > 0 || len(mc) > 0) {
+			items := make([]client.ConflictItem, 0, len(sc)+len(mc))
+			for i := range sc {
+				items = append(items, client.ConflictItem{TaskID: p.TaskID, Skill: &sc[i]})
+			}
+			for i := range mc {
+				items = append(items, client.ConflictItem{TaskID: p.TaskID, MCP: &mc[i]})
+			}
+			conflicts.Add(items...)
+		}
+		return invoker.RunTask(ctx, merged, onChunk)
 	}
 }
 
@@ -188,12 +222,18 @@ func defaultDBPath() string {
 
 type sqliteRecorder struct{}
 
+// Record persists the L36 mapping for a Multica-claimed task. §13.3 makes the
+// M7+ Multica path daemon-written: ensure the local `tasks` row exists before
+// MapTaskIDs' UPDATE so the mapping is not lost on a nonexistent row (C1).
 func (s *sqliteRecorder) Record(ctx context.Context, local, multica string) error {
 	d, err := db.Open(defaultDBPath())
 	if err != nil {
 		return err
 	}
 	defer d.Close()
+	if err := db.EnsureTaskRow(ctx, d, local, "jarvis", "{}"); err != nil {
+		return err
+	}
 	return db.MapTaskIDs(ctx, d, local, multica)
 }
 

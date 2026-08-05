@@ -63,6 +63,8 @@
   "runtime": {
     "mode": { "local": "本地模式", "runtime_registered": "Runtime 已注册", "runtime_busy": "Runtime 忙碌" },
     "registered": "注册状态: {{v}}",
+    "registeredYes": "已注册",
+    "registeredNo": "未注册",
     "protocol": "协议",
     "server": "Multica Server",
     "heartbeat": "最近心跳",

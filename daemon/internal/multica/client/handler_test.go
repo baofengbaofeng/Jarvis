@@ -170,7 +170,7 @@ func (f *fakeSkillFS) MkdirAll(d string) error { f.dirs[d] = true; return nil }
 func TestApplyInjectionCopiesSkills(t *testing.T) {
 	fs := &fakeSkillFS{dirs: map[string]bool{}}
 	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"s1"}}
-	merged, sc, mc, err := applyInjection(context.Background(), p, acp.Injection{}, "/ws/t1", fs)
+	merged, sc, mc, err := ApplyInjection(context.Background(), p, acp.Injection{}, "/ws/t1", fs)
 	if err != nil {
 		t.Fatal(err)
 	}

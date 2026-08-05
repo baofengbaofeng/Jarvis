@@ -37,7 +37,14 @@ func (s *sqliteHistoryLoader) Load(ctx context.Context, conversationID string) (
 
 type sqliteTaskRecorder struct{ d *sql.DB }
 
-func (s *sqliteTaskRecorder) Record(ctx context.Context, local, multica string) error {
+// Record persists the L36 mapping for a Multica-claimed task. §13.3 makes the
+// M7+ Multica path daemon-written, so the recorder first ensures the local
+// `tasks` row exists (INSERT OR IGNORE) before MapTaskIDs' UPDATE (C1: nothing
+// else creates the row for a claim).
+func (s *sqliteTaskRecorder) Record(ctx context.Context, local, multica, payloadJSON string) error {
+	if err := db.EnsureTaskRow(ctx, s.d, local, "jarvis", payloadJSON); err != nil {
+		return err
+	}
 	return db.MapTaskIDs(ctx, s.d, local, multica)
 }
 

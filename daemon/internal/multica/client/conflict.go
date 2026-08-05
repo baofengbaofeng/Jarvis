@@ -22,10 +22,25 @@ type ConflictStore struct {
 
 func NewConflictStore() *ConflictStore { return &ConflictStore{} }
 
+// maxConflicts caps the retained conflict list so a long-running daemon cannot
+// grow it without bound (M2). Resolved items are dropped on Add — the UI only
+// renders unresolved conflicts — and the tail (most recent) is kept past the cap.
+const maxConflicts = 100
+
 func (c *ConflictStore) Add(items ...ConflictItem) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.items = append(c.items, items...)
+	keep := c.items[:0]
+	for _, it := range c.items {
+		if !it.Resolved {
+			keep = append(keep, it)
+		}
+	}
+	c.items = keep
+	if len(c.items) > maxConflicts {
+		c.items = append([]ConflictItem{}, c.items[len(c.items)-maxConflicts:]...)
+	}
 }
 
 func (c *ConflictStore) Conflicts() []ConflictItem {

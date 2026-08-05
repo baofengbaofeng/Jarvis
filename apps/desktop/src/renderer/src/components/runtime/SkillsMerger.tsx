@@ -39,7 +39,7 @@ export function SkillsMerger() {
       {pending.length === 0 && <p data-testid="no-conflicts">{t('runtime.skillsMerger.none')}</p>}
       <ul>
         {pending.map((c) => (
-          <li key={nameOf(c)} data-testid="conflict-item">
+          <li key={`${c.taskId}-${nameOf(c)}`} data-testid="conflict-item">
             <span>{nameOf(c)}</span>
             <button onClick={() => void resolve(c, 'local')}>{t('runtime.skillsMerger.local')}</button>
             <button onClick={() => void resolve(c, 'multica')}>{t('runtime.skillsMerger.multica')}</button>
