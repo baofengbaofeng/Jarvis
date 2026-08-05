@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { MessageBus, CallGraph, createSquad, detectCycle, squadTransition, runSquad, runWorkflow, type Squad, type SquadEvent, type SquadRouterDeps, type SquadStatus, type Workflow } from '@jarvis/core';
+import { MessageBus, CallGraph, createSquad, detectCycle, squadTransition, runSquad, runWorkflow, type Squad, type SquadEvent, type SquadResult, type SquadRouterDeps, type SquadStatus, type Workflow } from '@jarvis/core';
 import { IpcEvent } from '@jarvis/protocol';
 
 // The bus is a module-level singleton: every M6 squad feature (task
@@ -26,6 +26,26 @@ export function createBusPersist(db: Database.Database, bus: MessageBus): () => 
   const ins = db.prepare('INSERT INTO agent_messages (id, kind, from_agent, to_agent, task_id, payload_json, created_at) VALUES (?,?,?,?,?,?,?)');
   return bus.subscribe(m => {
     ins.run(m.id, m.kind, m.from, m.to, m.taskId ?? null, JSON.stringify(m.payload), new Date(m.ts).toISOString());
+  });
+}
+
+// K5 (M6 Task 10): subscribe the shared bus and forward squad-related messages
+// to the renderer as 'squad:event' — a SquadEvent { agent, ts, kind, detail }.
+// The renderer's squad-store routes it into the module-level log the
+// TimelineView renders (the S5 stream surface). Only squad-shaped kinds
+// (delegate/response/complete/request/log) are forwarded; the payload is
+// stringified because the SquadEvent.detail contract is a string. Returns the
+// unsubscribe handle so IpcRouter.dispose can drop it alongside the persist
+// subscription.
+export function createSquadEventPush(bus: MessageBus, getWindow: () => BrowserWindow | null): () => void {
+  return bus.subscribe(m => {
+    if (m.kind !== 'delegate' && m.kind !== 'response' && m.kind !== 'complete' && m.kind !== 'request' && m.kind !== 'log') return;
+    getWindow()?.webContents.send(IpcEvent.squadEvent, {
+      agent: m.from,
+      ts: m.ts,
+      kind: m.kind,
+      detail: `${m.to === '*' ? '' : `→ ${m.to} `}${JSON.stringify(m.payload)}`
+    });
   });
 }
 
@@ -67,6 +87,13 @@ export interface SquadRunner extends SquadRouterDeps {
   // on the M4 approval gate) as a squad member run, so concurrent nodes cannot
   // leak into each other.
   runAgentOnce(agentId: string, input: string): Promise<string>;
+  // K5 (M6 Task 10): the last squad.start result ({ summary, members }). The
+  // squads table row only carries identity + status, and the squad:status event
+  // only carries { id, state } — so squad.current stashes the richer result
+  // here at start time and reads it back to drive the ApprovalPanel with FULL
+  // detail (the Task 8 summary/members gap). Optional so existing fakes and the
+  // workflow-only path (runAgentOnce) typecheck unchanged.
+  lastResult?: SquadResult | null;
 }
 
 export interface SquadIpcDeps {
@@ -95,23 +122,56 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
     }
   });
 
+  // M6 Task 5 (L14): shared graph loader — query a squad's delegation edges
+  // (agent_call_edges by squad_id, migration v7) and fold them into a CallGraph.
+  // Querying by squad_id decouples the graph from the delegation taskId — in
+  // this single-active milestone the delegation taskId equals the squad row id,
+  // but the squad's bound task_id is a separate optional column, so keying on
+  // it would miss edges. toRows() keeps the renderer contract to {from,to,label}.
+  const loadGraph = (squadId: string): CallGraph => {
+    const rows = deps.db.prepare('SELECT from_agent, to_agent, task_id, ok, created_at FROM agent_call_edges WHERE squad_id = ? ORDER BY created_at').all(squadId) as Array<{ from_agent: string; to_agent: string; task_id: string | null; ok: number; created_at: string }>;
+    const graph = new CallGraph();
+    for (const r of rows) graph.addEdge(r.from_agent, r.to_agent, { taskId: r.task_id ?? undefined, ok: r.ok === 1 });
+    return graph;
+  };
+
   // M6 Task 5 (L14): squad.graph returns a squad's delegation call chain
   // (leader -> member edges recorded by delegateRoute in tasks.ts) as
-  // react-flow rows plus a cycle flag from detectCycle. Querying by squad_id
-  // (migration v7) decouples the graph from the delegation taskId — in this
-  // single-active milestone the delegation taskId equals the squad row id, but
-  // the squad's bound task_id is a separate optional column, so keying on it
-  // would miss edges. toRows() keeps the renderer contract to {from,to,label};
-  // the cycle flag is cheap extra signal for a repeated (from,to,taskId)
-  // delegation the UI can surface immediately.
+  // react-flow rows plus a cycle flag from detectCycle. The cycle flag is cheap
+  // extra signal for a repeated (from,to,taskId) delegation the UI can surface
+  // immediately.
   register('squad.graph', (_e, args) => {
     try {
       const { squadId } = (args ?? {}) as { squadId: string };
       if (!store.list().some(s => s.id === squadId)) return { ok: false as const, error: `squad not found: ${squadId}` };
-      const rows = deps.db.prepare('SELECT from_agent, to_agent, task_id, ok, created_at FROM agent_call_edges WHERE squad_id = ? ORDER BY created_at').all(squadId) as Array<{ from_agent: string; to_agent: string; task_id: string | null; ok: number; created_at: string }>;
-      const graph = new CallGraph();
-      for (const r of rows) graph.addEdge(r.from_agent, r.to_agent, { taskId: r.task_id ?? undefined, ok: r.ok === 1 });
+      const graph = loadGraph(squadId);
       return { ok: true as const, rows: graph.toRows(), cycle: detectCycle(graph.getEdges()) };
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  // K5 (M6 Task 10): squad.current returns the ACTIVE (most recent) squad's FULL
+  // state — identity + status from the squads row, summary/members from the last
+  // squad.start result (stashed on the runner), and graphRows from the Task 5
+  // graph query. This is what lets SquadViewPage drive the ApprovalPanel with
+  // real review detail, closing the Task 8 gap where squad:status events only
+  // carried { id, state }. No-active-squad => { ok:true, squad:null } (a normal
+  // "nothing to show", not an error).
+  register('squad.current', (_e, _args) => {
+    try {
+      const rows = store.list();
+      if (rows.length === 0) return { ok: true as const, squad: null };
+      const s = rows[0];
+      const last = deps.runner.lastResult;
+      const detail = last && last.squadId === s.id ? last : { summary: '', members: [] };
+      return {
+        ok: true as const,
+        squad: {
+          id: s.id, leaderAgentId: s.leaderAgentId, memberAgentIds: s.memberAgentIds, status: s.status,
+          summary: detail.summary, members: detail.members, graphRows: loadGraph(s.id).toRows()
+        }
+      };
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
@@ -140,6 +200,11 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
         const result = await runSquad(squad, input, deps.runner);
         store.transition(id, 'summarized');
         emit(id, result.status);
+        // K5 (M6 Task 10): stash the full summary/members so squad.current can
+        // serve it later (the squads row only carries identity + status). Done
+        // before the finally teardown — teardown clears the run context, not
+        // this review detail.
+        deps.runner.lastResult = result;
         return { ok: true as const, result };
       } catch (e) {
         // A mid-run failure moves the squad to 'failed' so the UI does not sit

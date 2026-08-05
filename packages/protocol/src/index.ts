@@ -35,6 +35,10 @@ export const IpcEvent = {
   taskComplete: 'task:complete',
   taskFailed: 'task:failed',
   squadStatus: 'squad:status',
+  // K5 (M6 Task 10): main pushes squad/agent events (bus subscription + task
+  // log) as { agent, ts, kind, detail } so the renderer's squad timeline
+  // streams live.
+  squadEvent: 'squad:event',
   // I5 (M6 Task 8): main pushes terminal task/squad outcomes as in-app toasts.
   toastPush: 'toast:push',
 } as const;

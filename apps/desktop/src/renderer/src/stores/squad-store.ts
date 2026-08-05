@@ -1,4 +1,37 @@
 import { create } from 'zustand';
+import { IpcEvent } from '@jarvis/protocol';
+
+// K5 (M6 Task 10): a single squad/agent event on the timeline. Main pushes
+// these on 'squad:event' (bus subscription + task log); the renderer's
+// TimelineView renders them in arrival order.
+export interface SquadEvent { agent: string; ts: number; kind: string; detail: string }
+
+// K5 (M6 Task 10): module-level squad event log. Capped at 200 so a
+// long-lived session cannot grow unbounded (same cap the brief specifies).
+let events: SquadEvent[] = [];
+const listeners = new Set<(es: SquadEvent[]) => void>();
+export function pushSquadEvent(e: SquadEvent): void {
+  events = [...events, e].slice(-200);
+  listeners.forEach(l => l(events));
+}
+export function subscribeSquadEvents(fn: (es: SquadEvent[]) => void): () => void {
+  listeners.add(fn); return () => listeners.delete(fn);
+}
+// Test-only reset so specs start from an empty log (module-level state; a stale
+// event from an earlier spec would otherwise bleed into the next TimelineView).
+export function clearSquadEvents(): void {
+  events = [];
+  listeners.forEach(l => l(events));
+}
+
+// K5 (M6 Task 10): main pushes every squad/agent event on 'squad:event'.
+// Module-level guard matches toast-store/task-store so the subscription only
+// installs in the real preload bridge (specs without window.jarvis skip it).
+if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
+  window.jarvis.onDidReceive(IpcEvent.squadEvent, (payload) => {
+    pushSquadEvent(payload as SquadEvent);
+  });
+}
 
 export interface SquadReview {
   id: string;

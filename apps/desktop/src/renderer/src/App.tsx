@@ -14,6 +14,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { OfficePage } from './pages/OfficePage';
 import { CodingPanelPage } from './pages/CodingPanelPage';
 import { AgentListView } from './pages/AgentListView';
+import { SquadViewPage } from './pages/SquadViewPage';
 import { DaemonManagementPage } from './pages/DaemonManagementPage';
 import { ApprovalModal } from './components/approval/ApprovalModal';
 import { SelectionMenu } from './components/office/SelectionMenu';
@@ -51,6 +52,9 @@ export default function App() {
           <Route path="/agents" element={<AgentListView />} />
           <Route path="/coding" element={<CodingPanelPage />} />
           <Route path="/office" element={<OfficePage />} />
+          {/* K5/L14 (M6 Task 10): the squad view — timeline + call graph +
+              ApprovalPanel driven by the FULL squad.current state. */}
+          <Route path="/squad" element={<SquadViewPage />} />
           <Route path="/settings" element={<SettingsLayout />}>
             <Route path="providers" element={<ProviderSettingsPage />} />
             <Route path="mcp" element={<McpSettingsPage />} />

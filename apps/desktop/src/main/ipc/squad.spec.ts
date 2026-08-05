@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { MessageBus, type Squad, type SquadRouterDeps } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
-import { createBusPersist, getMessageBus, createSquadStore, registerSquadIpc, type SquadRunner } from './squad';
+import { createBusPersist, createSquadEventPush, getMessageBus, createSquadStore, registerSquadIpc, type SquadRunner } from './squad';
 
 // M6 Task 1 (L12): the main-owned agent_messages table must persist every
 // message posted to the shared bus. getMessageBus is a process-wide singleton,
@@ -208,6 +208,40 @@ describe('squad IPC (F8/F9)', () => {
     expect(r.cycle).toBe(false);
   });
 
+  // K5 (M6 Task 10): squad.current returns the FULL state of the most recent
+  // squad — identity + status from the squads row, summary/members from the
+  // last squad.start result (stashed on the runner), graphRows from the graph
+  // query. This is what lets SquadViewPage drive the ApprovalPanel with real
+  // review detail (the Task 8 summary/members gap).
+  it('squad.current returns the full state of the most recent squad (K5)', async () => {
+    register();
+    const create = handlers.get('squad.create')!;
+    const start = handlers.get('squad.start')!;
+    const current = handlers.get('squad.current')!;
+    const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1', 'm2'] }) as { id: string };
+    await start({}, { id, input: 'do the thing' });
+    // Seed one delegation edge so current embeds graphRows from the graph query.
+    db.prepare('INSERT INTO agent_call_edges (id, from_agent, to_agent, task_id, squad_id, ok, created_at) VALUES (?,?,?,?,?,?,?)')
+      .run('e1', 'leader', 'm1', id, id, 1, '2026-01-01T00:00:00.000Z');
+    const r = current({}) as { ok: boolean; squad: { id: string; leaderAgentId: string; memberAgentIds: string[]; status: string; summary: string; members: Array<{ agent: string; result: string }>; graphRows: Array<{ from: string; to: string; label: string }> } };
+    expect(r.ok).toBe(true);
+    expect(r.squad.id).toBe(id);
+    expect(r.squad.leaderAgentId).toBe('leader');
+    expect(r.squad.memberAgentIds).toEqual(['m1', 'm2']);
+    expect(r.squad.status).toBe('in_review');
+    expect(r.squad.summary).toContain('result of m1');
+    expect(r.squad.members).toHaveLength(2);
+    expect(r.squad.graphRows).toEqual([{ from: 'leader', to: 'm1', label: 'ok' }]);
+  });
+
+  it('squad.current returns { ok:true, squad:null } when no squad exists', () => {
+    register();
+    const current = handlers.get('squad.current')!;
+    const r = current({}) as { ok: boolean; squad: null };
+    expect(r.ok).toBe(true);
+    expect(r.squad).toBeNull();
+  });
+
   it('squad.graph flags a repeated delegation as a cycle', async () => {
     register();
     const create = handlers.get('squad.create')!;
@@ -316,5 +350,38 @@ describe('squad IPC (F8/F9)', () => {
       expect(r.ok).toBe(false);
       expect(r.error).toContain('NOPE');
     });
+  });
+});
+
+// K5 (M6 Task 10): createSquadEventPush forwards squad-shaped bus messages to
+// the renderer as 'squad:event' (a SquadEvent { agent, ts, kind, detail }) so
+// the squad timeline streams live. The unsubscribe handle is what IpcRouter
+// dispose() relies on, so dropping the push must stop the forwarding.
+describe('createSquadEventPush (K5)', () => {
+  it('forwards squad-shaped bus messages to the renderer as squad:event', () => {
+    const bus = new MessageBus();
+    const sent: Array<{ channel: string; payload: unknown }> = [];
+    const fakeWindow = { webContents: { send: (channel: string, payload: unknown) => sent.push({ channel, payload }) } };
+    createSquadEventPush(bus, () => fakeWindow as unknown as import('electron').BrowserWindow);
+    bus.post({ kind: 'delegate', from: 'leader', to: 'm1', taskId: 't1', payload: { subtask: 'x' } });
+    bus.post({ kind: 'response', from: 'm1', to: 'leader', taskId: 't1', payload: { text: 'done' } });
+    const events = sent.filter(e => e.channel === 'squad:event');
+    expect(events).toHaveLength(2);
+    const first = events[0].payload as { agent: string; ts: number; kind: string; detail: string };
+    expect(first.agent).toBe('leader');
+    expect(first.kind).toBe('delegate');
+    expect(first.detail).toContain('→ m1');
+    expect(first.ts).toBeTruthy();
+  });
+
+  it('stops forwarding after the returned unsubscribe runs', () => {
+    const bus = new MessageBus();
+    const sent: Array<{ channel: string; payload: unknown }> = [];
+    const fakeWindow = { webContents: { send: (channel: string, payload: unknown) => sent.push({ channel, payload }) } };
+    const unsub = createSquadEventPush(bus, () => fakeWindow as unknown as import('electron').BrowserWindow);
+    bus.post({ kind: 'delegate', from: 'a', to: 'b', taskId: 't', payload: {} });
+    unsub();
+    bus.post({ kind: 'complete', from: 'b', to: 'a', taskId: 't', payload: { ok: true } });
+    expect(sent).toHaveLength(1);
   });
 });

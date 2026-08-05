@@ -7,6 +7,7 @@
     "workspace": "工作区",
     "coding": "代码面板",
     "office": "办公增强",
+    "squad": "Squad",
     "quit": "退出",
     "open": "打开 JARVIS",
     "daemonStatus": "Daemon 状态",
@@ -62,6 +63,7 @@
   "coding": { "selectFile": "从左侧选择文件预览" },
   "diff": { "title": "改动", "accept": "接受", "reject": "拒绝", "apply": "应用改动" },
   "versionHistory": { "title": "版本历史", "rollback": "回滚", "rolledBack": "已回滚", "fields": "变更字段" },
+  "squadView": { "title": "Squad {{id}} — {{status}}", "leader": "Leader", "members": "成员" },
   "mention": { "placeholder": "@文件或 @符号" },
   "plan": { "badge": "Plan" },
   "selection": {

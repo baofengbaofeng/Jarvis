@@ -409,6 +409,50 @@ describe('task handlers', () => {
     const ctx2 = await runner.buildContext(m2, 'whole text');
     expect(ctx2).toBe('whole text');
   });
+
+  // K5 (M6 Task 10): while a squad run is active, task log lines are ALSO
+  // streamed onto the squad timeline ('squad:event'). A non-squad task keeps
+  // its log on 'task:log' only — the squad:event push is gated on squadCtx.
+  it('streams task log lines to squad:event while a squad run is active (K5)', async () => {
+    const leaderId = seedAgent();
+    const sent: Array<{ channel: string; payload: unknown }> = [];
+    const getWindow = () => ({ webContents: { send: (ch: string, p: unknown) => sent.push({ channel: ch, payload: p }) } }) as unknown as BrowserWindow;
+    const fn: EngineChatFn = async (_req, opts) => {
+      opts.onChunk?.({ kind: 'delta', delta: 'hello line' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-log', leaderAgentId: leaderId, memberAgentIds: [], status: 'in_progress' });
+    try {
+      await tasks.create(fakeEvent, { agentId: leaderId, prompt: 'go' });
+    } finally {
+      runner.teardown();
+    }
+    await vi.waitFor(() => {
+      const events = sent.filter(e => e.channel === 'squad:event' && (e.payload as { kind: string }).kind === 'log');
+      expect(events.length).toBeGreaterThan(0);
+      expect((events[0].payload as { detail: string }).detail).toBe('hello line');
+    });
+  });
+
+  it('keeps task logs off the squad timeline when no squad run is active', async () => {
+    const leaderId = seedAgent();
+    const sent: Array<{ channel: string; payload: unknown }> = [];
+    const getWindow = () => ({ webContents: { send: (ch: string, p: unknown) => sent.push({ channel: ch, payload: p }) } }) as unknown as BrowserWindow;
+    const fn: EngineChatFn = async (_req, opts) => {
+      opts.onChunk?.({ kind: 'delta', delta: 'hello line' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    await tasks.create(fakeEvent, { agentId: leaderId, prompt: 'go' });
+    await vi.waitFor(() => {
+      expect(sent.some(e => e.channel === 'task:log')).toBe(true);
+    });
+    expect(sent.filter(e => e.channel === 'squad:event')).toHaveLength(0);
+  });
 });
 
 describe('approval gate wiring (M3 Task 7)', () => {

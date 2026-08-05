@@ -11,7 +11,7 @@ import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
-import { createBusPersist, getMessageBus, registerSquadIpc } from './squad';
+import { createBusPersist, createSquadEventPush, getMessageBus, registerSquadIpc } from './squad';
 import { globalSearch } from './search';
 import { registerChatHandlers } from './chat';
 import { registerTaskHandlers } from './tasks';
@@ -245,6 +245,10 @@ export class IpcRouter {
     // channels yet — the renderer does not consume the bus in this task. The
     // unsubscribe is retained so dispose() can drop it (see disposeFns).
     this.disposeFns.push(createBusPersist(this.db, getMessageBus()));
+    // K5 (M6 Task 10): forward squad/agent bus messages to the renderer as
+    // 'squad:event' so the squad timeline (TimelineView) streams live. Same
+    // disposeFns lifecycle as the persist subscription.
+    this.disposeFns.push(createSquadEventPush(getMessageBus(), () => BrowserWindow.getFocusedWindow()));
   }
 
   listen(): void {

@@ -380,7 +380,16 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
 
   const orchestrator = new TaskOrchestrator(engine, store, {
     onStateChange: (id, state) => { getWindow()?.webContents.send(IpcEvent.taskState, { id, state }); },
-    onLog: (id, line) => { getWindow()?.webContents.send(IpcEvent.taskLog, { id, line }); },
+    onLog: (id, line) => {
+      getWindow()?.webContents.send(IpcEvent.taskLog, { id, line });
+      // K5 (M6 Task 10): during a squad run, stream the task log line onto the
+      // squad timeline too ('squad:event'). The leader/member engine runs
+      // (runLeader/runMember) go through engine.run directly and never reach
+      // the orchestrator today, so this fires only for direct tasks — a no-op
+      // guard keeps non-squad logs off the squad timeline and future-proofs the
+      // push when M7 threads squad member logs through the orchestrator.
+      if (squadCtx) getWindow()?.webContents.send(IpcEvent.squadEvent, { agent: squadCtx.leaderAgentId, ts: Date.now(), kind: 'log', detail: line });
+    },
     onDone: (id, ok, text) => {
       db.prepare('UPDATE tasks SET status = ?, result_json = ?, completed_at = ? WHERE id = ?').run(ok ? 'completed' : 'failed', JSON.stringify({ text }), new Date().toISOString(), id);
       getWindow()?.webContents.send(ok ? IpcEvent.taskComplete : IpcEvent.taskFailed, { id, text });
