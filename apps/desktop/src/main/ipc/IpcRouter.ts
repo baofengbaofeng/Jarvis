@@ -14,6 +14,7 @@ import { createTemplatesStore } from './templates';
 import { createBusPersist, createSquadEventPush, getMessageBus, registerSquadIpc } from './squad';
 import { globalSearch } from './search';
 import { registerChatHandlers } from './chat';
+import { registerRuntimeHandlers } from './runtime';
 import { registerTaskHandlers } from './tasks';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
@@ -186,6 +187,15 @@ export class IpcRouter {
     this.register(IpcChannel.secretsDelete, async (_e, key) => { await secrets.delete(key as string); return { ok: true }; });
     this.register(IpcChannel.daemonStatus, () => daemon.status());
     this.register(IpcChannel.daemonRestart, () => { daemon.restart(); return { ok: true }; });
+    // M7 Task 9 (L39/L38 数据面): runtime status/conflicts come from the
+    // supervisor's polled caches; conflict decisions are persisted to settings
+    // as the main-owned `multica.conflicts` map (main 属主).
+    registerRuntimeHandlers(
+      (ch, h) => this.register(ch, h),
+      () => daemon.getRuntimeStatus(),
+      () => daemon.getRuntimeConflicts(),
+      { get: (k) => settings.get(k), set: (k, v) => settings.set(k, v) },
+    );
     const collectEnv = () => collectEnvInfo({ daemonRunning: async () => (await daemon.status()).running });
     this.register(IpcChannel.envInfo, collectEnv);
     this.register(IpcChannel.diagnosticsRun, () => runDiagnostics(this.db, secrets));

@@ -62,12 +62,88 @@ export function createHealthPoller(opts: HealthPollerOptions) {
   };
 }
 
+// M7 Task 9 (L39 数据面): runtime status + L38 conflicts, cached by the
+// supervisor's 3s poller so the IPC handlers answer without a per-call HTTP hop.
+export interface RuntimeStatusData {
+  registered: boolean;
+  busy: boolean;
+  activeTasks: number;
+  lastHeartbeatAt: number;
+  serverUrl: string;
+  protocol: string;
+  mode: 'local' | 'runtime_registered' | 'runtime_busy';
+}
+
+export interface ConflictItem {
+  taskId: string;
+  skill?: { name: string; localPath?: string; multicaPath?: string };
+  mcp?: { name: string; localCommand?: string; multicaCommand?: string };
+  resolved: boolean;
+}
+
+// Daemon unreachable (not started, errored, or exited) => local mode. The daemon
+// itself does not report `mode`; it is derived from registered/busy here so the
+// renderer IPC payload is already shaped for deriveMode.
+const DEFAULT_RUNTIME_STATUS: RuntimeStatusData = {
+  registered: false,
+  busy: false,
+  activeTasks: 0,
+  lastHeartbeatAt: 0,
+  serverUrl: '',
+  protocol: '',
+  mode: 'local',
+};
+
+export interface RuntimePollerOptions {
+  port: number;
+  intervalMs: number;
+  fetchImpl?: (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+  onStatus: (data: RuntimeStatusData) => void;
+  onConflicts: (items: ConflictItem[]) => void;
+}
+
+// Polls GET /runtime/status and GET /runtime/conflicts, mirroring
+// createHealthPoller's pattern (start = immediate tick + setInterval). Each
+// endpoint is handled independently: a daemon that answers status but not
+// conflicts still refreshes the status cache.
+export function createRuntimePoller(opts: RuntimePollerOptions) {
+  const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url));
+  let timer: NodeJS.Timeout | null = null;
+  let stopped = false;
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const res = await fetchImpl(`http://127.0.0.1:${opts.port}/runtime/status`);
+      if (res.ok) {
+        const raw = await res.json() as Omit<RuntimeStatusData, 'mode'>;
+        opts.onStatus({ ...raw, mode: !raw.registered ? 'local' : raw.busy ? 'runtime_busy' : 'runtime_registered' });
+      }
+    } catch { /* daemon not ready — cache keeps the default/local mode */ }
+    try {
+      const res = await fetchImpl(`http://127.0.0.1:${opts.port}/runtime/conflicts`);
+      if (res.ok) {
+        opts.onConflicts(await res.json() as ConflictItem[]);
+      }
+    } catch { /* daemon not ready — conflicts stay empty */ }
+  };
+  return {
+    async start(): Promise<void> {
+      await tick();
+      timer = setInterval(() => void tick(), opts.intervalMs);
+    },
+    stop(): void { stopped = true; if (timer) clearInterval(timer); }
+  };
+}
+
 export class DaemonSupervisor {
   private child: ChildProcess | null = null;
   private poller: ReturnType<typeof createHealthPoller> | null = null;
+  private runtimePoller: ReturnType<typeof createRuntimePoller> | null = null;
   private port = Number(process.env.JARVIS_DAEMON_PORT ?? DEFAULT_PORT);
   private healthy = false;
   private concurrencyProvider: (() => ConcurrencyConfig) | null = null;
+  private runtimeStatusCache: RuntimeStatusData = { ...DEFAULT_RUNTIME_STATUS };
+  private conflictsCache: ConflictItem[] = [];
 
   constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
 
@@ -81,10 +157,20 @@ export class DaemonSupervisor {
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
     this.child = spawn(this.binaryPath, [], { env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}) });
-    this.child.on('error', () => { this.healthy = false; this.child = null; });
+    this.child.on('error', () => { this.healthy = false; this.resetRuntimeCache(); this.child = null; });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
     void this.poller.start(() => { this.healthy = true; onReady?.(); });
-    this.child.on('exit', () => { this.healthy = false; onExit?.(); });
+    // M7 Task 9: cache L39 runtime status + L38 conflicts at 3s. The cache stays
+    // at the local-mode default until the daemon answers, so a supervisor that
+    // never starts still reports local mode via getRuntimeStatus().
+    this.runtimePoller = createRuntimePoller({
+      port: this.port,
+      intervalMs: 3000,
+      onStatus: (data) => { this.runtimeStatusCache = data; },
+      onConflicts: (items) => { this.conflictsCache = items; },
+    });
+    void this.runtimePoller.start();
+    this.child.on('exit', () => { this.healthy = false; this.resetRuntimeCache(); onExit?.(); });
   }
 
   async status(): Promise<DaemonStatus> {
@@ -97,10 +183,20 @@ export class DaemonSupervisor {
     }
   }
 
+  getRuntimeStatus(): RuntimeStatusData { return { ...this.runtimeStatusCache }; }
+  getRuntimeConflicts(): ConflictItem[] { return [...this.conflictsCache]; }
+
+  private resetRuntimeCache(): void {
+    this.runtimeStatusCache = { ...DEFAULT_RUNTIME_STATUS };
+    this.conflictsCache = [];
+  }
+
   restart(): void { this.stop(); this.start(); }
   stop(): void {
     this.poller?.stop();
     this.poller = null;
+    this.runtimePoller?.stop();
+    this.runtimePoller = null;
     this.child?.kill();
     this.child = null;
   }

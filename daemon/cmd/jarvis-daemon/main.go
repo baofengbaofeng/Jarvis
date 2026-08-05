@@ -31,9 +31,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// cs stays nil when Multica is disabled; the /runtime/conflicts endpoint only
+	// registers (via conflictAdapter) when there is a live ConflictStore.
+	var cs *client.ConflictStore
 	if multicaURL != "" {
 		api := &client.HTTPClientAPI{BaseURL: multicaURL, HTTP: &http.Client{Timeout: 10 * time.Second}}
-		cs := client.NewConflictStore()
+		cs = client.NewConflictStore()
 		handler := &client.ClaimHandler{
 			API:       api,
 			Queue:     q,
@@ -56,7 +59,13 @@ func main() {
 		}()
 	}
 
-	srv := httpapi.NewServer("0.1.1", q)
+	// Wire the L39 runtimeState onto /runtime/status and, when a ConflictStore
+	// exists (Multica enabled), the L38 conflicts onto /runtime/conflicts.
+	extras := []httpapi.ServerExtra{st}
+	if cs != nil {
+		extras = append(extras, conflictAdapter{cs})
+	}
+	srv := httpapi.NewServer("0.1.1", q, extras...)
 	httpSrv := &http.Server{Addr: "127.0.0.1:" + port, Handler: srv.Handler()}
 	// SIGTERM/SIGINT cancels ctx, which stops the Multica Serve goroutine; the
 	// shutdown goroutine then drains the HTTP listener so the daemon terminates.
@@ -116,6 +125,26 @@ func (s *runtimeState) ServerURL() string {
 }
 
 func (s *runtimeState) CLIProtocol() string { return "acp" }
+
+// conflictAdapter adapts client.ConflictStore's []client.ConflictItem into the
+// httpapi-local ConflictItem shape (identical JSON) so the /runtime/conflicts
+// endpoint can serve L38 data without httpapi importing the multica client
+// package (avoids a dependency cycle).
+type conflictAdapter struct{ cs *client.ConflictStore }
+
+func (a conflictAdapter) Conflicts() []httpapi.ConflictItem {
+	items := a.cs.Conflicts()
+	out := make([]httpapi.ConflictItem, 0, len(items))
+	for _, it := range items {
+		out = append(out, httpapi.ConflictItem{
+			TaskID:   it.TaskID,
+			Skill:    it.Skill,
+			MCP:      it.MCP,
+			Resolved: it.Resolved,
+		})
+	}
+	return out
+}
 
 func heartbeatStatus(q *runtime.Queue) string {
 	if q.Status().ActiveTasks > 0 {
