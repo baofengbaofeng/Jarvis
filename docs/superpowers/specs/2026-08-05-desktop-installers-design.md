@@ -5,7 +5,7 @@
 
 ## 1. 目标
 
-为 `@jarvis/desktop`（Electron 32 + electron-vite，pnpm/turbo 单仓库）产出可分发的桌面安装包，全部落到仓库根目录 `dist/`（已存在且被 `.gitignore` 忽略，不入库）：
+为 `@jarvis/desktop`（Electron 32 + electron-vite，pnpm/turbo 单仓库）产出可分发的桌面安装包，全部落到仓库根目录 `dist/`。**安装包与指纹文件跟踪入库**（`.gitignore` 从整体忽略 `dist/` 改为白名单：仅跟踪 `*.msi` / `*.dmg` / `*.sha256`，electron-builder 中间产物如 `*-unpacked/`、`mac/`、构建缓存、日志仍忽略）；此边界按文件大小可调：若单文件接近 GitHub 单文件上限（100MB），改回整体忽略 `dist/` 并改走 GitHub Releases 分发。
 
 | 平台 | 架构 | 安装包文件 | 指纹文件 |
 |---|---|---|---|
@@ -184,6 +184,7 @@ CI 上传的 6 个文件（msi + 2 dmg + 3 sha256）从 GitHub Actions 页面手
 
 ## 7. 已知限制与后续工作
 
+- **dist 产物入库**：安装包 + 指纹文件跟踪入库（`.gitignore` 白名单）。⚠️ **体积风险**：Electron 的 MSI/dmg 通常 60–150MB，GitHub 对单文件有 50MB 告警、100MB 硬上限；若产物超限，push 会被拒。届时按"文件大小调整"约定：`dist/` 改回整体忽略，改用 GitHub Releases（单文件上限 2GB）分发，`.gitignore` 已注明该回退路径。
 - **未签名**：Windows SmartScreen 首次运行有警告；macOS 预览包下载后有 Gatekeeper 拦截（右键→打开）。正式发布需：Apple Developer 账号（$99/年）+ Developer ID 证书 + notarytool 公证，以及 Windows 代码签名证书；electron-builder 配置已留位，拿到证书后开启 `hardenedRuntime` 与签名即可。
 - **默认图标**：未提供自定义图标，使用 Electron 默认图标；后续补 `build/icon.ico` + `.icns`。
 - **版本号注入**：`1.0.0-Preview` 仅存在于构建时；仓库 `package.json` 版本保持 `0.1.0`，正式发版时再统一升版本。
