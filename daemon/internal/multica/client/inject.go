@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -15,6 +17,12 @@ type SkillFS interface {
 	Copy(src, dst string) error
 	MkdirAll(dir string) error
 }
+
+// errSkillNotPresent is returned by DefaultSkillFS.Copy when the source skill is
+// absent from the workspace. ApplyInjection treats it as a best-effort skip: M7
+// has no skill-content delivery source (§Wire), so a claimed skill name with no
+// staged content must not fail the task (round-2 re-review).
+var errSkillNotPresent = errors.New("skill not present in workspace")
 
 // DefaultSkillFS returns a SkillFS backed by the real filesystem (H1.7, C2).
 func DefaultSkillFS() SkillFS { return defaultSkillFS{} }
@@ -39,9 +47,13 @@ func (defaultSkillFS) MkdirAll(dir string) error { return os.MkdirAll(dir, 0o755
 
 // copyPath copies src to dst, recursively for directories. Skills in the Multica
 // payload are directory names, so the default fs must handle both files and dirs.
+// A missing src (ENOENT) is reported as errSkillNotPresent so the caller can skip.
 func copyPath(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %s", errSkillNotPresent, src)
+		}
 		return err
 	}
 	if !info.IsDir() {
@@ -95,6 +107,13 @@ func ApplyInjection(ctx context.Context, p *acp.TaskPayload, local acp.Injection
 			src := filepath.Join(workspace, name)
 			target := filepath.Join(dst, name)
 			if err := fs.Copy(src, target); err != nil {
+				// Best-effort (round-2 re-review): a claimed skill name with no
+				// staged content in the workspace is skipped, not fatal. Copy when
+				// present; skip (with a log) when the source is missing.
+				if errors.Is(err, errSkillNotPresent) {
+					log.Printf("multica: skill %q not present in workspace %s; skipping copy", name, workspace)
+					continue
+				}
 				return nil, nil, nil, fmt.Errorf("copy skill %s: %w", name, err)
 			}
 		}

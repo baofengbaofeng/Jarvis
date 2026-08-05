@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -186,5 +188,42 @@ func TestApplyInjectionCopiesSkills(t *testing.T) {
 	// Skills 内容已落盘 .jarvis/skills/,由 M3 SkillsLoader 扫描,payload.Skills 置空。
 	if merged.Skills != nil {
 		t.Fatalf("expected skills cleared after copy to disk, got %v", merged.Skills)
+	}
+}
+
+// TestApplyInjectionRealSkillFSBestEffort exercises DefaultSkillFS/copyPath
+// against a REAL temp directory (round-2 re-review): a present skill file is
+// copied into .jarvis/skills/ and a claimed skill with no staged content is
+// SKIPPED (no error) rather than ENOENT-failing the task.
+func TestApplyInjectionRealSkillFSBestEffort(t *testing.T) {
+	ws := t.TempDir()
+	// Stage one skill's content in the workspace root; leave "missing" unstaged.
+	if err := os.WriteFile(filepath.Join(ws, "present"), []byte("skill-body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"present", "missing"}}
+	merged, sc, mc, err := ApplyInjection(context.Background(), p, acp.Injection{}, ws, DefaultSkillFS())
+	if err != nil {
+		t.Fatalf("missing skill must not fail the task: %v", err)
+	}
+	if len(sc) != 0 || len(mc) != 0 {
+		t.Fatalf("no conflicts expected with empty local injection: %v %v", sc, mc)
+	}
+	if merged.Skills != nil {
+		t.Fatalf("expected skills cleared after copy, got %v", merged.Skills)
+	}
+
+	// The present skill was copied with content; the missing one was skipped.
+	dst := filepath.Join(ws, ".jarvis", "skills")
+	got, err := os.ReadFile(filepath.Join(dst, "present"))
+	if err != nil {
+		t.Fatalf("present skill not copied: %v", err)
+	}
+	if string(got) != "skill-body" {
+		t.Fatalf("present skill content wrong: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("missing skill should not have been copied (err=%v)", err)
 	}
 }

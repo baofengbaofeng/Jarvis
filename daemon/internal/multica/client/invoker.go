@@ -59,20 +59,21 @@ func (s *SubprocessAgentInvoker) RunTask(ctx context.Context, p *acp.TaskPayload
 	// parseClaimFrames drains stdout to EOF BEFORE cmd.Wait(): a partial read
 	// could leave the child blocked writing to a full pipe and deadlock Wait
 	// (same class as Task 6's parseResultFrames fix).
-	res, perr := parseClaimFrames(stdout, onChunk)
+	res, sawResult, perr := parseClaimFrames(stdout, onChunk)
 	if perr != nil {
 		_ = cmd.Wait() // reap the child even on a read error
 		return TaskResult{}, perr
 	}
 	if err := cmd.Wait(); err != nil {
-		// C1: don't discard a completed result because the child exited non-zero
-		// (e.g. a non-fatal id-mapping log). If the agent emitted a result frame,
-		// trust it; otherwise surface the wait error.
-		if res.Status != "" {
+		// C1: don't discard a parsed result because the child exited non-zero
+		// (e.g. a non-fatal id-mapping log) — if the agent emitted a result frame,
+		// trust it. Otherwise (no result frame seen, e.g. a genuine crash) surface
+		// the child's exit error in a failed result instead of dropping it.
+		if sawResult {
 			log.Printf("jarvis-agent: wait error %v but a %q result frame was parsed; using parsed result", err, res.Status)
 			return res, nil
 		}
-		return TaskResult{}, err
+		return TaskResult{Status: "failed", Error: err.Error()}, err
 	}
 	return res, nil
 }
@@ -83,8 +84,15 @@ func (s *SubprocessAgentInvoker) RunTask(ctx context.Context, p *acp.TaskPayload
 // (64KB token cap), bufio.Reader lines are unbounded, so a large frame cannot
 // truncate mid-frame; the stream is always drained to EOF/error, and non-JSON
 // noise lines are skipped.
-func parseClaimFrames(r io.Reader, onChunk func(runtime.StreamChunk)) (TaskResult, error) {
+// parseClaimFrames reads a JSONL stream of runtime.StreamChunk frames
+// ({"type":"progress"|"result",...}) and returns the LAST "result" frame (later
+// frames win) plus a sawResult flag (whether any result frame was seen), or a
+// failed TaskResult if none was seen. Unlike a bufio.Scanner (64KB token cap),
+// bufio.Reader lines are unbounded, so a large frame cannot truncate mid-frame;
+// the stream is always drained to EOF/error, and non-JSON noise lines are skipped.
+func parseClaimFrames(r io.Reader, onChunk func(runtime.StreamChunk)) (TaskResult, bool, error) {
 	var res TaskResult
+	sawResult := false
 	br := bufio.NewReader(r)
 	for {
 		line, err := br.ReadBytes('\n')
@@ -99,6 +107,7 @@ func parseClaimFrames(r io.Reader, onChunk func(runtime.StreamChunk)) (TaskResul
 					onChunk(frame)
 				}
 				if frame.Type == "result" {
+					sawResult = true
 					res = TaskResult{Status: frame.Status, Result: frame.Result, Error: frame.Error, Model: frame.Model, FinishedAt: frame.TS}
 				}
 			}
@@ -107,11 +116,11 @@ func parseClaimFrames(r io.Reader, onChunk func(runtime.StreamChunk)) (TaskResul
 			if err == io.EOF {
 				break
 			}
-			return res, err
+			return res, sawResult, err
 		}
 	}
-	if res.Status == "" {
+	if !sawResult {
 		res = TaskResult{Status: "failed", Error: "agent produced no result frame"}
 	}
-	return res, nil
+	return res, sawResult, nil
 }
