@@ -28,9 +28,13 @@ func Open(path string) (*sql.DB, error) {
 	return d, nil
 }
 
+// ensureSchema creates only daemon-owned tables. The profile table is named
+// daemon_runtime_profiles (NOT runtime_profiles): the main app's migration v1
+// already owns `runtime_profiles(id, name, config_json, created_at)` with a
+// different schema, and §13.3 says the daemon writes only its owned tables.
 func ensureSchema(d *sql.DB) error {
 	_, err := d.Exec(`
-		CREATE TABLE IF NOT EXISTS runtime_profiles (
+		CREATE TABLE IF NOT EXISTS daemon_runtime_profiles (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			concurrency_per_agent INTEGER NOT NULL DEFAULT 6,
@@ -68,7 +72,8 @@ func ListModels(ctx context.Context, d *sql.DB) ([]ModelInfo, error) {
 	return out, rows.Err()
 }
 
-// Profile is one runtime profile row (H1.14).
+// Profile is one runtime profile row (H1.14) from the daemon-owned
+// daemon_runtime_profiles table.
 type Profile struct {
 	ID                  string            `json:"id"`
 	Name                string            `json:"name"`
@@ -79,7 +84,7 @@ type Profile struct {
 
 func ListProfiles(ctx context.Context, d *sql.DB) ([]Profile, error) {
 	rows, err := d.QueryContext(ctx,
-		`SELECT id, name, concurrency_per_agent, concurrency_machine, env_json FROM runtime_profiles ORDER BY name`)
+		`SELECT id, name, concurrency_per_agent, concurrency_machine, env_json FROM daemon_runtime_profiles ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +106,7 @@ func ListProfiles(ctx context.Context, d *sql.DB) ([]Profile, error) {
 
 func GetProfile(ctx context.Context, d *sql.DB, id string) (*Profile, error) {
 	row := d.QueryRowContext(ctx,
-		`SELECT id, name, concurrency_per_agent, concurrency_machine, env_json FROM runtime_profiles WHERE id = ?`, id)
+		`SELECT id, name, concurrency_per_agent, concurrency_machine, env_json FROM daemon_runtime_profiles WHERE id = ?`, id)
 	var p Profile
 	var env string
 	if err := row.Scan(&p.ID, &p.Name, &p.ConcurrencyPerAgent, &p.ConcurrencyMachine, &env); err != nil {
@@ -117,12 +122,15 @@ func GetProfile(ctx context.Context, d *sql.DB, id string) (*Profile, error) {
 }
 
 func UpsertProfile(ctx context.Context, d *sql.DB, p Profile) error {
+	if p.Env == nil {
+		p.Env = map[string]string{}
+	}
 	env, err := json.Marshal(p.Env)
 	if err != nil {
 		return err
 	}
 	_, err = d.ExecContext(ctx, `
-		INSERT INTO runtime_profiles (id, name, concurrency_per_agent, concurrency_machine, env_json)
+		INSERT INTO daemon_runtime_profiles (id, name, concurrency_per_agent, concurrency_machine, env_json)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name,
