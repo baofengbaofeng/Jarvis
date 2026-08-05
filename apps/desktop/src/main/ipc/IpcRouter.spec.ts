@@ -138,6 +138,44 @@ describe('IpcRouter template channels (D15)', () => {
   });
 });
 
+// M8 Task 8 (L30): agent template channels. `agent-templates.list` returns the
+// seed presets; `agent-templates.createAgent` resolves the template's
+// systemPrompt and threads it into the REAL agent store create (modelId:null,
+// no skills field). The prefix is agent-templates.* — NOT templates.*, which the
+// D15 prompt-template store owns.
+describe('IpcRouter agent-templates channels (L30)', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('registers agent-templates.list and createAgent against the real agent store', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const list = handlers.get('agent-templates.list')!;
+    const createAgent = handlers.get('agent-templates.createAgent')!;
+    expect(list).toBeTruthy();
+    expect(createAgent).toBeTruthy();
+
+    const templates = await list({}) as Array<{ id: string; category: string; systemPrompt: string }>;
+    expect(templates.length).toBeGreaterThanOrEqual(4);
+    const coding = templates.find(t => t.id === 'tpl-coding')!;
+    expect(coding.category).toBe('coding');
+    expect(coding.systemPrompt).toContain('REPL');
+
+    const created = await createAgent({}, { templateId: 'tpl-coding', name: 'Coder', workspaceId: 'ws-1' }) as { id: string; name: string; systemPrompt: string; modelId: string | null; workspaceId: string | null };
+    expect(created.id).toBeTruthy();
+    expect(created.name).toBe('Coder');
+    expect(created.systemPrompt).toBe(coding.systemPrompt);
+    expect(created.modelId).toBeNull();
+    expect(created.workspaceId).toBe('ws-1');
+
+    // Unknown template -> the handler throws (ipcMain rejection), it does not
+    // silently create a wrong agent.
+    await expect(createAgent({}, { templateId: 'nope', name: 'X' })).rejects.toThrow('unknown template');
+  });
+});
+
 // M5 Task 10 (L21): search.global answers against the real FTS5 tables
 // (migration v3) seeded through the trigger-populated source tables.
 describe('IpcRouter search.global channel (L21)', () => {

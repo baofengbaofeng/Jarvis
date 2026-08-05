@@ -11,6 +11,7 @@ export * from './agent/types';
 export * from './agent/context';
 export * from './agent/ToolRegistry';
 export * from './agent/AgentEngine';
+export * from './agents/index';
 export * from './task/TaskStateMachine';
 export * from './task/TaskOrchestrator';
 export * from './tasks/index';

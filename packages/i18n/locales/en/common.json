@@ -147,7 +147,12 @@
     "save": "Save",
     "preview": "Preview",
     "insert": "Insert into input",
-    "error": "Failed"
+    "error": "Failed",
+    "create": "Create",
+    "office": { "name": "Office Writing", "desc": "Office assistant that drafts emails, reports and copy" },
+    "coding": { "name": "Coding Agent", "desc": "REPL-loop coding assistant: analyze, read, edit, test, fix" },
+    "review": { "name": "Code Review", "desc": "Read-only review that lists findings and suggestions" },
+    "generic": { "name": "Generic Assistant", "desc": "A general assistant that completes tasks per instructions" }
   },
   "office": {
     "title": "Office",

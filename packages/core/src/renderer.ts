@@ -36,6 +36,10 @@ export * from './coding/index/IndexStore';
 // K4 Task 看板 (M8 Task 1): board is pure (no node:*), so the kanban columns
 // logic is renderer-safe. Kept in sync with the main barrel's ./tasks/index.
 export * from './tasks/index';
+// L30 (M8 Task 8): agent template seed is pure data (no node:*), so the
+// renderer AgentTemplateView can import AgentTemplate/seedTemplates from this
+// entry. Kept in sync with the main barrel's ./agents/index.
+export * from './agents/index';
 // J5 (M8 Task 3): audit types are pure (no node:*), so the audit sink types are
 // renderer-safe. Kept in sync with the main barrel's ./audit/index.
 export * from './audit/index';

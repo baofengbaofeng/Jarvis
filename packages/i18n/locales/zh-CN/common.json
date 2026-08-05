@@ -147,7 +147,12 @@
     "save": "保存",
     "preview": "预览",
     "insert": "插入到输入框",
-    "error": "操作失败"
+    "error": "操作失败",
+    "create": "创建",
+    "office": { "name": "办公写作", "desc": "起草邮件、报告与文案的办公助手" },
+    "coding": { "name": "编程 Agent", "desc": "遵循 REPL 循环的编程助手" },
+    "review": { "name": "代码审查", "desc": "只读审查，输出问题清单与建议" },
+    "generic": { "name": "通用助手", "desc": "根据指令完成任务的通用 Agent" }
   },
   "office": {
     "title": "办公增强",

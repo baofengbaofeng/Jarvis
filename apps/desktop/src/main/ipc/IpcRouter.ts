@@ -7,6 +7,7 @@ import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
+import { createAgentTemplatesIpc } from './agent-templates';
 import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
@@ -98,6 +99,16 @@ export class IpcRouter {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
       }
     });
+    // L30 (M8 Task 8): agent template library. `list` returns the seed presets;
+    // `createAgent` resolves the template's systemPrompt and threads it into the
+    // REAL agent store create. Skills are global/filesystem-injected (not
+    // per-agent), so no skills field is passed — AgentInput has none. Channel
+    // prefix `agent-templates.*` (NOT `templates.*`, which D15's prompt-template
+    // store owns). The template has no modelId (Q4), so creation is modelId:null.
+    const agentTemplates = createAgentTemplatesIpc((input: { name: string; systemPrompt: string; workspaceId: string | null }) =>
+      agents.create({ name: input.name, systemPrompt: input.systemPrompt, modelId: null, workspaceId: input.workspaceId }));
+    this.register('agent-templates.list', () => agentTemplates.list());
+    this.register('agent-templates.createAgent', (_e, input) => agentTemplates.createAgent(_e, input as { templateId: string; name: string; workspaceId?: string }));
     const mcpStore = createMcpStore(this.db);
     // Pass the agents store so skills.import can copy SKILL.md into every bound
     // workspace's .jarvis/skills/ (the runtime injection surface), J2 fix.
