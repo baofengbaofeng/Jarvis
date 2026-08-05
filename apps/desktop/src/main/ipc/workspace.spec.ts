@@ -121,4 +121,28 @@ describe('workspace copyFiles IPC', () => {
     const ipc = createWorkspaceIpc(() => tmp);
     expect(ipc.copyFiles([join(tmp, 'nope.txt')])).toEqual({ ok: false, error: expect.stringContaining('not a file') });
   });
+
+  it('returns {ok:false,error} when the copy itself throws (EACCES/ENOSPC)', () => {
+    // deps.copyFile is injected to force a real copy failure; production uses
+    // node's copyFileSync. Without the try/catch this would propagate as a
+    // rejected ipcMain.handle promise instead of an { ok:false } payload.
+    const ipc = createWorkspaceIpc(() => tmp, { copyFile: () => { throw new Error('EACCES: permission denied, copy \'x\' -> \'y\''); } });
+    const srcDir = mkdtempSync(join(tmpdir(), 'jv-src-'));
+    tmpDirs.push(srcDir);
+    const src = join(srcDir, 'a.txt');
+    writeFileSync(src, 'x');
+    expect(ipc.copyFiles([src])).toEqual({ ok: false, error: 'EACCES: permission denied, copy \'x\' -> \'y\'' });
+  });
+
+  it('skips a basename collision and reports it instead of overwriting', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'jv-src-'));
+    tmpDirs.push(srcDir);
+    const src = join(srcDir, 'notes.txt');
+    writeFileSync(src, 'new content');
+    writeFileSync(join(tmp, 'notes.txt'), 'original');
+    const ipc = createWorkspaceIpc(() => tmp);
+    expect(ipc.copyFiles([src])).toEqual({ ok: true, skipped: ['notes.txt'] });
+    // The existing workspace file is untouched.
+    expect(readFileSync(join(tmp, 'notes.txt'), 'utf8')).toBe('original');
+  });
 });

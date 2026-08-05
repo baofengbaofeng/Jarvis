@@ -41,7 +41,7 @@ export function createWorkspaceService(db: Database.Database) {
 // from Dirent flags, so it would be an unused import under strict noUnusedLocals.
 const IGNORE_DEFAULT = ['node_modules/', '.git/', 'dist/', 'build/'];
 
-export function createWorkspaceIpc(getWorkspace: () => string | null) {
+export function createWorkspaceIpc(getWorkspace: () => string | null, deps: { copyFile?: (src: string, dest: string) => void } = {}) {
   const tree = () => {
     const ws = getWorkspace();
     if (!ws) return [];
@@ -62,15 +62,30 @@ export function createWorkspaceIpc(getWorkspace: () => string | null) {
   // source lives (no escaping). The isFile() pre-pass serves double duty: it
   // rejects missing/directory paths before any copy, and since '.'/'..' never
   // stat as files, a hostile source path cannot smuggle a destination outside
-  // the workspace. Basename collisions are allowed per L22 (the later drop wins).
-  const copyFiles = (paths: string[]): { ok: boolean; error?: string } => {
+  // the workspace. Two real-failure guards keep the { ok, error } IPC contract:
+  // a basename collision SKIPS that file (reported in `skipped`) rather than
+  // silently overwriting a real workspace file, and a copy that throws (EACCES,
+  // ENOSPC, ...) is caught and returned as { ok:false } instead of a rejected
+  // promise. deps.copyFile is injected so tests can force a throw; production
+  // uses node's copyFileSync.
+  const copyFile = deps.copyFile ?? copyFileSync;
+  const copyFiles = (paths: string[]): { ok: boolean; error?: string; skipped?: string[] } => {
     const ws = getWorkspace();
     if (!ws) return { ok: false, error: 'no workspace' };
     for (const p of paths) {
       if (!existsSync(p) || !statSync(p).isFile()) return { ok: false, error: `not a file: ${p}` };
     }
-    for (const p of paths) copyFileSync(p, join(ws, basename(p)));
-    return { ok: true };
+    const skipped: string[] = [];
+    try {
+      for (const p of paths) {
+        const dest = join(ws, basename(p));
+        if (existsSync(dest)) { skipped.push(basename(p)); continue; }
+        copyFile(p, dest);
+      }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    return skipped.length ? { ok: true, skipped } : { ok: true };
   };
   return { tree, read, copyFiles };
 }
