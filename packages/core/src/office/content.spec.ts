@@ -36,6 +36,8 @@ describe('multimodal content', () => {
     expect(isContentArray([{ type: 'text', text: 'hi' }])).toBe(true);
     // A JSON-looking string is NOT a content array.
     expect(isContentArray('[{"type":"text","text":"hi"}]')).toBe(false);
+    // An empty array is not a valid content message (toContentArray('') -> '').
+    expect(isContentArray([])).toBe(false);
     // Malformed parts are rejected.
     expect(isContentArray([{ type: 'text' }])).toBe(false);
     expect(isContentArray([{ type: 'image_url', image_url: { url: 42 } }])).toBe(false);

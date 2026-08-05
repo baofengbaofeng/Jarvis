@@ -35,7 +35,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streaming: false,
   streamingText: '',
   pendingImages: [],
-  addImages(urls) { set(s => ({ pendingImages: [...s.pendingImages, ...urls] })); },
+  // Dedupe on data URL so a double-fired FileReader (or a repeat paste of the
+  // same image) never renders the same preview twice under React keys.
+  addImages(urls) { set(s => ({ pendingImages: [...s.pendingImages, ...urls.filter(u => !s.pendingImages.includes(u))] })); },
   removeImage(url) { set(s => ({ pendingImages: s.pendingImages.filter(u => u !== url) })); },
 
   async init() {
@@ -68,9 +70,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!agentId) return; // 无选中 Agent 时不发起任务
     // L23 multimodal: with images attached the user message becomes a content
     // array. With no images `content` is exactly the plain `text` string, so the
-    // M2 task path and the M1 chat IPC keep their existing string behavior.
+    // M2 task path and the M1 chat IPC keep their existing string behavior. The
+    // optimistic message holds the structured content (string or array) so the
+    // live bubble renders it without ever showing the serialized JSON.
     const content = pendingImages.length ? toContentArray(text, pendingImages) : text;
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), sessionId, role: 'user', content: typeof content === 'string' ? content : JSON.stringify(content), createdAt: new Date().toISOString() };
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), sessionId, role: 'user', content, createdAt: new Date().toISOString() };
     set({ streaming: true, streamingText: '', messages: [...get().messages, userMsg] });
     taskSessionId = sessionId;
     try {

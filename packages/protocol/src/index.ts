@@ -75,11 +75,20 @@ export type Agent = AgentConfig;
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
+// L23 multimodal: a message may carry a content array (text + image_url parts)
+// in addition to a plain string. Kept self-contained here because protocol
+// cannot depend on @jarvis/core; it is structurally identical to core's
+// MessageContent, so the two are interchangeable under structural typing.
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+export type ChatContent = string | ChatContentPart[];
+
 export interface ChatMessage {
   id: string;
   sessionId: string;
   role: ChatRole;
-  content: string;              // D13 markdown 由渲染层解析
+  content: ChatContent;         // D13 markdown 由渲染层解析 (string); L23 content array for multimodal
   toolCalls?: unknown;
   createdAt: string;
 }

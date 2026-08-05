@@ -28,7 +28,9 @@ export function isImageUrl(url: string): boolean {
 // every part matches the union, so user text that merely looks like JSON is
 // never mis-parsed (validation-on-parse, documented in ChatService).
 export function isContentArray(content: unknown): content is NonNullable<MessageContent> {
-  if (!Array.isArray(content)) return false;
+  // An empty array is not a valid content message (toContentArray returns ''
+  // for zero parts) — `.every` would vacuously accept it.
+  if (!Array.isArray(content) || content.length === 0) return false;
   return content.every((p) => {
     if (!p || typeof p !== 'object') return false;
     const part = p as { type?: unknown; text?: unknown; image_url?: unknown };

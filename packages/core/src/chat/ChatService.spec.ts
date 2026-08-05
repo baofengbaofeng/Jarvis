@@ -37,6 +37,25 @@ describe('ChatService', () => {
     expect(built[1].content).toEqual(content);
   });
 
+  it('loadMessages round-trips a content-array row back to the array', async () => {
+    const content = [{ type: 'text' as const, text: 'hi' }, { type: 'image_url' as const, image_url: { url: 'data:image/png;base64,AAA' } }];
+    // A stored row carries the marker-serialized string (what appendMessage wrote).
+    const stored = '\u0000jarvis:content\u0000' + JSON.stringify(content);
+    const row: ChatMessage = { id: 'm1', sessionId: 's1', role: 'user', content: stored, createdAt: '' };
+    const svc = createChatService({ listSessions: async () => [], createSession: async () => ({ id: 's1', title: '', createdAt: '', updatedAt: '' }), loadMessages: async () => [row], appendMessage: async () => {}, loadAgent: async () => ({ id: 'a1', systemPrompt: '', modelId: 'm1', name: 'a', slug: 'a', description: '', workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' }) });
+    const loaded = await svc.loadMessages('s1');
+    expect(loaded[0].content).toEqual(content);
+    // The marker/JSON must not leak to the renderer.
+    expect(JSON.stringify(loaded[0].content)).not.toContain('jarvis:content');
+  });
+
+  it('loadMessages leaves plain-string rows untouched (backward compat)', async () => {
+    const row: ChatMessage = { id: 'm1', sessionId: 's1', role: 'user', content: 'hello', createdAt: '' };
+    const svc = createChatService({ listSessions: async () => [], createSession: async () => ({ id: 's1', title: '', createdAt: '', updatedAt: '' }), loadMessages: async () => [row], appendMessage: async () => {}, loadAgent: async () => ({ id: 'a1', systemPrompt: '', modelId: 'm1', name: 'a', slug: 'a', description: '', workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' }) });
+    const loaded = await svc.loadMessages('s1');
+    expect(loaded[0].content).toBe('hello');
+  });
+
   it('never mis-parses a plain-string user message that looks like JSON', () => {
     const svc = createChatService({ listSessions: async () => [], createSession: async () => ({ id: 's1', title: '', createdAt: '', updatedAt: '' }), loadMessages: async () => [], appendMessage: async () => {}, loadAgent: async () => ({ id: 'a1', systemPrompt: '', modelId: 'm1', name: 'a', slug: 'a', description: '', workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' }) });
     const looksLikeJson = '[{"type":"text","text":"hi"}]';

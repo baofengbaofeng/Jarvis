@@ -26,7 +26,10 @@ function serializeContent(content: string | MessageContent): string {
   return typeof content === 'string' ? content : CONTENT_MARKER + JSON.stringify(content);
 }
 
-function deserializeContent(content: string): string | MessageContent {
+function deserializeContent(content: string | MessageContent): string | MessageContent {
+  // Structured content (already an array) passes straight through; only the
+  // stored TEXT form needs the marker stripped.
+  if (typeof content !== 'string') return content;
   if (!content.startsWith(CONTENT_MARKER)) return content;
   try {
     const parsed: unknown = JSON.parse(content.slice(CONTENT_MARKER.length));
@@ -41,12 +44,20 @@ export function createChatService(db: ChatDbAdapter) {
   return {
     async listSessions() { return db.listSessions(); },
     async createSession(title?: string) { return db.createSession(title); },
-    async loadMessages(sessionId: string) { return db.loadMessages(sessionId); },
+    async loadMessages(sessionId: string) {
+      // L23: rows may hold a marker-serialized content array; restore the
+      // structured form so the renderer never sees the marker/JSON and the model
+      // layer gets real content parts on follow-up turns.
+      const rows = await db.loadMessages(sessionId);
+      return rows.map(r => ({ ...r, content: deserializeContent(r.content) }));
+    },
     async appendMessage(sessionId: string, role: string, content: string | MessageContent) {
       // Arrays are serialized here so the DB adapter only ever sees a string.
       return db.appendMessage(sessionId, role, serializeContent(content));
     },
-    buildModelMessages(history: Array<{ role: string; content: string }>, systemPrompt: string): ModelMessage[] {
+    // History may already be deserialized (loadMessages returns structured
+    // ChatMessage.content); deserializeContent passes arrays through untouched.
+    buildModelMessages(history: Array<{ role: string; content: string | MessageContent }>, systemPrompt: string): ModelMessage[] {
       return [
         { role: 'system', content: systemPrompt },
         ...history.map(h => ({ role: h.role as ModelMessage['role'], content: deserializeContent(h.content) }))

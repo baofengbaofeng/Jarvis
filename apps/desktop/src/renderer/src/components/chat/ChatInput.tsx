@@ -45,6 +45,10 @@ export function ChatInput() {
     const images = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'));
     if (!images.length) return;
     e.preventDefault();
+    // A mixed clipboard (text + image) would lose the text portion to the
+    // default paste once we preventDefault; insert it explicitly so both survive.
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText) setText(prev => prev + pastedText);
     const addImages = useChatStore.getState().addImages;
     for (const f of images) {
       const reader = new FileReader();
