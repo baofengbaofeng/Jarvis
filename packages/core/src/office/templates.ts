@@ -9,5 +9,8 @@ export function listTemplateVars(text: string): string[] {
 }
 
 export function substituteTemplate(text: string, vars: Record<string, string>): string {
-  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k: string) => (k in vars ? vars[k] : ''));
+  // `k in vars` would match inherited properties (constructor, toString,
+  // __proto__), leaking the value instead of the spec's "unbound var → empty".
+  // Object.hasOwn only matches the caller's own keys.
+  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k: string) => (Object.hasOwn(vars, k) ? vars[k] : ''));
 }

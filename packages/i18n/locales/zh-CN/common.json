@@ -96,7 +96,8 @@
     "variables": "变量",
     "save": "保存",
     "preview": "预览",
-    "insert": "插入到输入框"
+    "insert": "插入到输入框",
+    "error": "操作失败"
   },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

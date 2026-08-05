@@ -161,7 +161,16 @@ export class IpcRouter {
     const templates = createTemplatesStore(this.db);
     this.register('templates.list', () => templates.list());
     this.register('templates.create', (_e, input) => templates.create(input as { name: string; content: string }));
-    this.register('templates.update', (_e, id, input) => templates.update(id as string, input as { name?: string; content?: string }));
+    // update throws on a missing id (store guard); catch it so the channel
+    // returns { ok:false, error } like render instead of an ipcMain rejection.
+    this.register('templates.update', (_e, id, input) => {
+      try {
+        templates.update(id as string, input as { name?: string; content?: string });
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('templates.delete', (_e, id) => { templates.remove(id as string); return { ok: true }; });
     this.register('templates.render', (_e, req) => {
       const { id, vars } = req as { id: string; vars?: Record<string, string> };

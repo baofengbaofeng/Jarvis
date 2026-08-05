@@ -115,6 +115,12 @@ describe('IpcRouter template channels (D15)', () => {
     await update({}, created.id, { content: 'Review {{name}} carefully' });
     expect((await list({}) as Array<{ content: string }>)[0].content).toBe('Review {{name}} carefully');
 
+    // The store throws on a missing id; the handler must return { ok:false }
+    // rather than let the ipcMain reject.
+    const badUpdate = await update({}, 'nope', { content: 'x' }) as { ok: boolean; error?: string };
+    expect(badUpdate.ok).toBe(false);
+    expect(badUpdate.error).toContain('nope');
+
     await del({}, created.id);
     expect((await list({}) as unknown[])).toHaveLength(0);
   });

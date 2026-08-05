@@ -41,4 +41,23 @@ describe('PromptTemplatesPage', () => {
     fireEvent.click(screen.getByTestId('tpl-insert-t1'));
     expect(onInsert).toHaveBeenCalledWith('Review Jarvis');
   });
+
+  it('surfaces a non-ok render response as an inline error', async () => {
+    const jarvis = window as unknown as { jarvis: { invoke: (m: string) => Promise<unknown> } };
+    const orig = jarvis.jarvis.invoke;
+    jarvis.jarvis.invoke = async (m: string) => m === 'templates.list'
+      ? [{ id: 't1', name: 'review', content: 'Review {{name}}' }]
+      : { ok: false, error: 'boom' };
+    try {
+      render(<PromptTemplatesPage />);
+      await waitFor(() => expect(screen.getByTestId('tpl-render-t1')).toBeTruthy());
+      fireEvent.click(screen.getByTestId('tpl-render-t1'));
+      // A rejected channel response is surfaced inline, not as an unhandled
+      // rejection, and the preview stays empty.
+      await waitFor(() => expect(screen.getByTestId('tpl-error').textContent).toBe('boom'));
+      expect(screen.getByTestId('tpl-preview').textContent).toBe('');
+    } finally {
+      jarvis.jarvis.invoke = orig;
+    }
+  });
 });

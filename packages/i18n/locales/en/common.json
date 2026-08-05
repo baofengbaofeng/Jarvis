@@ -96,7 +96,8 @@
     "variables": "Variables",
     "save": "Save",
     "preview": "Preview",
-    "insert": "Insert into input"
+    "insert": "Insert into input",
+    "error": "Failed"
   },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }
