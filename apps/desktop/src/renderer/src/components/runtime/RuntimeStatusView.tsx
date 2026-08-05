@@ -1,0 +1,30 @@
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useRuntimeStore } from '../../stores/runtime-store';
+import { ModeIndicator, type RuntimeMode } from './ModeIndicator';
+
+export function RuntimeStatusView() {
+  const { t } = useTranslation('common');
+  const status = useRuntimeStore((s) => s.status);
+  const refresh = useRuntimeStore((s) => s.refresh);
+  useEffect(() => {
+    void refresh();
+    const iv = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(iv);
+  }, [refresh]);
+  // The store starts with status === null (no poll has resolved yet); render a
+  // bare placeholder so the container testid is stable for callers that mount
+  // this inside a page (DaemonManagementPage) without a live runtime.
+  if (!status) return <div data-testid="runtime-status" />;
+  const mode: RuntimeMode = status.mode;
+  return (
+    <div data-testid="runtime-status" className="space-y-2 p-4">
+      <ModeIndicator mode={mode} />
+      <p data-testid="runtime-registered">{t('runtime.registered', { v: status.registered ? 'yes' : 'no' })}</p>
+      <p>{t('runtime.protocol')}: {status.protocol}</p>
+      <p>{t('runtime.server')}: {status.serverUrl || '-'}</p>
+      <p>{t('runtime.heartbeat')}: {status.lastHeartbeatAt ? new Date(status.lastHeartbeatAt).toLocaleTimeString() : '-'}</p>
+      <p>{t('runtime.activeTasks')}: {status.activeTasks}</p>
+    </div>
+  );
+}

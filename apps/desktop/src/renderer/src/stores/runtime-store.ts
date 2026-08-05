@@ -25,7 +25,15 @@ interface RuntimeStore {
 export const useRuntimeStore = create<RuntimeStore>((set) => ({
   status: null,
   refresh: async () => {
-    const s = (await window.jarvis.invoke('runtime.status')) as RuntimeStatus;
-    set({ status: s });
+    // Task 1 convention: an IPC rejection must not propagate as an unhandled
+    // promise rejection from the polling callers (RuntimeStatusView polls every
+    // 3s). Leave the last-known status in place on failure so the view degrades
+    // gracefully instead of throwing mid-render.
+    try {
+      const s = (await window.jarvis.invoke('runtime.status')) as RuntimeStatus;
+      set({ status: s });
+    } catch (e) {
+      console.error('runtime.status failed', e);
+    }
   },
 }));

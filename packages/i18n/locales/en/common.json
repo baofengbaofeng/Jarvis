@@ -60,6 +60,15 @@
     "perAgent": "Per-agent",
     "concurrency": "Machine concurrency"
   },
+  "runtime": {
+    "mode": { "local": "Local mode", "runtime_registered": "Runtime registered", "runtime_busy": "Runtime busy" },
+    "registered": "Registered: {{v}}",
+    "protocol": "Protocol",
+    "server": "Multica Server",
+    "heartbeat": "Last heartbeat",
+    "activeTasks": "Active Multica tasks",
+    "skillsMerger": { "title": "Skills/MCP injection conflicts", "none": "No conflicts", "local": "Local", "multica": "Remote", "merge": "Merge (rename)" }
+  },
   "coding": { "selectFile": "Select a file from the left to preview" },
   "diff": { "title": "Diff", "accept": "Accept", "reject": "Reject", "apply": "Apply" },
   "versionHistory": { "title": "Version History", "rollback": "Rollback", "rolledBack": "Rolled back", "fields": "Fields" },

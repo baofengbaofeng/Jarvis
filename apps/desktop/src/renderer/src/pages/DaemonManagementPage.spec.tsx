@@ -14,6 +14,10 @@ beforeAll(async () => {
     invoke: async (m: string) => {
       if (m === 'daemon.status') return statusMock();
       if (m === 'daemon.restart') { restartMock(); return { ok: true }; }
+      // M7 Task 10: the page now mounts the Multica runtime surfaces, which poll
+      // their own IPC channels. Stub them so the smoke test sees real content.
+      if (m === 'runtime.status') return { registered: false, busy: false, activeTasks: 0, lastHeartbeatAt: 0, serverUrl: '', protocol: 'acp', mode: 'local' as const };
+      if (m === 'runtime.conflicts') return [];
       return null;
     },
     onDidReceive: () => () => {}
@@ -43,5 +47,14 @@ describe('DaemonManagementPage', () => {
     await waitFor(() => expect(screen.getByTestId('daemon-restart')).toBeTruthy());
     fireEvent.click(screen.getByTestId('daemon-restart'));
     await waitFor(() => expect(restartMock).toHaveBeenCalled());
+  });
+
+  it('mounts the Multica runtime status and skills merger surfaces (M7 Task 10)', async () => {
+    render(<DaemonManagementPage />);
+    // RuntimeStatusView resolves its first poll; SkillsMerger renders once the
+    // conflicts fetch returns (empty list -> no-conflicts state).
+    await waitFor(() => expect(screen.getByTestId('runtime-status')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('skills-merger')).toBeTruthy());
+    expect(screen.getByTestId('no-conflicts')).toBeTruthy();
   });
 });

@@ -60,6 +60,15 @@
     "perAgent": "每 Agent",
     "concurrency": "机器并发"
   },
+  "runtime": {
+    "mode": { "local": "本地模式", "runtime_registered": "Runtime 已注册", "runtime_busy": "Runtime 忙碌" },
+    "registered": "注册状态: {{v}}",
+    "protocol": "协议",
+    "server": "Multica Server",
+    "heartbeat": "最近心跳",
+    "activeTasks": "活跃 Multica 任务",
+    "skillsMerger": { "title": "Skills/MCP 注入冲突", "none": "无冲突", "local": "本地", "multica": "下发", "merge": "合并(改名)" }
+  },
   "coding": { "selectFile": "从左侧选择文件预览" },
   "diff": { "title": "改动", "accept": "接受", "reject": "拒绝", "apply": "应用改动" },
   "versionHistory": { "title": "版本历史", "rollback": "回滚", "rolledBack": "已回滚", "fields": "变更字段" },
