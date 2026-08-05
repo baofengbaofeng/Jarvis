@@ -69,5 +69,13 @@
     "search": "搜索",
     "error": "处理失败"
   },
+  "writing": {
+    "polish": "润色",
+    "continue": "续写",
+    "summarize": "总结",
+    "translate": "翻译",
+    "live": "边写边译",
+    "error": "处理失败"
+  },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }

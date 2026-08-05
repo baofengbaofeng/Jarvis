@@ -69,5 +69,13 @@
     "search": "Search",
     "error": "Failed"
   },
+  "writing": {
+    "polish": "Polish",
+    "continue": "Continue",
+    "summarize": "Summarize",
+    "translate": "Translate",
+    "live": "Translate as you type",
+    "error": "Failed"
+  },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

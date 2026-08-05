@@ -12,6 +12,7 @@
 // belong here. officeChat/selection are pure prompt/stream helpers (no node:*).
 export * from './office/officeChat';
 export * from './office/selection';
+export * from './office/writing';
 export * from './coding/diff';
 export * from './coding/mention';
 export * from './coding/filetree';

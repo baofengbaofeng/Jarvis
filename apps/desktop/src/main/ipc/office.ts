@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { createAdapter, chatText, buildSelectionPrompt, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction } from '@jarvis/core';
+import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
 
@@ -100,5 +100,17 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
     const prompt = buildSelectionPrompt(req);
     const result = await chatText(modelRouter, [{ role: 'system', content: '你是专业助手。' }, { role: 'user', content: prompt }]);
     return { ok: true, result };
+  }) as (...a: unknown[]) => unknown);
+  // M5 Task 2 (D5/D6): AI 写作 + 边写边译. Same chatText drain over the same
+  // streaming modelRouter bridge as office.selection.
+  router.register('office.writing', (async (_e, req: { action: WritingAction; text: string; lang?: string }) => {
+    const result = await chatText(modelRouter, [{ role: 'user', content: buildWritingPrompt(req.action, req.text, req.lang) }]);
+    return { ok: true, result };
+  }) as (...a: unknown[]) => unknown);
+  router.register('office.writing.translate', (async (_e, text: string, lang: string) => {
+    const { done, pending } = await translateWhileTyping(text, lang, async (p) => {
+      return chatText(modelRouter, [{ role: 'user', content: buildWritingPrompt('translate', p, lang) }]);
+    });
+    return { ok: true, done, pending };
   }) as (...a: unknown[]) => unknown);
 }
