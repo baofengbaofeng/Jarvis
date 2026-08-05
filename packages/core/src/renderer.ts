@@ -47,3 +47,7 @@ export * from './data/index';
 // the renderer ConfigImportExportView can share CURRENT_SCHEMA + shapes with the
 // main-process config IPC. Kept in sync with the main barrel's ./config/index.
 export * from './config/index';
+// C5 (M8 Task 7): shortcut map is pure (no node:*), so both the main-process
+// shortcuts IPC and the renderer settings view/hook share one normalize/lookup.
+// Kept in sync with the main barrel's ./shortcuts/index.
+export * from './shortcuts/index';

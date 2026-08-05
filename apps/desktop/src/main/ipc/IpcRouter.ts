@@ -1,7 +1,7 @@
 import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope, type ImportStrategy } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope, type ImportStrategy, type ShortcutBindings } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
@@ -18,6 +18,7 @@ import { registerRuntimeHandlers } from './runtime';
 import { registerTaskHandlers } from './tasks';
 import { createTaskboardIpc } from './taskboard';
 import { createUsageIpc } from './usage';
+import { createShortcutsIpc } from './shortcuts';
 import { createAuditIpc } from './audit';
 import { createBackupIpc } from './backup';
 import { createWipeIpc } from './wipe';
@@ -47,6 +48,12 @@ export class IpcRouter {
 
   registerAll(daemon: DaemonSupervisor, backup?: BackupService): void {
     const settings = createSettingsStore(this.db);
+    // C5 (M8 Task 7): in-app shortcut bindings read/write the `shortcuts`
+    // settings key (merged over defaults). The renderer's useShortcuts hook +
+    // ShortcutsSettingsView are the only consumers.
+    const shortcuts = createShortcutsIpc(k => settings.get(k), (k, v) => settings.set(k, v));
+    this.register('shortcuts.get', () => shortcuts.get());
+    this.register('shortcuts.set', (_e, bindings) => shortcuts.set(_e, bindings as ShortcutBindings));
     const secrets = new SecureStorage();
     const providers = createProviderStore(this.db, secrets);
     const agents = createAgentStore(this.db);

@@ -30,3 +30,4 @@ export * from './memory/index';
 export * from './squad/index';
 export * from './squad/agents/index';
 export * from './config/index';
+export * from './shortcuts/index';

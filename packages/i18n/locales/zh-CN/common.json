@@ -183,5 +183,18 @@
     "enabled": "启用",
     "saved": "已保存"
   },
-  "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
+  "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "press_key": "按下按键…",
+    "capture": "录制",
+    "save": "保存快捷键",
+    "action": {
+      "chatSend": "发送聊天消息",
+      "chatNew": "新建对话",
+      "settingsOpen": "打开设置",
+      "taskCancel": "取消任务",
+      "focusInput": "聚焦消息输入框"
+    }
+  }
 }

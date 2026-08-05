@@ -183,5 +183,18 @@
     "enabled": "Enabled",
     "saved": "Saved"
   },
-  "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
+  "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "press_key": "Press a key…",
+    "capture": "capture",
+    "save": "Save shortcuts",
+    "action": {
+      "chatSend": "Send chat message",
+      "chatNew": "New chat",
+      "settingsOpen": "Open settings",
+      "taskCancel": "Cancel task",
+      "focusInput": "Focus message input"
+    }
+  }
 }
