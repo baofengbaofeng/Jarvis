@@ -32,8 +32,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 9 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index)', () => {
-    expect(latestVersion()).toBe(9);
+  it('reports latestVersion as 10 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table)', () => {
+    expect(latestVersion()).toBe(10);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created
@@ -147,5 +147,26 @@ describe('db migrations', () => {
     expect(v9).toBeDefined();
     expect(v9!.sql).toContain('multica_task_id');
     expect(v9!.sql).toContain('UNIQUE INDEX');
+  });
+
+  // M8 Task 2 (B9): v10 replaces the vestigial v1 token_usage table with the
+  // real shape (agent_id/model_id/cost_estimate). The v1 table would otherwise
+  // make a plain CREATE TABLE IF NOT EXISTS a no-op and break the UsageTracker
+  // INSERT; v10 DROPs it first, so the reshape is effective on fresh AND
+  // upgraded databases.
+  it('v10 creates the B9 token_usage table with agent_id/model_id/cost_estimate', () => {
+    applyMigrations(db);
+    const cols = db.prepare('PRAGMA table_info(token_usage)').all() as Array<{ name: string }>;
+    expect(cols.map(c => c.name)).toEqual(expect.arrayContaining([
+      'id', 'task_id', 'session_id', 'agent_id', 'model_id',
+      'prompt_tokens', 'completion_tokens', 'total_tokens', 'cost_estimate', 'created_at'
+    ]));
+    // The UsageTracker INSERT shape must work end to end against the migrated table.
+    db.prepare('INSERT INTO token_usage (task_id, agent_id, model_id, prompt_tokens, completion_tokens, total_tokens, cost_estimate) VALUES (?,?,?,?,?,?,?)')
+      .run('t1', 'a1', 'claude-3-5-sonnet', 10, 5, 15, null);
+    const row = db.prepare('SELECT agent_id, model_id, total_tokens FROM token_usage WHERE task_id = ?').get('t1') as { agent_id: string; model_id: string; total_tokens: number };
+    expect(row).toEqual({ agent_id: 'a1', model_id: 'claude-3-5-sonnet', total_tokens: 15 });
+    // Idempotent: re-applying migrations must not throw.
+    applyMigrations(db);
   });
 });

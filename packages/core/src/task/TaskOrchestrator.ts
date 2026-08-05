@@ -1,6 +1,7 @@
 import type { AgentConfig } from '@jarvis/protocol';
 import type { AgentEngine, EngineRunInput } from '../agent/AgentEngine';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
+import type { Usage } from '../model/types';
 import { transition, type TaskState } from './TaskStateMachine';
 
 export interface TaskStoreAdapter {
@@ -28,7 +29,10 @@ export interface SubmitInput {
 export interface TaskOrchestratorCallbacks {
   onStateChange?: (id: string, state: TaskState) => void;
   onLog?: (id: string, line: string) => void;
-  onDone?: (id: string, ok: boolean, text: string) => void;
+  // B9: `usage` carries the run's aggregated token usage on the completion path
+  // (undefined on the failure path). Optional so existing `onDone: () => ...`
+  // callers stay backward compatible.
+  onDone?: (id: string, ok: boolean, text: string, usage?: Usage | null) => void;
 }
 
 const DEFAULT_CONCURRENCY_PER_AGENT = 6;
@@ -130,7 +134,7 @@ export class TaskOrchestrator {
           await this.store.updateState(input.id, transition(st, 'complete'));
           this.states.set(input.id, 'completed');
           this.cb.onStateChange?.(input.id, 'completed');
-          this.cb.onDone?.(input.id, true, result.text);
+          this.cb.onDone?.(input.id, true, result.text, result.usage);
         }
       } catch (e) {
         // A prior cancel() sets the state to 'cancelled'; never overwrite that

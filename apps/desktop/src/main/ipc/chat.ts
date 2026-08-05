@@ -7,6 +7,7 @@ import { ModelRouter } from '@jarvis/core';
 import type { MessageContent } from '@jarvis/core';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig, ChatRole } from '@jarvis/protocol';
+import type { UsageTracker } from '../usage/UsageTracker';
 
 export function createChatDbAdapter(db: Database.Database): Parameters<typeof createChatService>[0] {
   const now = () => new Date().toISOString();
@@ -43,7 +44,7 @@ export function createChatDbAdapter(db: Database.Database): Parameters<typeof cr
   };
 }
 
-export function registerChatHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, deps: { router?: ModelRouter } = {}) {
+export function registerChatHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, deps: { router?: ModelRouter; usageTracker?: UsageTracker } = {}) {
   const dbAdapter = createChatDbAdapter(db);
   const chatService = createChatService(dbAdapter);
   const router = deps.router ?? new ModelRouter();
@@ -71,17 +72,25 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
 
       let full = '';
       try {
+        const modelId = (db.prepare('SELECT model_id FROM models WHERE id = ?').get(agent.modelId) as { model_id: string }).model_id;
         await router.chat({
           provider: {
             id: provider.id as string, name: provider.name as string, type: provider.type as 'openai-compatible' | 'anthropic-compatible',
             baseUrl: provider.base_url as string, apiKeyRef: provider.api_key_ref as string, createdAt: provider.created_at as string, updatedAt: provider.updated_at as string
           },
-          modelId: (db.prepare('SELECT model_id FROM models WHERE id = ?').get(agent.modelId) as { model_id: string }).model_id,
+          modelId,
           messages: chatService.buildModelMessages(history, agent.systemPrompt),
           stream: true
         }, {
           apiKeyResolver: async (ref) => secrets.get(ref),
-          onChunk: (c) => { if (c.kind === 'delta') full += c.delta; sendChunk(c); }
+          onChunk: (c) => {
+            if (c.kind === 'delta') full += c.delta;
+            // M8 Task 2 (B9): best-effort token telemetry from the streaming
+            // usage chunk. The model id is the actual string passed to the
+            // router above.
+            if (c.kind === 'usage') deps.usageTracker?.track({ sessionId, agentId, modelId, ...c.usage });
+            sendChunk(c);
+          }
         });
         if (full) await chatService.appendMessage(sessionId, 'assistant', full);
         getWindow()?.webContents.send(IpcEvent.chatDone, { sessionId });

@@ -319,6 +319,31 @@ export const MIGRATIONS: Migration[] = [
     version: 9,
     sql: `
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_multica_task_id ON tasks(multica_task_id) WHERE multica_task_id IS NOT NULL;`
+  },
+  // M8 Task 2 (B9): token usage tracking. The v1 schema ALREADY created a
+  // token_usage table with a vestigial shape (id TEXT PRIMARY KEY, no
+  // agent_id/model_id/cost_estimate) that NOTHING writes to — but its existence
+  // would make the B9 `CREATE TABLE IF NOT EXISTS` below a no-op and leave the
+  // UsageTracker INSERT (which includes agent_id/model_id/cost_estimate) broken
+  // on every database, fresh or upgraded. The old table is dead (no code reads
+  // or writes it), so DROP it and create the real shape. schema_migrations
+  // version tracking runs v10 exactly once, so the DROP/CREATE is safe.
+  {
+    version: 10,
+    sql: `
+    DROP TABLE IF EXISTS token_usage;
+    CREATE TABLE IF NOT EXISTS token_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT,
+      session_id TEXT,
+      agent_id TEXT,
+      model_id TEXT,
+      prompt_tokens INTEGER NOT NULL,
+      completion_tokens INTEGER NOT NULL,
+      total_tokens INTEGER NOT NULL,
+      cost_estimate REAL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`
   }
 ];
 

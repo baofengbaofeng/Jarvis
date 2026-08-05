@@ -1,4 +1,5 @@
 export * from './model/types';
+export * from './model';
 export * from './model/adapters/index';
 export * from './coding/index';
 export * from './model/router';

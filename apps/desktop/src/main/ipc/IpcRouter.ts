@@ -17,6 +17,8 @@ import { registerChatHandlers } from './chat';
 import { registerRuntimeHandlers } from './runtime';
 import { registerTaskHandlers } from './tasks';
 import { createTaskboardIpc } from './taskboard';
+import { createUsageIpc } from './usage';
+import { UsageTracker } from '../usage/UsageTracker';
 import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
@@ -161,12 +163,15 @@ export class IpcRouter {
     this.register(IpcChannel.providerDelete, (_e, id) => providers.remove(id as string));
     this.register('provider.listModels', (_e, providerId) => providers.listModels(providerId as string));
     this.register('provider.addModel', (_e, providerId, input) => providers.addModel(providerId as string, input as ModelInput));
-    const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow());
+    // M8 Task 2 (B9): ONE shared token-usage sink feeds the chat path, the task
+    // path, and the usage.* IPC channels.
+    const usageTracker = new UsageTracker(this.db);
+    const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), { usageTracker });
     this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as Parameters<typeof chat.send>[1]));
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
-    const tasks = registerTaskHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), createAgentStore(this.db), { settings });
+    const tasks = registerTaskHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), createAgentStore(this.db), { settings, usageTracker });
     this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string; sessionId?: string }));
     this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
     this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));
@@ -178,6 +183,11 @@ export class IpcRouter {
     // task.cancel/pause/resume/retry channels above.
     const taskboard = createTaskboardIpc(this.db);
     this.register('taskboard.list', () => taskboard.list());
+    // M8 Task 2 (B9): token usage dashboard data plane. Read-only channels over
+    // the same tracker the chat/task paths write.
+    const usage = createUsageIpc(usageTracker);
+    this.register('usage.summary', () => usage.summary());
+    this.register('usage.list', (_e, agentId) => usage.list(agentId as string | undefined));
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract

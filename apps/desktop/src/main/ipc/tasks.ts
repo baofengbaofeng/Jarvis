@@ -16,6 +16,7 @@ import { webSearch } from './search';
 import { getMessageBus } from './squad';
 import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SecureStorage } from '../secrets/SecureStorage';
+import type { UsageTracker } from '../usage/UsageTracker';
 import type { AgentConfig } from '@jarvis/protocol';
 import { createSnapshotStore, snapshotBeforeTask, createSnapshotGit, createSnapshotFs, createCodeIndexAdapter } from './coding';
 
@@ -41,6 +42,9 @@ export interface TaskHandlerDeps {
   // policy saved by the PermissionsSettingsPage. Falls back to the default
   // readwrite policy when absent.
   settings?: SettingsStore;
+  // M8 Task 2 (B9): optional token-usage sink. Best-effort telemetry — when
+  // absent (most specs), task completion just skips tracking.
+  usageTracker?: UsageTracker;
 }
 
 export function registerTaskHandlers(db: Database.Database, secrets: SecureStorage, getWindow: () => BrowserWindow | null, agentStore = createAgentStore(db), deps: TaskHandlerDeps = {}) {
@@ -80,6 +84,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // turn into the same session that launched it (M1 session list + reload stays
   // working while M2 executes the task through the task path).
   const taskSessions = new Map<string, string>();
+  // M8 Task 2 (B9): task id -> resolved run identity (agent + model) captured at
+  // create time, so the completion path can attribute token usage even though
+  // the orchestrator's onDone only carries (id, ok, text, usage).
+  const taskRuns = new Map<string, { agentId: string; modelId: string }>();
 
   // The model adapters stream deltas via onChunk and return void, while
   // EngineChatFn must RETURN { text, usage } (the AgentEngine destructures it).
@@ -419,11 +427,18 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // push when M7 threads squad member logs through the orchestrator.
       if (squadCtx) getWindow()?.webContents.send(IpcEvent.squadEvent, { agent: squadCtx.leaderAgentId, ts: Date.now(), kind: 'log', detail: line });
     },
-    onDone: (id, ok, text) => {
+    onDone: (id, ok, text, usage) => {
       db.prepare('UPDATE tasks SET status = ?, result_json = ?, completed_at = ? WHERE id = ?').run(ok ? 'completed' : 'failed', JSON.stringify({ text }), new Date().toISOString(), id);
       getWindow()?.webContents.send(ok ? IpcEvent.taskComplete : IpcEvent.taskFailed, { id, text });
       const sessionId = taskSessions.get(id);
       if (sessionId) void chatService.appendMessage(sessionId, 'assistant', text);
+      // M8 Task 2 (B9): best-effort token telemetry. Only the completion path
+      // carries usage; the failure path leaves it undefined and is skipped. A
+      // missing taskRuns entry (unlikely) degrades to NULL agent/model ids.
+      if (usage) {
+        const run = taskRuns.get(id);
+        deps.usageTracker?.track({ taskId: id, agentId: run?.agentId, modelId: run?.modelId, ...usage });
+      }
       // M6 Task 8 (I5): a terminal task outcome fires a desktop notification
       // plus an in-app toast. buildTaskNotification is the unit-tested decision
       // logic (complete/failed only). NotificationBridge is lazy-imported so
@@ -452,6 +467,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       // AgentEngine.run) — no module-level currentAgentId/currentPlanOnly.
       const { agent, messages, env, apiKey, provider, modelId, workspaceRoot, policy } = await resolveAgentRun(agentId, prompt);
       await store.create(id, agentId);
+      taskRuns.set(id, { agentId, modelId });
       // G6: register the agent's bound MCP servers' tools into the shared
       // engine registry (filtered by config_json.agentIds). Clients are cached
       // per server id (see ./mcp) so repeated task runs reuse the same child
