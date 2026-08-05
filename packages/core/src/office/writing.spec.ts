@@ -3,7 +3,7 @@ import { buildWritingPrompt, splitParagraphs, translateWhileTyping } from './wri
 
 describe('writing', () => {
   it('builds prompts per action', () => {
-    expect(buildWritingPrompt('polish', 'hi', )).toContain('润色');
+    expect(buildWritingPrompt('polish', 'hi')).toContain('润色');
     expect(buildWritingPrompt('translate', 'hi', 'en')).toContain('en');
   });
 

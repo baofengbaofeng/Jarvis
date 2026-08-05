@@ -11,6 +11,14 @@ export function WritingView() {
   const [sideBySide, setSideBySide] = useState(false);
   const [error, setError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Monotonic request id: every debounce run (and every toggle-off/clear) bumps
+  // it, so an older in-flight translate that resolves late is recognized as
+  // stale and can never clobber fresher results.
+  const reqId = useRef(0);
+  // Latest-value mirror of sideBySide so the async .then callback checks the
+  // *current* toggle state, not the value captured when the debounce fired.
+  const sideBySideRef = useRef(sideBySide);
+  sideBySideRef.current = sideBySide;
 
   const runAction = async (action: WritingAction) => {
     if (!text.trim()) return;
@@ -30,15 +38,29 @@ export function WritingView() {
   };
 
   useEffect(() => {
-    if (!sideBySide || !text.trim()) { setLive(null); return; }
+    // Feature off or empty input: drop any pending debounce, invalidate any
+    // in-flight request, and clear the live panel so a stale resolve can never
+    // re-render it after the toggle is switched off.
+    if (!sideBySide || !text.trim()) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      reqId.current++;
+      setLive(null);
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const id = ++reqId.current;
     debounceRef.current = setTimeout(() => {
       // Promise-chain (not await) so a rejecting channel cannot escape as an
-      // unhandled rejection from the debounced effect; on error, clear the live
-      // preview and leave the editor usable.
+      // unhandled rejection from the debounced effect. The id guard skips a
+      // resolve that is stale (a newer request or a toggle-off superseded it).
       window.jarvis.invoke('office.writing.translate', text, 'en')
-        .then((r) => { const res = r as { ok: boolean; done: string[]; pending: string }; if (res.ok) setLive({ done: res.done, pending: res.pending }); })
-        .catch(() => setLive(null));
+        .then((r) => {
+          if (id !== reqId.current || !sideBySideRef.current) return;
+          const res = r as { ok: boolean; done: string[]; pending: string };
+          if (res.ok) setLive({ done: res.done, pending: res.pending });
+          else setLive(null);
+        })
+        .catch(() => { if (id === reqId.current) setLive(null); });
     }, 800);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [text, sideBySide]);
