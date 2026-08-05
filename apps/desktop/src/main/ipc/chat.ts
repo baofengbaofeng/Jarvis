@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
 import { createChatService } from '@jarvis/core';
 import { ModelRouter } from '@jarvis/core';
+import type { MessageContent } from '@jarvis/core';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig, ChatRole } from '@jarvis/protocol';
 
@@ -52,9 +53,14 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
     async createSession(title?: string) { return chatService.createSession(title); },
     async loadMessages(sessionId: string) { return chatService.loadMessages(sessionId); },
 
-    async send(_event: Electron.IpcMainInvokeEvent, args: { sessionId: string; text: string; agentId: string }) {
-      const { sessionId, text, agentId } = args;
-      await chatService.appendMessage(sessionId, 'user', text);
+    async send(_event: Electron.IpcMainInvokeEvent, args: { sessionId: string; agentId: string; text?: string; content?: string | MessageContent }) {
+      const { sessionId, agentId } = args;
+      // L23: the renderer may attach images and send a content array under
+      // `content`. `text` is retained for backward compatibility with existing
+      // callers (the M1 IPC contract and chat.spec fixtures); string behavior is
+      // identical either way.
+      const content = args.content ?? args.text ?? '';
+      await chatService.appendMessage(sessionId, 'user', content);
       const history = await chatService.loadMessages(sessionId);
       const agent = await dbAdapter.loadAgent(agentId);
       const provider = db.prepare(`

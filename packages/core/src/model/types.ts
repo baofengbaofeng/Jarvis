@@ -1,10 +1,14 @@
 import type { Provider, ProviderType } from '@jarvis/protocol';
+import type { MessageContent } from '../office/content';
 
 export type ModelRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface ModelMessage {
   role: ModelRole;
-  content: string;
+  // L23: a message may carry a content array (text + image_url parts) for
+  // multimodal providers. `string | MessageContent` keeps plain-string callers
+  // (the entire M1 path and all existing adapters.spec fixtures) untouched.
+  content: string | MessageContent;
   name?: string;
 }
 

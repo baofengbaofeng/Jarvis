@@ -116,7 +116,7 @@ export class IpcRouter {
     this.register('provider.listModels', (_e, providerId) => providers.listModels(providerId as string));
     this.register('provider.addModel', (_e, providerId, input) => providers.addModel(providerId as string, input as ModelInput));
     const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow());
-    this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as { sessionId: string; text: string; agentId: string }));
+    this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as Parameters<typeof chat.send>[1]));
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));

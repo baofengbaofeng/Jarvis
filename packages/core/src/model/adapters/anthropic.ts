@@ -1,5 +1,6 @@
 import type { ChatRequest, ChatChunk, ProviderAdapter } from '../types';
 import { parseSSE } from '../../util/sse';
+import { normalizeContent } from '../../office/content';
 
 export class AnthropicAdapter implements ProviderAdapter {
   readonly type = 'anthropic-compatible' as const;
@@ -8,8 +9,13 @@ export class AnthropicAdapter implements ProviderAdapter {
   async chat(req: ChatRequest, ctx: { apiKey: string; onChunk: (c: ChatChunk) => void; signal?: AbortSignal }): Promise<void> {
     const fetchImpl = this.deps.fetchImpl ?? fetch;
     const url = `${req.provider.baseUrl.replace(/\/$/, '')}/v1/messages`;
-    const system = req.messages.filter(m => m.role === 'system').map(m => m.content).join('\n');
-    const rest = req.messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content }));
+    // System messages are always plain strings in practice; if one ever carries a
+    // content array, join only its text parts (image blocks are not valid in the
+    // Anthropic `system` field).
+    const system = req.messages.filter(m => m.role === 'system').map(m => typeof m.content === 'string' ? m.content : m.content.filter(p => p.type === 'text').map(p => p.text).join('\n')).join('\n');
+    // L23: normalize each message — image_url parts map to Anthropic image
+    // content blocks, string content passes through unchanged.
+    const rest = req.messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: normalizeContent(m.content, 'anthropic') }));
     const body = {
       model: req.modelId,
       max_tokens: req.maxTokens ?? 4096,

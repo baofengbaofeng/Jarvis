@@ -143,7 +143,10 @@ describe('task handlers', () => {
       writeFileSync(join(ws, 'notes.txt'), 'hello from notes');
       let userContent = '';
       const fn: EngineChatFn = async (req, opts) => {
-        userContent = req.messages.find(m => m.role === 'user')?.content ?? '';
+        // The task path is text-only, so extract the string part (L23 widened
+        // ModelMessage.content to string | MessageContent).
+        const c = req.messages.find(m => m.role === 'user')?.content;
+        userContent = typeof c === 'string' ? c : '';
         opts.onChunk?.({ kind: 'delta', delta: 'ok' });
         opts.onChunk?.({ kind: 'done' });
         return { text: 'ok', usage: null };

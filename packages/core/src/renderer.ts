@@ -10,6 +10,7 @@
 // Keep this list in sync with the pure modules under `src/coding/` and
 // `src/office/`; anything that imports `node:*` (transitively or not) does NOT
 // belong here. officeChat/selection are pure prompt/stream helpers (no node:*).
+export * from './office/content';
 export * from './office/officeChat';
 export * from './office/selection';
 export * from './office/writing';

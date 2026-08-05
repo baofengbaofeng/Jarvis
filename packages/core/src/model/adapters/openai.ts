@@ -1,5 +1,6 @@
 import type { ChatRequest, ChatChunk, ProviderAdapter } from '../types';
 import { parseSSE } from '../../util/sse';
+import { normalizeContent } from '../../office/content';
 
 export interface AdapterDeps { fetchImpl?: typeof fetch }
 
@@ -12,7 +13,9 @@ export class OpenAIAdapter implements ProviderAdapter {
     const url = `${req.provider.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
     const body = {
       model: req.modelId,
-      messages: req.messages,
+      // L23: normalize content arrays to OpenAI's content-part shape. String
+      // content passes through unchanged, so existing requests are identical.
+      messages: req.messages.map(m => ({ ...m, content: normalizeContent(m.content, 'openai') })),
       stream: true,
       stream_options: { include_usage: true },
       ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),

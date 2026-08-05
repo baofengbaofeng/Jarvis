@@ -1,4 +1,4 @@
-import type { ModelMessage } from '../model/types';
+import type { ModelMessage, ModelRole } from '../model/types';
 
 export function mergeEnv(system: Record<string, string>, dotenv: Record<string, string>, agent: Record<string, string>, multica: Record<string, string>): Record<string, string> {
   return { ...system, ...dotenv, ...agent, ...multica };
@@ -6,7 +6,7 @@ export function mergeEnv(system: Record<string, string>, dotenv: Record<string, 
 
 export interface AgentContextFiles { jarvisMd: string; agentMd: string | null }
 
-export function buildContextMessages(ctx: AgentContextFiles, systemPrompt: string, history: Array<{ role: string; content: string }>): ModelMessage[] {
+export function buildContextMessages(ctx: AgentContextFiles, systemPrompt: string, history: Array<{ role: string; content: string }>): Array<{ role: ModelRole; content: string }> {
   const parts = [
     systemPrompt,
     ctx.jarvisMd ? `\n\n<workspace-context>\n${ctx.jarvisMd}\n</workspace-context>` : '',
