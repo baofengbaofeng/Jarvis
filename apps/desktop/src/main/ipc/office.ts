@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs';
 import type Database from 'better-sqlite3';
-import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction } from '@jarvis/core';
+// The MAIN process runs in Node/Electron, where the pdfjs-dist browser build
+// (build/pdf.mjs) references browser-only globals (DOMMatrix) at module scope and
+// throws. The legacy build is the Node entry point — same getDocument API, no
+// DOM at import time. The renderer keeps the browser build (see PdfReaderPage).
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, type ChatChunk, type ChatRequest, type ModelMessage, type ModelRole, type ProviderAdapter, type SelectionAction, type WritingAction } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
 
@@ -92,6 +98,32 @@ export function streamAdapter(req: ChatRequest, apiKey: string, deps: { createAd
   })();
 }
 
+// Shared main-side PDF reader for the office channels. readFileSync loads the
+// raw bytes (PDFs are binary, no encoding), getDocument parses the file, then we
+// walk every page and join each page's text items with a space — PDF text items
+// don't carry reliable line breaks, so a space approximates reading order. Both
+// office.pdf.extract (raw page texts) and office.pdf.summarize (chunk + chatText)
+// reuse this so the pdfjs-dist surface stays in one place.
+export async function extractPdf(path: string): Promise<{ pages: number; pageTexts: string[] }> {
+  const data = new Uint8Array(readFileSync(path));
+  const doc = await getDocument({ data }).promise;
+  const pages = doc.numPages;
+  const pageTexts: string[] = [];
+  try {
+    for (let i = 1; i <= pages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      // TextMarkedContent (outlines/links) carries no str; treat it as empty.
+      pageTexts.push((content.items as Array<{ str?: string }>).map((it) => it.str ?? '').join(' '));
+    }
+  } finally {
+    // pdfjs-dist v6: PDFDocumentProxy has no destroy(); the owning loading task
+    // does. Releasing the worker after a one-shot extract avoids a leaked parse.
+    void doc.loadingTask.destroy();
+  }
+  return { pages, pageTexts };
+}
+
 export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }) {
   // The router's generic handler type is (...a: unknown[]) => unknown, but the
   // handler below narrows its second arg; cast it so strictFunctionTypes accepts
@@ -112,5 +144,39 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
       return chatText(modelRouter, [{ role: 'user', content: buildWritingPrompt('translate', p, lang) }]);
     });
     return { ok: true, done, pending };
+  }) as (...a: unknown[]) => unknown);
+  // M5 Task 3 (D7): PDF 伴读 — page text extraction + summarization. extract
+  // returns every page's text; summarize slices the requested page range (1-based
+  // inclusive), chunks it by character budget, and drains each chunk through the
+  // same chatText bridge as the other office channels. Errors (missing file, pdf
+  // parse failure) are caught and returned as { ok: false, error } so the
+  // renderer can surface them without an unhandled rejection.
+  router.register('office.pdf.extract', (async (_e, path: string) => {
+    try {
+      const ext = await extractPdf(path);
+      // The renderer re-loads the doc with pdfjs-dist to paint the page to a
+      // canvas, so ship the raw bytes alongside the page texts. extractPdf
+      // already threw on a missing/unreadable file before this, so the second
+      // read is cheap and safe.
+      const data = readFileSync(path).toString('base64');
+      return { ok: true, ...ext, data };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }) as (...a: unknown[]) => unknown);
+  router.register('office.pdf.summarize', (async (_e, path: string, from: number, to: number) => {
+    try {
+      const { pageTexts } = await extractPdf(path);
+      const chunks = chunkPages(pageTexts.slice(from - 1, to));
+      const out: string[] = [];
+      for (const c of chunks) {
+        // chunkPages is 1-based within the slice; add (from - 1) to rebase chunk
+        // page numbers back onto the document's absolute page numbers.
+        out.push(await chatText(modelRouter, [{ role: 'user', content: buildPdfSummaryPrompt(undefined, { from: c.from + from - 1, to: c.to + from - 1 }, c.texts) }]));
+      }
+      return { ok: true, result: out.join('\n\n---\n\n') };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   }) as (...a: unknown[]) => unknown);
 }

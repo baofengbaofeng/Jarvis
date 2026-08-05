@@ -13,6 +13,7 @@
 export * from './office/officeChat';
 export * from './office/selection';
 export * from './office/writing';
+export * from './office/pdf';
 export * from './coding/diff';
 export * from './coding/mention';
 export * from './coding/filetree';

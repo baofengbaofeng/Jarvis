@@ -77,5 +77,17 @@
     "live": "Translate as you type",
     "error": "Failed"
   },
+  "pdf": {
+    "path": "PDF file path",
+    "open": "Open",
+    "summarize": "Summarize",
+    "summarizePage": "Summarize page",
+    "summarizeAll": "Summarize all",
+    "page": "Page {{page}} / {{total}}",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "error": "Failed to process PDF",
+    "loading": "Processing…"
+  },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" }
 }

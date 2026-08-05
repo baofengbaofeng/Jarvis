@@ -77,5 +77,17 @@
     "live": "边写边译",
     "error": "处理失败"
   },
+  "pdf": {
+    "path": "PDF 文件路径",
+    "open": "打开",
+    "summarize": "摘要",
+    "summarizePage": "本页摘要",
+    "summarizeAll": "全篇摘要",
+    "page": "第 {{page}} / {{total}} 页",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
+    "error": "PDF 处理失败",
+    "loading": "处理中…"
+  },
   "common": { "ok": "确定", "cancel": "取消", "save": "保存", "loading": "加载中…", "edit": "编辑" }
 }
