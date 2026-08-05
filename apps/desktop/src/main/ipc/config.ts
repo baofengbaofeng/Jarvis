@@ -69,7 +69,10 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
 
     const current = {
       providers: db.prepare('SELECT id, name, type, base_url AS baseUrl, api_key_ref AS apiKeyRef FROM providers').all() as ProviderExport[],
-      agents: db.prepare('SELECT id, name, slug FROM agents').all() as AgentExport[],
+      // model_id is selected so mergeEntity can preserve an existing agent's
+      // model binding when the incoming agent omits modelId (merge semantics:
+      // non-empty incoming overrides, the rest is preserved).
+      agents: db.prepare('SELECT id, name, slug, model_id AS modelId FROM agents').all() as AgentExport[],
     };
     const plan = planImport(payload, current, strategy);
     const skipped = [...plan.skip];

@@ -452,6 +452,44 @@ describe('IpcRouter config channels (C12)', () => {
     expect(db.prepare('SELECT value_json FROM settings WHERE key = ?').get('concurrency')).toEqual({ value_json: '{"perAgent":5}' });
   });
 
+  it('config.import rejects a null/empty payload cleanly (no ipcMain rejection)', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const importCfg = handlers.get('config.import')!;
+    // JSON `null` and an empty YAML document both parse to a null payload.
+    const jsonNull = await importCfg({}, 'null', 'merge') as { ok: boolean; error?: string };
+    expect(jsonNull.ok).toBe(false);
+    expect(jsonNull.error).toContain('schemaVersion');
+    const emptyYaml = await importCfg({}, '', 'merge') as { ok: boolean; error?: string };
+    expect(emptyYaml.ok).toBe(false);
+    expect(emptyYaml.error).toContain('schemaVersion');
+  });
+
+  it('config.import merge preserves an existing agent model_id when incoming omits modelId', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const importCfg = handlers.get('config.import')!;
+    db.prepare("INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES ('p1', 'P1', 'openai-compatible', 'https://x', 'k', '2026-08-01', '2026-08-01')").run();
+    db.prepare("INSERT INTO models (id, provider_id, model_id, name, created_at) VALUES ('m1', 'p1', 'gpt-test', 'M1', '2026-08-01')").run();
+    db.prepare("INSERT INTO agents (id, name, slug, model_id, created_at, updated_at) VALUES ('a1', 'A1', 'a-1', 'm1', '2026-08-01', '2026-08-01')").run();
+    const payload = JSON.stringify({
+      schemaVersion: 11, exportedAt: '2026-08-05T00:00:00Z',
+      providers: [], models: [],
+      agents: [{ id: 'a1', name: 'A1 renamed', slug: 'a-1' }],
+      settings: {},
+    });
+    const res = await importCfg({}, payload, 'merge') as { ok: boolean; skipped: number };
+    expect(res.ok).toBe(true);
+    expect(res.skipped).toBe(0);
+    const a1 = db.prepare('SELECT * FROM agents WHERE id = ?').get('a1') as { name: string; model_id: string };
+    expect(a1.name).toBe('A1 renamed');
+    expect(a1.model_id).toBe('m1');
+  });
+
   it('config.import skip leaves an existing provider untouched', async () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;

@@ -75,6 +75,10 @@ export function buildExport(
 }
 
 export function validateSchema(p: ExportPayload): { ok: true } | { ok: false; error: string } {
+  // Guard the boundary: a config file that parses to JSON `null` or an empty
+  // YAML document yields a null payload, which must be a clean { ok:false }
+  // instead of a TypeError escaping as an ipcMain rejection.
+  if (typeof p !== 'object' || p === null) return { ok: false, error: 'missing schemaVersion' };
   if (typeof p.schemaVersion !== 'number' || p.schemaVersion < 1) return { ok: false, error: 'missing schemaVersion' };
   if (p.schemaVersion > CURRENT_SCHEMA) return { ok: false, error: `schema ${p.schemaVersion} > current ${CURRENT_SCHEMA}` };
   return { ok: true };

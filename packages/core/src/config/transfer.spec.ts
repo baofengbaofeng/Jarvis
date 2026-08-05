@@ -37,6 +37,11 @@ describe('transfer', () => {
     expect(validateSchema(payload).ok).toBe(true);
   });
 
+  it('validateSchema rejects non-object payloads instead of throwing', () => {
+    expect(validateSchema(null as unknown as ExportPayload)).toEqual({ ok: false, error: 'missing schemaVersion' });
+    expect(validateSchema(undefined as unknown as ExportPayload).ok).toBe(false);
+  });
+
   it('planImport applies skip/overwrite/merge on id', () => {
     const current: { providers: ProviderExport[]; agents: AgentExport[] } = {
       providers: [{ id: 'p1', name: 'Old', type: 'openai-compatible', baseUrl: 'old', apiKeyRef: 'keychain:p1' }],
