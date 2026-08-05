@@ -92,7 +92,11 @@ export class AgentEngine {
             continue;
           }
         }
-        const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal, workspaceRoot, policy });
+        // M6 final review (finding 3): thread the RUN's agent through to the
+        // tool context so identity-sensitive tools (memory, delegate from) see
+        // who issued this call even on the shared engine (last-registration-wins
+        // otherwise mis-attributes writes to a different agent).
+        const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal, workspaceRoot, policy, agent: input.agent });
         onTool?.(call, result);
         working.push({ role: 'tool', content: result.output });
       }

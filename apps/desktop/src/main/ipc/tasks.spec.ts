@@ -410,6 +410,99 @@ describe('task handlers', () => {
     expect(ctx2).toBe('whole text');
   });
 
+  // M6 final review (finding 1): the strategy-processed leader context must
+  // reach the MEMBER's PROMPT at DELEGATE time (delegateRoute), not be computed
+  // only in runSquad's loop and discarded on the cached path. A 'summary' member
+  // must see the truncated context — the raw leader input's tail (beyond the
+  // 2000-char truncation) must be absent from what the member actually receives.
+  it('passes the strategy-processed leader context to the member at delegate time (L13)', async () => {
+    const leaderId = seedAgent();
+    const m1 = seedAgent();
+    db.prepare('UPDATE agents SET context_passing = ? WHERE id = ?').run('summary', m1);
+    db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run('sq-l13', leaderId, JSON.stringify([m1]), 'in_progress', null, new Date().toISOString());
+    // 2000 'z's then a distinctive tail beyond the summary truncation point.
+    const raw = 'z'.repeat(2000) + 'UNIQUE_TAIL_BEYOND_SUMMARY';
+    let leaderPhase = 0;
+    let memberPrompt = '';
+    const fn: EngineChatFn = async (req, opts) => {
+      if (req.provider.id === leaderId) {
+        if (leaderPhase === 0) {
+          leaderPhase = 1;
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'delegate_agent', arguments: { agent: m1, subtask: 'do x' } }] });
+        }
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      // Member run: capture the user prompt it actually received.
+      const c = req.messages.find(m => m.role === 'user')?.content;
+      memberPrompt = typeof c === 'string' ? c : '';
+      opts.onChunk?.({ kind: 'delta', delta: 'member result' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'member result', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-l13', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
+    try {
+      await runner.runLeader(raw);
+    } finally {
+      runner.teardown();
+    }
+    // The member prompt is the TRUNCATED context + the subtask — the tail beyond
+    // the summary truncation point never reaches the member.
+    expect(memberPrompt).toContain('[子任务]');
+    expect(memberPrompt).toContain('do x');
+    expect(memberPrompt).not.toContain('UNIQUE_TAIL_BEYOND_SUMMARY');
+    expect(memberPrompt.length).toBeLessThan(2500);
+  });
+
+  // M6 final review (finding 3): within a single squad run the leader and member
+  // share the tool registry, but each memorize must write to ITS OWN memory. The
+  // member's re-registration (bound to m1) must NOT capture the leader's later
+  // memorize — ctx.agent (threaded through AgentEngine.run) attributes each write.
+  it('attributes memory writes to the run agent within a squad run (F11 per-run)', async () => {
+    const leaderId = seedAgent();
+    const m1 = seedAgent();
+    db.prepare('INSERT INTO squads (id, leader_agent_id, member_agent_ids_json, status, task_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run('sq-memattr', leaderId, JSON.stringify([m1]), 'in_progress', null, new Date().toISOString());
+    let leaderPhase = 0;
+    const fn: EngineChatFn = async (req, opts) => {
+      if (req.provider.id === leaderId) {
+        if (leaderPhase === 0) {
+          leaderPhase = 1;
+          // Phase 1: delegate to m1 (member runs inline and memorizes).
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'delegate_agent', arguments: { agent: m1, subtask: 'do x' } }] });
+        } else if (leaderPhase === 1) {
+          leaderPhase = 2;
+          // Phase 2: the leader's continuation memorizes — must go to the leader.
+          opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '2', name: 'memorize', arguments: { key: 'leaderKey', value: 'leaderVal' } }] });
+        }
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      // Member run: memorize, then done.
+      opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '3', name: 'memorize', arguments: { key: 'memberKey', value: 'memberVal' } }] });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'member result', usage: null };
+    };
+    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const runner = tasks.squad;
+    runner.prepare({ id: 'sq-memattr', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
+    try {
+      await runner.runLeader('do it');
+    } finally {
+      runner.teardown();
+    }
+    const leaderRow = db.prepare('SELECT value FROM agent_memory WHERE agent_id = ? AND key = ?').get(leaderId, 'leaderKey') as { value: string } | undefined;
+    expect(leaderRow?.value).toBe('leaderVal');
+    const memberRow = db.prepare('SELECT value FROM agent_memory WHERE agent_id = ? AND key = ?').get(m1, 'memberKey') as { value: string } | undefined;
+    expect(memberRow?.value).toBe('memberVal');
+    // The leader's write must NOT land on the member's memory.
+    const wrong = db.prepare('SELECT value FROM agent_memory WHERE agent_id = ? AND key = ?').get(m1, 'leaderKey') as { value: string } | undefined;
+    expect(wrong).toBeUndefined();
+  });
+
   // K5 (M6 Task 10): while a squad run is active, task log lines are ALSO
   // streamed onto the squad timeline ('squad:event'). A non-squad task keeps
   // its log on 'task:log' only — the squad:event push is gated on squadCtx.

@@ -221,19 +221,27 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // inline during the leader run is reused instead of re-run. Squad runs are
   // single-active in this milestone (squad.start drives one leader at a time);
   // M7's Multica queue will own a proper per-run context.
-  let squadCtx: { guard: DelegateGuardState; leaderAgentId: string; taskId: string; memberResults: Map<string, string>; memberActive: boolean } | null = null;
+  let squadCtx: { guard: DelegateGuardState; leaderAgentId: string; taskId: string; input: string; memberResults: Map<string, string>; memberActive: boolean } | null = null;
 
   // E14 isolation: each member runs with its OWN resolved config + workspace
   // root through the shared engine — the approval gate is per-run via
   // input.agent, so concurrent leader and member runs cannot leak into each
   // other (same rationale as the M4 approval-gate fix).
-  const runMemberAgent = async (agentId: string, subtask: string): Promise<string> => {
-    const run = await resolveAgentRun(agentId, subtask);
+  const runMemberAgent = async (agentId: string, prompt: string): Promise<string> => {
+    const run = await resolveAgentRun(agentId, prompt);
     await registerAgentMcpTools(db, toolRegistry, agentId);
     registerMemoryToolsFor(agentId);
     const result = await engine.run({ ...run, cwd: run.workspaceRoot });
     return result.text;
   };
+
+  // L13 (M6 final review finding 1): the member's prompt is the leader's
+  // delegation context PLUS the specific subtask. The context is the
+  // strategy-processed leader input (buildPassedContext), so a 'summary' or
+  // 'conclusion' member sees a truncated/processed view rather than the raw
+  // leader input — the strategy actually reaches the member prompt now.
+  const buildMemberPrompt = (subtask: string, context: string): string =>
+    context ? `[Leader 指示]\n${context}\n\n[子任务]\n${subtask}` : subtask;
 
   // M6 Task 5 (L14): persist one delegation edge (leader -> member) when a
   // delegate_agent completes, so squad.graph can render the call chain. The
@@ -269,7 +277,15 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     bus.post({ kind: 'delegate', from, to, taskId, payload: { subtask } });
     ctx.memberActive = true;
     try {
-      const text = await runMemberAgent(to, subtask);
+      // L13 (M6 final review finding 1): the leader's input was stashed on
+      // squadCtx by runLeader; process it through the MEMBER's configured
+      // context_passing strategy and build the member prompt so the strategy
+      // reaches the actual member run. Previously the context was computed only
+      // in runSquad's member loop and discarded on the cached path — the member
+      // ran on the bare subtask and full/summary/conclusion/custom had no effect.
+      const member = agentStore.get(to);
+      const processed = await buildPassedContext(member.contextPassing ?? 'full', ctx.input);
+      const text = await runMemberAgent(to, buildMemberPrompt(subtask, processed));
       ctx.memberResults.set(to, text);
       bus.post({ kind: 'response', from: to, to: from, taskId, payload: { text } });
       bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: true } });
@@ -291,16 +307,21 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // running. Non-leader task runs never touch squadCtx (route rejects them).
   registerDelegateTool(toolRegistry, {
     get guard() { return squadCtx?.guard ?? createGuard(); },
-    // Members are leaves (Multica SOP). This getter is evaluated as an argument
-    // to checkDelegate, so throwing HERE blocks a member-initiated delegate_agent
-    // BEFORE any guard depth is attributed to the leader — a recursive member
-    // call fails loudly with a clear DelegateGuardError instead of being
-    // credited to the leader and passing the cycle guard.
-    get fromAgent() {
+    // Members are leaves (Multica SOP). Throwing HERE blocks a member-initiated
+    // delegate_agent BEFORE any guard depth is attributed to the leader — a
+    // recursive member call fails loudly with a clear DelegateGuardError instead
+    // of being credited to the leader and passing the cycle guard. Otherwise
+    // resolve the RUN's agent (ctx.agent, threaded through AgentEngine.run) so a
+    // shared registry attributes the delegation to whoever actually issued it,
+    // falling back to the active squad leader (M6 final review finding 3).
+    fromAgent: (ctx) => {
       if (squadCtx?.memberActive) throw new DelegateGuardError('members cannot delegate');
-      return squadCtx?.leaderAgentId ?? '';
+      return ctx.agent?.id ?? squadCtx?.leaderAgentId ?? '';
     },
-    taskHash: () => squadCtx?.taskId ?? '',
+    // L15 (M6 final review finding 2): hash the SUBTASK (not the constant squad
+    // id) so a leader delegating two DIFFERENT subtasks to the same member gets
+    // distinct guard keys instead of a spurious 'delegation cycle detected'.
+    taskHash: (subtask) => squadCtx ? `${squadCtx.taskId}:${subtask}` : subtask,
     taskId: () => squadCtx?.taskId ?? '',
     route: delegateRoute
   });
@@ -311,7 +332,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
   // (avoiding a double member run), else runs the member fresh.
   const squadRunner: SquadRouterDeps & { prepare(squad: Squad): void; teardown(): void; isActive(): boolean; runAgentOnce(agentId: string, input: string): Promise<string> } = {
     prepare(squad: Squad): void {
-      squadCtx = { guard: createGuard(), leaderAgentId: squad.leaderAgentId, taskId: squad.id, memberResults: new Map(), memberActive: false };
+      squadCtx = { guard: createGuard(), leaderAgentId: squad.leaderAgentId, taskId: squad.id, input: '', memberResults: new Map(), memberActive: false };
     },
     teardown(): void { squadCtx = null; },
     // Single-active guard used by squad.start: reject a second concurrent run
@@ -319,6 +340,11 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     isActive(): boolean { return squadCtx !== null; },
     async runLeader(input: string): Promise<{ text: string; delegations: Array<{ to: string; subtask: string }> }> {
       if (!squadCtx) throw new Error('squad runner used without prepare');
+      // L13 (M6 final review finding 1): stash the leader's task input on the
+      // squad context so delegateRoute can shape it per-member via the member's
+      // context_passing strategy at delegate time (the strategy output must reach
+      // the member prompt, not be discarded after runLeader returns).
+      squadCtx.input = input;
       const leader = await resolveAgentRun(squadCtx.leaderAgentId, input);
       await registerAgentMcpTools(db, toolRegistry, squadCtx.leaderAgentId);
       registerMemoryToolsFor(squadCtx.leaderAgentId);
@@ -333,10 +359,13 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       });
       return { text: result.text, delegations };
     },
-    async runMember(agentId: string, subtask: string, _context: string): Promise<string> {
+    async runMember(agentId: string, subtask: string, context: string): Promise<string> {
       const cached = squadCtx?.memberResults.get(agentId);
       if (cached !== undefined) return cached;
-      return runMemberAgent(agentId, subtask);
+      // Uncached path (a delegation not actually run inline during the leader
+      // run): still hand the member the composed context — L13 must apply
+      // whether the member ran at delegate time or here.
+      return runMemberAgent(agentId, buildMemberPrompt(subtask, context));
     },
     // M6 Task 6 (F10): a workflow node is a single agent run through the SAME
     // shared engine as a squad member — resolveAgentRun -> engine.run, no squad

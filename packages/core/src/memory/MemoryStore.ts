@@ -35,19 +35,25 @@ export function buildMemoryInjection(entries: MemoryEntry[]): string {
 }
 
 export function registerMemoryTools(registry: ToolRegistry, store: MemoryStore, agentId: string): void {
+  // M6 final review (finding 3): the engine is SHARED across tasks/squad
+  // members, so the baked agentId here is only a fallback. The run's agent
+  // (ctx.agent, threaded through AgentEngine.run) wins when present — a leader
+  // run then a member run on the same registry each memorize to their own
+  // memory, not to the last-registered agent.
+  const resolveAgent = (ctx: { agent?: { id: string } }): string => ctx.agent?.id ?? agentId;
   registry.register({
     name: 'memorize', description: 'Store a persistent memory for the current agent',
     parameters: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } }, required: ['key', 'value'] }
-  }, async (args) => {
-    store.memorize(agentId, String(args.key), String(args.value));
+  }, async (args, ctx) => {
+    store.memorize(resolveAgent(ctx), String(args.key), String(args.value));
     return { ok: true, output: 'remembered' };
   });
 
   registry.register({
     name: 'recall', description: 'Recall stored memories for the current agent',
     parameters: { type: 'object', properties: { key: { type: 'string' } } }
-  }, async (args) => {
-    const items = store.recall(agentId, args.key ? String(args.key) : undefined);
+  }, async (args, ctx) => {
+    const items = store.recall(resolveAgent(ctx), args.key ? String(args.key) : undefined);
     return { ok: true, output: items.map(i => `${i.key}: ${i.value}`).join('\n') || 'no memories' };
   });
 }

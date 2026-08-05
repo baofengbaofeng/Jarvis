@@ -20,6 +20,13 @@ export interface ToolContext {
   // to the policy captured at registration time, so a shared engine can still
   // run agents with different permission levels.
   policy?: SandboxPolicy;
+  // The RUN's agent (M6 final review finding 3). The engine is SHARED across
+  // concurrently-running tasks/squad members and tool handlers are registered
+  // once with a baked identity, so a per-run agent here lets identity-sensitive
+  // tools (memory memorize/recall, delegate_agent's from) resolve the agent that
+  // ACTUALLY issued the call instead of the last-registered one. Falls back to
+  // the baked id when absent.
+  agent?: AgentConfig;
 }
 
 export interface ToolResult {

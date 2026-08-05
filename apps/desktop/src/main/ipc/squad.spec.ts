@@ -234,6 +234,28 @@ describe('squad IPC (F8/F9)', () => {
     expect(r.squad.graphRows).toEqual([{ from: 'leader', to: 'm1', label: 'ok' }]);
   });
 
+  // M6 final review (finding 4): "most recent" is not rows[0] (newest by
+  // created_at DESC). A newer squad that was created but never started (idle)
+  // must not shadow an older squad sitting in_review — squad.current prefers the
+  // active/in_review row.
+  it('squad.current prefers the active/in_review squad over a newer created-but-not-started one', async () => {
+    register();
+    const create = handlers.get('squad.create')!;
+    const start = handlers.get('squad.start')!;
+    const current = handlers.get('squad.current')!;
+    // Older squad runs into in_review.
+    const { id: oldId } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1'] }) as { id: string };
+    await start({}, { id: oldId, input: 'do it' });
+    // Newer squad created but never started (idle) — newer by created_at, but
+    // not active. It must NOT shadow the in_review squad.
+    create({}, { leaderAgentId: 'leader2', memberAgentIds: ['m2'] });
+    const r = current({}) as { ok: boolean; squad: { id: string; leaderAgentId: string; status: string } };
+    expect(r.ok).toBe(true);
+    expect(r.squad.id).toBe(oldId);
+    expect(r.squad.leaderAgentId).toBe('leader');
+    expect(r.squad.status).toBe('in_review');
+  });
+
   it('squad.current returns { ok:true, squad:null } when no squad exists', () => {
     register();
     const current = handlers.get('squad.current')!;
@@ -378,6 +400,26 @@ describe('squad IPC (F8/F9)', () => {
       const r = await run({}, 'not json') as { ok: boolean; error: string };
       expect(r.ok).toBe(false);
       expect(r.error).toBeTruthy();
+    });
+
+    // M6 final review (minor): workflow nodes run through the SAME shared
+    // engine as squad members, so workflow.run must reject while a squad run
+    // holds the runner context (same single-active story as squad.start).
+    it('rejects workflow.run while a squad run is active (single-active)', async () => {
+      const { runner, release } = deferredRunner();
+      register(runner);
+      const create = handlers.get('squad.create')!;
+      const start = handlers.get('squad.start')!;
+      const run = handlers.get('workflow.run')!;
+      const { id } = create({}, { leaderAgentId: 'leader', memberAgentIds: ['m1'] }) as { id: string };
+      // squad.start's prepare runs synchronously, so the runner is active while
+      // runLeader awaits the gate.
+      const first = start({}, { id, input: 'run one' });
+      const r = await run({}, '{"nodes":[],"edges":[]}') as { ok: boolean; error: string };
+      expect(r.ok).toBe(false);
+      expect(r.error).toContain('another squad run is in progress');
+      release({ text: 'plan', delegations: [] });
+      await first;
     });
 
     it('returns { ok:false } when a node agent is missing', async () => {

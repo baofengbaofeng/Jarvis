@@ -63,7 +63,7 @@
   "coding": { "selectFile": "Select a file from the left to preview" },
   "diff": { "title": "Diff", "accept": "Accept", "reject": "Reject", "apply": "Apply" },
   "versionHistory": { "title": "Version History", "rollback": "Rollback", "rolledBack": "Rolled back", "fields": "Fields" },
-  "squadView": { "title": "Squad {{id}} — {{status}}", "leader": "Leader", "members": "Members" },
+  "squadView": { "title": "Squad {{id}} — {{status}}", "leader": "Leader", "members": "Members", "newSquad": "New squad", "task": "Task input", "create": "Create" },
   "mention": { "placeholder": "@file or @symbol" },
   "plan": { "badge": "Plan" },
   "selection": {

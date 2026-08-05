@@ -158,12 +158,22 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
   // real review detail, closing the Task 8 gap where squad:status events only
   // carried { id, state }. No-active-squad => { ok:true, squad:null } (a normal
   // "nothing to show", not an error).
+  //
+  // M6 final review (finding 4): "most recent" is NOT rows[0] (newest by
+  // created_at DESC) — a newer squad that was created but never started (idle)
+  // would shadow an older squad sitting in_review. Prefer the row whose status
+  // is in_progress/in_review, then the one matching runner.lastResult.squadId,
+  // then fall back to the newest. The first active row in the DESC list is the
+  // newest active one.
   register('squad.current', (_e, _args) => {
     try {
       const rows = store.list();
       if (rows.length === 0) return { ok: true as const, squad: null };
-      const s = rows[0];
       const last = deps.runner.lastResult;
+      const s =
+        rows.find(r => r.status === 'in_progress' || r.status === 'in_review') ??
+        (last ? rows.find(r => r.id === last.squadId) : undefined) ??
+        rows[0];
       const detail = last && last.squadId === s.id ? last : { summary: '', members: [] };
       return {
         ok: true as const,
@@ -262,6 +272,12 @@ export function registerSquadIpc(register: (channel: string, handler: (event: un
   // executes a definition the renderer hands over.
   register('workflow.run', async (_e, definitionJson) => {
     try {
+      // M6 final review (minor): workflow nodes run through the SAME shared
+      // engine as squad members (runAgentOnce), so a workflow run must not
+      // start while a squad run holds the shared runner context — same
+      // single-active story as squad.start (reject before JSON.parse so a
+      // parse error cannot mask an in-flight run).
+      if (deps.runner.isActive()) return { ok: false as const, error: 'another squad run is in progress' };
       const wf = JSON.parse(definitionJson as string) as Workflow;
       const outputs = await runWorkflow(wf, async (node, context) => {
         return deps.runner.runAgentOnce(node.agentId, context);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
@@ -60,5 +60,57 @@ describe('SquadViewPage', () => {
     (window as unknown as { jarvis: unknown }).jarvis = { invoke, onDidReceive: () => () => {} };
     render(<SquadViewPage />);
     await waitFor(() => expect(screen.getByTestId('squad-view-error')).toBeTruthy());
+  });
+
+  // M6 final review (finding 5): the S5 scenario must be launchable from the
+  // product. The "New squad" launch control invokes squad.create then
+  // squad.start with the selected leader/members/task.
+  it('creates and starts a squad through the launch control (S5)', async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    const invoke = vi.fn(async (method: string, ...args: unknown[]) => {
+      calls.push({ method, args });
+      if (method === 'squad.current') return { ok: true, squad: null };
+      if (method === 'agent.list') return [
+        { id: 'leader', name: 'Leader Agent' },
+        { id: 'm1', name: 'M1' },
+        { id: 'm2', name: 'M2' }
+      ];
+      if (method === 'squad.create') return { ok: true, id: 'sq-new' };
+      if (method === 'squad.start') return { ok: true, result: { status: 'in_review', summary: 's', members: [] } };
+      return null;
+    });
+    (window as unknown as { jarvis: unknown }).jarvis = { invoke, onDidReceive: () => () => {} };
+    render(<SquadViewPage />);
+    // Open the form once agents have loaded (leader defaults to the first).
+    await waitFor(() => expect(screen.getByTestId('squad-new')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('squad-new'));
+    await waitFor(() => expect(screen.getByTestId('squad-create-form')).toBeTruthy());
+    // Pick m1 as a member (the leader select already defaults to 'leader').
+    fireEvent.click(screen.getByTestId('squad-member-m1'));
+    fireEvent.change(screen.getByTestId('squad-task-input'), { target: { value: 'do the thing' } });
+    fireEvent.click(screen.getByTestId('squad-create-submit'));
+    await waitFor(() => {
+      const createCall = calls.find(c => c.method === 'squad.create');
+      expect(createCall?.args[0]).toEqual({ leaderAgentId: 'leader', memberAgentIds: ['m1'] });
+      const startCall = calls.find(c => c.method === 'squad.start');
+      expect(startCall?.args[0]).toEqual({ id: 'sq-new', input: 'do the thing' });
+    });
+  });
+
+  it('surfaces an inline error when squad.create fails', async () => {
+    const invoke = vi.fn(async (method: string) => {
+      if (method === 'squad.current') return { ok: true, squad: null };
+      if (method === 'agent.list') return [{ id: 'leader', name: 'Leader Agent' }];
+      if (method === 'squad.create') return { ok: false, error: 'boom' };
+      return null;
+    });
+    (window as unknown as { jarvis: unknown }).jarvis = { invoke, onDidReceive: () => () => {} };
+    render(<SquadViewPage />);
+    await waitFor(() => expect(screen.getByTestId('squad-new')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('squad-new'));
+    await waitFor(() => expect(screen.getByTestId('squad-create-form')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('squad-create-submit'));
+    await waitFor(() => expect(screen.getByTestId('squad-create-error').textContent).toContain('boom'));
+    expect(invoke).not.toHaveBeenCalledWith('squad.start');
   });
 });
