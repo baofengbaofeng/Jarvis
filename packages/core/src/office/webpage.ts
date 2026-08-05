@@ -19,10 +19,9 @@ export function extractMainText(html: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/&#?\w+;/g, ' ')
     .replace(/[ \t]+/g, ' ');
-  const blocks = cleaned.split(/\s*\n\s*/).map(s => s.trim()).filter(s => s.length > 0);
-  const main = blocks.filter(s => s.length > 20);
-  if (main.length === 0) return cleaned.replace(/\s+/g, ' ').trim();
-  return main.sort((a, b) => b.length - a.length).slice(0, 5).join('\n');
+  const blocks = cleaned.split(/\s*\n\s*/).map(s => s.trim()).filter(s => s.length > 20);
+  if (blocks.length === 0) return cleaned.replace(/\s+/g, ' ').trim();
+  return blocks.sort((a, b) => b.length - a.length).slice(0, 5).join('\n');
 }
 
 // Security gate for WebView URLs: only http(s) is allowed (reject file:,

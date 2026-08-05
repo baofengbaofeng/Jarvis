@@ -66,23 +66,53 @@ describe('streamAdapter', () => {
 // orchestration (incl. try/finally close and URL validation) is covered here
 // with an injected fake host.
 describe('summarizeWebPage', () => {
-  const html = '<html><body><nav>menu menu menu menu</nav><article><p>这是正文第一段,包含足够多的文字内容以便被选中为正文主体。</p><p>这是正文第二段,继续提供更多有意义的句子来支撑正文提取逻辑的判断。</p></article></body></html>';
+  // The WebView's extract() returns the rendered page innerText (plain text, no
+  // tags) — that is the primary source for the summary (D8 生产优先 innerText).
+  const innerText = '这是正文第一段,包含足够多的文字内容以便被选中为正文主体。\n这是正文第二段,继续提供更多有意义的句子来支撑正文提取逻辑的判断。';
 
-  it('opens, extracts, cleans, summarizes and always closes', async () => {
+  it('prefers extract() innerText, summarizes and always closes', async () => {
     const calls: string[] = [];
     const web = {
       open: async () => { calls.push('open'); },
-      extract: async () => html,
+      extract: async () => innerText,
       close: () => { calls.push('close'); }
     };
     const result = await summarizeWebPage('https://example.com/article', web, async (text) => {
       calls.push('summarize');
+      // innerText passes through untouched (no truncation, no cleaning).
+      expect(text).toBe(innerText);
       expect(text).toContain('这是正文第一段');
-      expect(text).not.toContain('menu menu');
       return 'summary';
     });
     expect(result).toEqual({ ok: true, result: 'summary' });
     expect(calls).toEqual(['open', 'summarize', 'close']);
+  });
+
+  it('whitespace-only extract() (raw.trim() falsy) yields the empty-extract error', async () => {
+    // raw.trim() || extractMainText(raw): extractMainText only sees the
+    // extract() return (innerText) — it cannot resurrect content the page never
+    // produced, so a blank innerText still errors out. HTML cleaning (nav/menu
+    // dropping) is extractMainText's own job and is unit-tested in
+    // packages/core/src/office/webpage.spec.ts.
+    const web = { open: async () => {}, extract: async () => '  \n  ', close: () => {} };
+    const result = await summarizeWebPage('https://example.com/article', web, async () => 'summary');
+    expect(result).toEqual({ ok: false, error: '页面无可提取的正文内容' });
+  });
+
+  it('does not truncate a long multi-paragraph innerText to 5 blocks', async () => {
+    // Regression: extractMainText keeps only the 5 longest blocks — if it ran
+    // over plain innerText, paragraphs 6+ would never reach the model. The
+    // summarize path must pass innerText through whole (the 12000-char slice is
+    // the only cut).
+    const paragraphs = Array.from({ length: 12 }, (_, i) => `这是第${i + 1}段正文内容,包含足够多的文字内容以便被选中为正文主体。`);
+    const longText = paragraphs.join('\n');
+    const web = { open: async () => {}, extract: async () => longText, close: () => {} };
+    let seen = '';
+    const result = await summarizeWebPage('https://example.com/article', web, async (text) => { seen = text; return 'summary'; });
+    expect(result).toEqual({ ok: true, result: 'summary' });
+    expect(seen).toContain('这是第1段正文内容');
+    expect(seen).toContain('这是第8段正文内容');
+    expect(seen).toContain('这是第12段正文内容');
   });
 
   it('rejects non-http URLs without opening the window', async () => {

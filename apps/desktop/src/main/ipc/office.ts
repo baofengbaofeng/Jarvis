@@ -47,9 +47,12 @@ export async function summarizeWebPage(
     if (!isHttpUrl(url)) return { ok: false, error: '只支持 http/https 网页地址' };
     await web.open(url);
     const raw = await web.extract();
-    // extract() returns the rendered innerText (usually cleaner than raw HTML);
-    // extractMainText is the pure-function fallback for when only HTML is around.
-    const text = extractMainText(raw) || raw;
+    // extract() returns the rendered innerText — that is the primary text source
+    // (D8 "生产优先 innerText"). extractMainText is the pure-function FALLBACK,
+    // used only when the WebView returned no innerText (e.g. '' on a JS-driven
+    // page before render): running its "keep 5 longest blocks" pass over plain
+    // innerText would silently truncate a long article before the slice below.
+    const text = raw.trim() || extractMainText(raw);
     if (!text) return { ok: false, error: '页面无可提取的正文内容' };
     const result = await summarize(text.slice(0, 12000));
     return { ok: true, result };

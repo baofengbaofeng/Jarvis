@@ -25,6 +25,11 @@ export interface WebViewHostDeps {
 // 20000 chars); main-side pure extraction (core extractMainText) is the fallback
 // for raw HTML in office.summarize.
 export class WebViewHost {
+  // Monotonic counter for partition names: Date.now() alone would collide when
+  // two opens land in the same millisecond. Note the throwaway in-memory
+  // partitions/sessions accumulate for the app lifetime — an accepted trade-off
+  // of per-open isolation (I8).
+  private static seq = 0;
   private win: WebViewWindow | null = null;
   private readonly createWindow: (partition: string) => WebViewWindow;
 
@@ -42,10 +47,16 @@ export class WebViewHost {
   }
 
   async open(url: string): Promise<void> {
-    const partition = `webview-${Date.now()}`;
-    this.win = this.createWindow(partition);
-    this.win.on('closed', () => { this.win = null; });
-    await this.win.loadURL(url);
+    // Close any window already up (office.webview.open leaves one open) so a
+    // second open can't orphan it. The 'closed' handler is guarded so a stale
+    // window's close event (fired later) can't null the reference to the CURRENT
+    // window.
+    this.close();
+    const partition = `webview-${++WebViewHost.seq}`;
+    const win = this.createWindow(partition);
+    this.win = win;
+    win.on('closed', () => { if (this.win === win) this.win = null; });
+    await win.loadURL(url);
   }
 
   async extract(): Promise<string> {
