@@ -403,6 +403,21 @@ describe('IpcRouter backup channels (L18)', () => {
     expect(rl.ok).toBe(true);
   });
 
+  it('rejects backup.create when search migration is blocked', async () => {
+    const mainPath = join(dir, 'main.db');
+    const main = new Database(mainPath);
+    main.exec('CREATE TABLE t (v TEXT)');
+    const backup = new BackupService(main, join(dir, 'backups'), mainPath);
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon, backup, { migrationBlocked: true });
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const create = handlers.get('backup.create')!;
+    const res = await create({}) as { ok: false; error: string };
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('SEARCH_SECRET_MIGRATION_REQUIRED');
+  });
+
   it('does not register backup.* when no BackupService is threaded in', () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
@@ -478,6 +493,17 @@ describe('IpcRouter config channels (C12)', () => {
     expect(out).not.toContain('sk-');
     const yaml = await exportCfg({}, 'yaml') as string;
     expect(yaml).toContain('schemaVersion: 12');
+  });
+
+  it('rejects config.export when search migration is blocked', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon, undefined, { migrationBlocked: true });
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const exportCfg = handlers.get('config.export')!;
+    const res = await exportCfg({}, 'json') as { ok: false; error: string };
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('SEARCH_SECRET_MIGRATION_REQUIRED');
   });
 
   it('config.import applies skip/overwrite/merge and skips agents whose model is missing', async () => {

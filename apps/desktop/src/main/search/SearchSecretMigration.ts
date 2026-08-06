@@ -53,6 +53,7 @@ export class SearchSecretMigration {
 
     const migrated: SearchProviderConfig[] = [];
     const plaintextSecrets = legacyConfigs.map(c => c.apiKey);
+    const alreadyMigrated = (raw as unknown[]).filter(c => !isLegacyConfig(c)) as SearchProviderConfig[];
 
     try {
       for (const cfg of legacyConfigs) {
@@ -64,8 +65,12 @@ export class SearchSecretMigration {
         migrated.push({ type: cfg.type, apiKeyRef: ref, enabled: cfg.enabled });
       }
 
+      const migratedTypes = new Set(migrated.map(c => c.type));
+      const preserved = alreadyMigrated.filter(c => !migratedTypes.has(c.type));
+      const combined = [...preserved, ...migrated];
+
       this.db.pragma('secure_delete = ON');
-      this.db.transaction(() => settings.set('search_providers', migrated))();
+      this.db.transaction(() => settings.set('search_providers', combined))();
     } catch {
       return { ok: false, error: 'SEARCH_SECRET_MIGRATION_REQUIRED' };
     }

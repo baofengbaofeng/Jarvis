@@ -43,6 +43,28 @@ describe('SearchSecretMigration', () => {
     expect(settings.get('search_providers')).toEqual([{ type: 'brave', apiKey: 'keep-me', enabled: true }]);
   });
 
+  it('preserves already-migrated providers when migrating a mixed array', async () => {
+    settings.set('search_providers', [
+      { type: 'serper', apiKeyRef: 'search:serper:key', enabled: true },
+      { type: 'brave', apiKey: 'brave-secret', enabled: false },
+    ]);
+    const secrets = new Map<string, string>([['search:serper:key', 'existing-serper-key']]);
+    const migration = new SearchSecretMigration(db, {
+      set: async (k, v) => { secrets.set(k, v); },
+      get: async k => secrets.get(k) ?? null,
+      delete: async k => { secrets.delete(k); },
+    });
+    expect(await migration.run()).toEqual({ ok: true, migrated: 1 });
+    expect(settings.get('search_providers')).toEqual([
+      { type: 'serper', apiKeyRef: 'search:serper:key', enabled: true },
+      { type: 'brave', apiKeyRef: 'search:brave:key', enabled: false },
+    ]);
+    expect(secrets.get('search:serper:key')).toBe('existing-serper-key');
+    expect(secrets.get('search:brave:key')).toBe('brave-secret');
+    const raw = db.prepare('SELECT value_json FROM settings WHERE key = ?').get('search_providers') as { value_json: string };
+    expect(raw.value_json).not.toContain('brave-secret');
+  });
+
   it('leaves no plaintext in db, wal, backup or export after checkpoint', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'jarvis-search-mig-'));
     const dbPath = join(dir, 'jarvis.db');

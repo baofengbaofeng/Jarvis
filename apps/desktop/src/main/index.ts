@@ -30,6 +30,7 @@ let ideBridge: IdeBridge | null = null;
 // started on boot, a best-effort backup is taken on quit, and the same instance
 // is threaded into IpcRouter so the renderer can list/create/restore backups.
 let backup: BackupService | null = null;
+let searchMigrationBlocked = false;
 
 export async function bootstrap(): Promise<void> {
   const db = openDatabase();
@@ -37,7 +38,7 @@ export async function bootstrap(): Promise<void> {
   const settings = createSettingsStore(db);
   const secrets = new SecureStorage();
   const migrationResult = await new SearchSecretMigration(db, secrets).run();
-  const searchMigrationBlocked = !migrationResult.ok;
+  searchMigrationBlocked = !migrationResult.ok;
   // C10: the daemon is sized from the saved settings.concurrency value on every
   // (re)start; the provider reads live so a save + daemon.restart picks it up.
   daemon.setConcurrencyProvider(() => (settings.get('concurrency') ?? {}) as { perAgent?: number; machine?: number });
@@ -48,7 +49,7 @@ export async function bootstrap(): Promise<void> {
   const backupService = new BackupService(db, join(jarvisDataDir(), 'backups'), dbPath);
   const rawInterval = settings.get('backup_interval_min', 1440);
   const intervalMin = typeof rawInterval === 'number' && rawInterval > 0 ? rawInterval : 1440;
-  backupService.start(intervalMin * 60_000);
+  if (!searchMigrationBlocked) backupService.start(intervalMin * 60_000);
   backup = backupService;
   const windows = new WindowManager();
   const ipc = new IpcRouter(db, { getMainWindow: () => windows.getMainWindow() });
@@ -155,5 +156,5 @@ app.on('will-quit', () => {
   // the periodic backups are the durable copy). The catch guards the restore
   // path: after a restore the service's db handle is closed (createBackup is a
   // guarded no-op then), and any other backup failure must not crash the quit.
-  void backup?.createBackup().catch(() => {});
+  void (searchMigrationBlocked ? Promise.resolve() : backup?.createBackup().catch(() => {}));
 });

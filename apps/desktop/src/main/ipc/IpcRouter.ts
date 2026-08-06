@@ -351,8 +351,12 @@ export class IpcRouter {
     // relaunches via app.relaunch immediately after.
     if (backup) {
       const backupIpc = createBackupIpc(backup);
+      const migrationBlocked = searchOpts.migrationBlocked ?? false;
       this.register('backup.list', () => backupIpc.list());
-      this.register('backup.create', async () => backupIpc.create());
+      this.register('backup.create', async () => {
+        if (migrationBlocked) return { ok: false as const, error: 'SEARCH_SECRET_MIGRATION_REQUIRED' };
+        return backupIpc.create();
+      });
       this.register('backup.restore', async (_e, file) => backupIpc.restore(_e, file as string));
     }
     // L18: `app.relaunch` does not exist on the preload surface — the renderer's
@@ -392,7 +396,11 @@ export class IpcRouter {
     // models/agents/settings tables (apiKeyRef only, never plaintext keys);
     // import applies a skip/overwrite/merge strategy over the same tables.
     const config = createConfigIpc(this.db, settings.get);
-    this.register('config.export', (_e, format) => config.exportConfig(format as 'json' | 'yaml'));
+    const migrationBlocked = searchOpts.migrationBlocked ?? false;
+    this.register('config.export', (_e, format) => {
+      if (migrationBlocked) return { ok: false as const, error: 'SEARCH_SECRET_MIGRATION_REQUIRED' };
+      return config.exportConfig(format as 'json' | 'yaml');
+    });
     this.register('config.import', (_e, text, strategy) => config.importConfig(text as string, strategy as ImportStrategy));
     this.register(IpcChannel.secretsSet, async (_e, key, value) => { await secrets.set(key as string, value as string); return { ok: true }; });
     this.register(IpcChannel.secretsGet, async (_e, key) => secrets.get(key as string));
