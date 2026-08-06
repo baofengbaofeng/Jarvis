@@ -12,7 +12,9 @@ import { createAgentStore } from './ipc/agents';
 import { IdeBridge, parseFileArg, openInExternalIde, resolveFileInWorkspace } from './external/IdeBridge';
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
+import { openMainWindow } from './mainWindowLifecycle';
 import { DaemonSupervisor } from './daemon/DaemonSupervisor';
+import type { IpcRouter } from './ipc/IpcRouter';
 import { SecureStorage } from './secrets/SecureStorage';
 import { SearchSecretMigration } from './search/SearchSecretMigration';
 import { pluginRunner } from './plugins/PluginRunnerHost';
@@ -32,6 +34,8 @@ let ideBridge: IdeBridge | null = null;
 // is threaded into IpcRouter so the renderer can list/create/restore backups.
 let backup: BackupService | null = null;
 let searchMigrationBlocked = false;
+let windows: WindowManager | null = null;
+let ipc: IpcRouter | null = null;
 
 export async function bootstrap(): Promise<void> {
   const db = openDatabase();
@@ -52,8 +56,8 @@ export async function bootstrap(): Promise<void> {
   const intervalMin = typeof rawInterval === 'number' && rawInterval > 0 ? rawInterval : 1440;
   if (!searchMigrationBlocked) backupService.start(intervalMin * 60_000);
   backup = backupService;
-  const windows = new WindowManager();
-  const ipc = new IpcRouter(db, { getMainWindow: () => windows.getMainWindow() });
+  windows = new WindowManager();
+  ipc = new IpcRouter(db, { getMainWindow: () => windows!.getMainWindow() });
   ipc.registerAll(daemon, backupService, { migrationBlocked: searchMigrationBlocked });
   ipc.listen();
 
@@ -77,13 +81,13 @@ export async function bootstrap(): Promise<void> {
 
   const tray = new TrayManager({
     onQuit: () => app.quit(),
-    onOpen: () => windows.createMainWindow(),
+    onOpen: () => openMainWindow(windows!, ipc!),
     onRestartDaemon: () => daemon.restart()
   });
 
   tray.create();
   daemon.start(() => tray.updateDaemonStatus(true), () => tray.updateDaemonStatus(false));
-  ipc.attachMainWindowRevoke(windows.createMainWindow());
+  openMainWindow(windows, ipc);
 }
 
 // `jarvis open --file <path[:line]>` opens the file in the external IDE: `code
@@ -135,8 +139,8 @@ if (!gotLock) {
     // Handle the very first launch when it IS an `open --file` invocation.
     handleOpenArgv(process.argv);
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        new WindowManager().createMainWindow();
+      if (BrowserWindow.getAllWindows().length === 0 && windows && ipc) {
+        openMainWindow(windows, ipc);
       }
     });
   });
