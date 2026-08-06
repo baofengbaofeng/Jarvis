@@ -16,6 +16,7 @@ import (
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/httpapi"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/client"
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/policy"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 )
 
@@ -73,7 +74,18 @@ func main() {
 
 	// Wire the L39 runtimeState onto /runtime/status and, when a ConflictStore
 	// exists (Multica enabled), the L38 conflicts onto /runtime/conflicts.
-	extras := []httpapi.ServerExtra{st}
+	// SEC-09: shared file pending/approvals so agent writes and daemon HTTP agree.
+	approvalsPath, pendingPath := policy.DefaultInjectionPaths()
+	extras := []httpapi.ServerExtra{
+		st,
+		&httpapi.InjectionApprovalService{
+			Pending:   policy.NewFilePendingStore(pendingPath),
+			Approvals: policy.NewFileApprovalStore(approvalsPath),
+		},
+	}
+	if token := os.Getenv("JARVIS_DAEMON_TOKEN"); token != "" {
+		extras = append(extras, httpapi.AuthToken(token))
+	}
 	if cs != nil {
 		extras = append(extras, conflictAdapter{cs})
 	}

@@ -407,6 +407,29 @@ export class IpcRouter {
     this.register(IpcChannel.secretsDelete, async (_e, key) => { await secrets.delete(key as string); return { ok: true }; });
     this.register(IpcChannel.daemonStatus, () => daemon.status());
     this.register(IpcChannel.daemonRestart, () => { daemon.restart(); return { ok: true }; });
+    this.register('daemon.injectionApprovals.list', async () => {
+      try {
+        return { ok: true as const, items: await daemon.injectionApprovalClient().list() };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    });
+    this.register('daemon.injectionApprovals.approve', async (_e, args) => {
+      const input = (args ?? {}) as { kind?: string; name?: string; digest?: string };
+      if (!input.kind || !input.name || !input.digest) {
+        return { ok: false as const, error: 'kind, name, and digest required' };
+      }
+      try {
+        await daemon.injectionApprovalClient().approve({
+          kind: input.kind,
+          name: input.name,
+          digest: input.digest,
+        });
+        return { ok: true as const };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    });
     // M7 Task 9 (L39/L38 数据面): runtime status/conflicts come from the
     // supervisor's polled caches; conflict decisions are persisted to settings
     // as the main-owned `multica.conflicts` map (main 属主).

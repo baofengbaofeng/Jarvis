@@ -76,7 +76,14 @@
     "active": "Active",
     "queued": "Queued",
     "perAgent": "Per-agent",
-    "concurrency": "Machine concurrency"
+    "concurrency": "Machine concurrency",
+    "injectionApprovals": {
+      "title": "Pending injection approvals",
+      "none": "No pending approvals",
+      "source": "Remote",
+      "approve": "Approve",
+      "retryHint": "Approved. Retry the original task to apply the injection."
+    }
   },
   "runtime": {
     "mode": { "local": "Local mode", "runtime_registered": "Runtime registered", "runtime_busy": "Runtime busy" },

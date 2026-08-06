@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
+import { InjectionApprovalClient } from './InjectionApprovalClient';
 
 const DEFAULT_PORT = 17890;
 // Fallbacks mirror daemon/cmd/jarvis-daemon/main.go getenvInt defaults.
@@ -185,6 +186,11 @@ export class DaemonSupervisor {
 
   getRuntimeStatus(): RuntimeStatusData { return { ...this.runtimeStatusCache }; }
   getRuntimeConflicts(): ConflictItem[] { return [...this.conflictsCache]; }
+
+  injectionApprovalClient(): InjectionApprovalClient {
+    const token = process.env.JARVIS_DAEMON_TOKEN ?? '';
+    return new InjectionApprovalClient(`http://127.0.0.1:${this.port}`, token);
+  }
 
   private resetRuntimeCache(): void {
     this.runtimeStatusCache = { ...DEFAULT_RUNTIME_STATUS };

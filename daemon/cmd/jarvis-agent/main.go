@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
+	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/policy"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 )
 
@@ -20,13 +21,20 @@ func main() {
 		log.Printf("warn: open db %s: %v", defaultDBPath(), err)
 	} else {
 		defer d.Close()
+		approvalsPath, pendingPath := policy.DefaultInjectionPaths()
+		approvals := policy.NewFileApprovalStore(approvalsPath)
+		pending := policy.NewFilePendingStore(pendingPath)
+		evaluator := policy.NewEvaluator(policy.LoadPolicyConfigFromEnv(), approvals)
 		root.AddCommand(NewListModelsCmd(sqliteModelLister{d: d}, out))
 		root.AddCommand(NewRunCmd(RunDeps{
-			Runner:   &NodeRunner{},
-			History:  &sqliteHistoryLoader{d: d},
-			Recorder: &sqliteTaskRecorder{d: d},
-			Pool:     runtime.NewWorkspacePool(workspaceRoot()),
-			Profiles: &sqliteProfileStore{d: d},
+			Runner:           &NodeRunner{},
+			History:          &sqliteHistoryLoader{d: d},
+			Recorder:         &sqliteTaskRecorder{d: d},
+			Pool:             runtime.NewWorkspacePool(workspaceRoot()),
+			Profiles:         &sqliteProfileStore{d: d},
+			InjectionPolicy:  evaluator,
+			InjectionAudit:   policy.NewJSONLAudit(os.Stderr),
+			InjectionPending: pending,
 		}, out))
 	}
 

@@ -76,7 +76,14 @@
     "active": "活跃",
     "queued": "排队",
     "perAgent": "每 Agent",
-    "concurrency": "机器并发"
+    "concurrency": "机器并发",
+    "injectionApprovals": {
+      "title": "待批准的注入项",
+      "none": "暂无待批准项",
+      "source": "远端",
+      "approve": "批准",
+      "retryHint": "已批准。请重试原任务以应用该注入。"
+    }
   },
   "runtime": {
     "mode": { "local": "本地模式", "runtime_registered": "Runtime 已注册", "runtime_busy": "Runtime 忙碌" },

@@ -83,6 +83,8 @@ export const ALLOWED_INVOKE = new Set<string>([
   'runtime.status',
   'runtime.conflicts',
   'runtime.resolveConflict',
+  'daemon.injectionApprovals.list',
+  'daemon.injectionApprovals.approve',
   'office.selection',
   'office.writing',
   'office.writing.translate',
