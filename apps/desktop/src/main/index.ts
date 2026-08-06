@@ -15,6 +15,7 @@ import { WindowManager } from './window/WindowManager';
 import { DaemonSupervisor } from './daemon/DaemonSupervisor';
 import { SecureStorage } from './secrets/SecureStorage';
 import { SearchSecretMigration } from './search/SearchSecretMigration';
+import { pluginRunner } from './plugins/PluginRunnerHost';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
@@ -151,6 +152,7 @@ app.on('will-quit', () => {
   daemon.stop();
   closeAllMcpClients();
   void ideBridge?.close();
+  void pluginRunner.closeAll();
   // L18 (M8 Task 4): best-effort backup on graceful quit. The backup is async,
   // so this is fire-and-forget (a partial backup on hard-quit is acceptable;
   // the periodic backups are the durable copy). The catch guards the restore

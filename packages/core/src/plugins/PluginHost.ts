@@ -1,26 +1,23 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ToolRegistry } from '../agent/ToolRegistry';
-import type { ToolDef, ToolContext, ToolResult } from '../agent/types';
-import vm from 'node:vm';
+import type { ToolContext, ToolResult } from '../agent/types';
+import type { PluginDescriptor, RegisteredPluginTool } from './protocol';
 
-export interface PluginHostDeps { readImpl?: (p: string) => string }
+export type { PluginDescriptor, RegisteredPluginTool } from './protocol';
+export * from './protocol';
 
-export function createPluginHost(registry: ToolRegistry, deps: PluginHostDeps = {}) {
-  const read = deps.readImpl ?? ((p: string) => readFileSync(p, 'utf8'));
+export interface PluginRunner {
+  load(descriptor: PluginDescriptor): Promise<RegisteredPluginTool[]>;
+  invoke(pluginId: string, tool: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>;
+  close(pluginId: string): Promise<void>;
+}
 
-  const registerTool = (def: ToolDef, handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>): void => {
-    registry.register(def, handler);
-  };
-
+export function createPluginHost(registry: ToolRegistry, runner: PluginRunner) {
   return {
-    registerTool,
-    load(pluginDir: string): void {
-      const entry = join(pluginDir, 'index.js');
-      const code = read(entry);
-      const sandbox = { registerTool, console };
-      vm.createContext(sandbox);
-      vm.runInContext(code, sandbox, { filename: entry });
-    }
+    async load(descriptor: PluginDescriptor): Promise<void> {
+      for (const tool of await runner.load(descriptor)) {
+        registry.register(tool.definition, (args, ctx) =>
+          runner.invoke(descriptor.manifest.id, tool.definition.name, args, ctx));
+      }
+    },
   };
 }
