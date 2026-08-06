@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 // searchProvider/rankFts are pure office modules; searchWeb is the M1 legacy
 // web_search implementation (packages/core/src/chat/search.ts) kept as the
 // fallback when no L25 search_providers config is present.
-import { ftsEscape, rankFts, buildSearchRequest, parseSearchResults, searchWeb, type FtsRow, type SearchProviderConfig, type SearchResultItem, type SearchConfig } from '@jarvis/core';
+import { ftsEscape, rankFts, buildSearchRequest, parseSearchResults, searchWeb, type FtsRow, type SearchProviderConfig, type SearchResultItem, type SearchConfig, type SafeHttpClient, type SafeFetchLimits } from '@jarvis/core';
 import type { SettingsStore } from './settings';
 
 // L21: global FTS5 search across chat_messages/agents/tasks (migration v3).
@@ -24,7 +24,35 @@ export function globalSearch(db: Database.Database, query: string): FtsRow[] {
   return rankFts([...msgs, ...agents, ...tasks], trimmed);
 }
 
-export interface WebSearchDeps { fetchImpl?: typeof fetch }
+export const DEFAULT_WEB_SEARCH_LIMITS: SafeFetchLimits = {
+  timeoutMs: 15_000,
+  maxRedirects: 3,
+  maxResponseBytes: 5 * 1024 * 1024,
+};
+
+let defaultHttp: SafeHttpClient | null = null;
+
+export function setDefaultWebSearchHttp(http: SafeHttpClient): void {
+  defaultHttp = http;
+}
+
+export interface WebSearchDeps {
+  http?: SafeHttpClient;
+  /** @deprecated use `http` — kept for unit tests that mock fetch-shaped responses */
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+  limits?: SafeFetchLimits;
+}
+
+function resolveHttp(deps: WebSearchDeps): SafeHttpClient {
+  if (deps.http) return deps.http;
+  if (deps.fetchImpl) {
+    return {
+      request: (url, init) => deps.fetchImpl!(url, init),
+    };
+  }
+  if (defaultHttp) return defaultHttp;
+  throw new Error('SEARCH_HTTP_CLIENT_MISSING');
+}
 
 // L25: web_search routing. Reads settings.search_providers — the NEW format is
 // an array of SearchProviderConfig (the SearchProvidersPage form). When an
@@ -32,9 +60,10 @@ export interface WebSearchDeps { fetchImpl?: typeof fetch }
 // response. When none is configured, fall back to the M1 legacy implementation
 // (searchWeb against the legacy object-form config under the same key). If
 // neither exists, throw a clear error so the tool/IPC can surface it instead of
-// an unhandled rejection. fetch is injected for tests (deps.fetchImpl).
+// an unhandled rejection. SafeHttpClient is injected for policy-enforced fetch.
 export async function webSearch(settingsStore: SettingsStore, query: string, deps: WebSearchDeps = {}): Promise<SearchResultItem[]> {
-  const fetchImpl = deps.fetchImpl ?? fetch;
+  const http = resolveHttp(deps);
+  const limits = deps.limits ?? DEFAULT_WEB_SEARCH_LIMITS;
   const raw = settingsStore.get('search_providers');
   if (Array.isArray(raw)) {
     const active = (raw as SearchProviderConfig[]).find(c => c.enabled);
@@ -42,7 +71,7 @@ export async function webSearch(settingsStore: SettingsStore, query: string, dep
       const req = buildSearchRequest(active, query);
       let res: Response;
       try {
-        res = await fetchImpl(req.url, { method: req.body ? 'POST' : 'GET', headers: req.headers, body: req.body });
+        res = await http.request(req.url, { method: req.body ? 'POST' : 'GET', headers: req.headers, body: req.body }, limits);
       } catch (e) {
         throw new Error(`search network error: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -54,7 +83,9 @@ export async function webSearch(settingsStore: SettingsStore, query: string, dep
   }
   const legacy = (Array.isArray(raw) ? undefined : raw) as SearchConfig | undefined;
   if (legacy && legacy.endpoint && legacy.apiKey) {
-    return searchWeb(query, legacy, { fetchImpl });
+    return searchWeb(query, legacy, {
+      fetchImpl: async (url, init) => http.request(String(url), init, limits),
+    });
   }
   throw new Error('未配置联网搜索源(设置→办公→搜索源)');
 }

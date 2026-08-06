@@ -36,6 +36,8 @@ import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 import { SecureStorage } from '../secrets/SecureStorage';
 import { TrustedRendererPolicy, assertTrustedIpcEvent } from '../security/TrustedRendererPolicy';
 import { PathCapabilityStore, type PathOperation, type PathPickPurpose } from '../security/PathCapabilityStore';
+import { SafeUrlPolicy } from '../security/SafeUrlPolicy';
+import { setDefaultWebSearchHttp } from './search';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
@@ -83,6 +85,11 @@ export class IpcRouter {
 
   registerAll(daemon: DaemonSupervisor, backup?: BackupService): void {
     const settings = createSettingsStore(this.db);
+    const safeUrlPolicy = new SafeUrlPolicy({
+      allowLoopbackDev: process.env['JARVIS_ALLOW_LOOPBACK_URLS'] === '1',
+    });
+    setDefaultWebSearchHttp(safeUrlPolicy);
+    const assertAllowedUrl = async (url: string) => { await safeUrlPolicy.assertAllowed(url); };
     // C5 (M8 Task 7): in-app shortcut bindings read/write the `shortcuts`
     // settings key (merged over defaults). The renderer's useShortcuts hook +
     // ShortcutsSettingsView are the only consumers.
@@ -90,7 +97,7 @@ export class IpcRouter {
     this.register('shortcuts.get', () => shortcuts.get());
     this.register('shortcuts.set', (_e, bindings) => shortcuts.set(_e, bindings as ShortcutBindings));
     const secrets = new SecureStorage();
-    const providers = createProviderStore(this.db, secrets);
+    const providers = createProviderStore(this.db, secrets, { assertAllowedUrl });
     const agents = createAgentStore(this.db);
     this.register(IpcChannel.agentList, () => agents.list());
     this.register(IpcChannel.agentCreate, (_e, input) => agents.create(input as AgentInput));
@@ -399,6 +406,7 @@ export class IpcRouter {
       settings,
       secrets,
       resolvePath: (token, owner, op) => this.resolvePath(token, owner, op),
+      assertAllowedUrl,
     });
     // M5 Task 9 (D15): prompt template library. The store is main-owned; the
     // render channel substitutes {{var}} placeholders against the template body.

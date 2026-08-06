@@ -117,9 +117,16 @@ describe('summarizeWebPage', () => {
 
   it('rejects non-http URLs without opening the window', async () => {
     let opened = false;
-    const web = { open: async () => { opened = true; }, extract: async () => '', close: () => {} };
+    const web = {
+      open: async (u: string) => {
+        if (u.startsWith('file:')) throw new Error('URL_HTTPS_REQUIRED');
+        opened = true;
+      },
+      extract: async () => '',
+      close: () => {},
+    };
     const result = await summarizeWebPage('file:///etc/passwd', web, async () => 'x');
-    expect(result).toEqual({ ok: false, error: '只支持 http/https 网页地址' });
+    expect(result).toEqual({ ok: false, error: 'URL_HTTPS_REQUIRED' });
     expect(opened).toBe(false);
   });
 
