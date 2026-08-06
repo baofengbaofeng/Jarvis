@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   main: { plugins: [externalizeDepsPlugin({ exclude: ['@jarvis/protocol', '@jarvis/i18n', '@jarvis/core'] })] },
-  preload: { plugins: [externalizeDepsPlugin({ exclude: ['@jarvis/protocol', '@jarvis/i18n', '@jarvis/core'] })] },
+  preload: {
+    plugins: [externalizeDepsPlugin({ exclude: ['@jarvis/protocol', '@jarvis/i18n', '@jarvis/core'] })],
+    build: { rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } } },
+  },
   renderer: {
     resolve: { alias: { '@renderer': resolve('src/renderer/src') } },
     plugins: [react()]

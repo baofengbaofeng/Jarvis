@@ -53,10 +53,12 @@ export function createMcpStore(db: Database.Database) {
   };
 }
 
+export type McpTestResult = { ok: boolean; tools: string[]; error?: string };
+
 // G7: connectivity probe behind the settings page "Test" button. Spawns the
 // server via createMcpClient, runs initialize + tools/list, and reports the
 // discovered tool names (or an error) without persisting anything.
-export async function testMcpServer(input: McpServerInput, deps: { spawnImpl?: SpawnImpl } = {}): Promise<{ ok: boolean; tools: string[]; error?: string }> {
+export async function testMcpServer(input: McpServerInput, deps: { spawnImpl?: SpawnImpl } = {}): Promise<McpTestResult> {
   if (input.transport !== 'stdio') return { ok: false, tools: [], error: `transport ${input.transport} not supported for test` };
   const client = createMcpClient(input.command ?? '', input.args ?? [], input.name, deps);
   try {
@@ -68,6 +70,18 @@ export async function testMcpServer(input: McpServerInput, deps: { spawnImpl?: S
   } finally {
     client.close();
   }
+}
+
+export async function testMcpServerById(
+  db: Database.Database,
+  serverId: string,
+  deps: { spawnImpl?: SpawnImpl } = {},
+): Promise<McpTestResult> {
+  const row = db.prepare('SELECT name, transport, config_json FROM mcp_servers WHERE id = ?')
+    .get(serverId) as { name: string; transport: McpServerInput['transport']; config_json: string } | undefined;
+  if (!row) return { ok: false, tools: [], error: 'MCP_SERVER_NOT_FOUND' };
+  const cfg = JSON.parse(row.config_json) as { command?: string; args?: string[] };
+  return testMcpServer({ name: row.name, transport: row.transport, command: cfg.command, args: cfg.args }, deps);
 }
 
 export interface McpRegistrationDeps { spawnImpl?: SpawnImpl }

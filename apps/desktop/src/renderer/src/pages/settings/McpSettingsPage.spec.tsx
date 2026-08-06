@@ -8,10 +8,13 @@ import { McpSettingsPage } from './McpSettingsPage';
 beforeAll(async () => {
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
   (window as unknown as { jarvis: unknown }).jarvis = {
-    invoke: async (m: string) => {
+    invoke: async (m: string, payload?: unknown) => {
       if (m === 'mcp.list') return [{ id: 's1', name: 'fs', transport: 'stdio', config: { command: 'npx', args: [], agentIds: ['a1'] } }];
       if (m === 'agent.list') return [{ id: 'a1', name: 'Agent 1' }, { id: 'a2', name: 'Agent 2' }];
-      if (m === 'mcp.test') return { ok: true, tools: ['read', 'write'] };
+      if (m === 'mcp.test') {
+        expect(payload).toEqual({ id: 's1' });
+        return { ok: true, tools: ['read', 'write'] };
+      }
       return { ok: true };
     },
     onDidReceive: () => () => {}

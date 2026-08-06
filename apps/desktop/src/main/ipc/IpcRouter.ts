@@ -1,5 +1,6 @@
 import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
+import { join } from 'node:path';
 import { IpcChannel } from '@jarvis/protocol';
 import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope, type ImportStrategy, type ShortcutBindings } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
@@ -8,7 +9,7 @@ import { createSettingsStore } from './settings';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
 import { createAgentTemplatesIpc } from './agent-templates';
-import { createMcpStore, testMcpServer, type McpServerInput } from './mcp';
+import { createMcpStore, testMcpServerById, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
@@ -33,16 +34,29 @@ import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 import { SecureStorage } from '../secrets/SecureStorage';
+import { TrustedRendererPolicy, assertTrustedIpcEvent } from '../security/TrustedRendererPolicy';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
+export interface IpcRouterOptions {
+  getMainWindow?: () => BrowserWindow | null;
+  rendererRoot?: string;
+}
+
 export class IpcRouter {
   private handlers = new Map<string, Handler>();
+  private readonly policy: TrustedRendererPolicy;
   // Teardown handles for resources registerAll subscribes to (the bus persist
   // subscription). dispose() drops them so a discarded router never fires into
   // a stale db (M6 Task 1 review fix — the singleton persists across routers).
   private disposeFns: Array<() => void> = [];
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database.Database, private opts: IpcRouterOptions = {}) {
+    const rendererRoot = opts.rendererRoot ?? join(import.meta.dirname, '../renderer');
+    this.policy = new TrustedRendererPolicy({
+      rendererRoot,
+      devOrigin: process.env['ELECTRON_RENDERER_URL'],
+    });
+  }
 
   register(channel: string, handler: Handler): void {
     this.handlers.set(channel, handler);
@@ -117,7 +131,8 @@ export class IpcRouter {
     this.register('mcp.list', () => mcpStore.list());
     this.register('mcp.create', (_e, input) => mcpStore.create(input as McpServerInput));
     this.register('mcp.delete', (_e, id) => mcpStore.remove(id as string));
-    this.register('mcp.test', (_e, input) => testMcpServer(input as McpServerInput));
+    this.register('mcp.test', (_e, args) =>
+      testMcpServerById(this.db, ((args ?? {}) as { id: string }).id));
     this.register('skills.list', () => skillsStore.list());
     this.register('skills.import', (_e, dir) => skillsStore.importFromDir(dir as string));
     this.register('skills.delete', (_e, id) => skillsStore.remove(id as string));
@@ -393,8 +408,13 @@ export class IpcRouter {
   }
 
   listen(): void {
+    const getMainWindow = (): BrowserWindow | null =>
+      this.opts.getMainWindow?.() ?? BrowserWindow.getAllWindows()[0] ?? null;
     for (const [channel, handler] of this.handlers) {
-      ipcMain.handle(channel, handler);
+      ipcMain.handle(channel, async (event, ...args) => {
+        assertTrustedIpcEvent(event, getMainWindow(), this.policy);
+        return handler(event, ...args);
+      });
     }
   }
 

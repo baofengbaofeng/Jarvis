@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { PassThrough } from 'node:stream';
 import { ToolRegistry } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
-import { createMcpStore, testMcpServer, registerAgentMcpTools, closeAllMcpClients } from './mcp';
+import { createMcpStore, testMcpServer, testMcpServerById, registerAgentMcpTools, closeAllMcpClients } from './mcp';
 
 describe('mcp store', () => {
   let db: Database.Database;
@@ -25,6 +25,9 @@ describe('mcp store', () => {
 });
 
 describe('mcp.test', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
   class FakeProc {
     stdout = new PassThrough();
     stdin = {
@@ -48,6 +51,25 @@ describe('mcp.test', () => {
     const r = await testMcpServer({ name: 's', transport: 'sse', command: 'x' });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('not supported');
+  });
+
+  it('loads the executable from the persisted server id', async () => {
+    const store = createMcpStore(db);
+    const saved = store.create({ name: 'fs', transport: 'stdio', command: 'approved-bin', args: ['--stdio'] });
+    const commands: string[] = [];
+    const result = await testMcpServerById(db, saved.id, {
+      spawnImpl: (cmd) => { commands.push(cmd); return new FakeProc() as never; },
+    });
+    expect(result.ok).toBe(true);
+    expect(commands).toEqual(['approved-bin']);
+  });
+
+  it('rejects an unknown id without spawning', async () => {
+    const spawnImpl = vi.fn();
+    await expect(testMcpServerById(db, 'missing', { spawnImpl })).resolves.toEqual({
+      ok: false, tools: [], error: 'MCP_SERVER_NOT_FOUND',
+    });
+    expect(spawnImpl).not.toHaveBeenCalled();
   });
 });
 

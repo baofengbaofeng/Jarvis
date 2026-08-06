@@ -605,3 +605,25 @@ describe('IpcRouter config channels (C12)', () => {
     expect(dirRes).toBe('/tmp/dir');
   });
 });
+
+describe('IpcRouter trusted IPC enforcement', () => {
+  let db: Database.Database;
+  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+
+  it('wraps every ipcMain handler with trusted main-frame enforcement', async () => {
+    const { ipcMain } = await import('electron');
+    const mainFrame = { url: 'file:///app/out/renderer/index.html' };
+    const webContents = { id: 1, mainFrame };
+    const win = { webContents };
+    const router = new IpcRouter(db, {
+      getMainWindow: () => win as never,
+      rendererRoot: '/app/out/renderer',
+    });
+    router.register('probe', () => 'ok');
+    router.listen();
+    const wrapped = vi.mocked(ipcMain.handle).mock.calls.find(([ch]) => ch === 'probe')![1];
+    await expect(wrapped({ sender: { id: 2 }, senderFrame: mainFrame } as never)).rejects.toThrow('IPC_UNTRUSTED_WINDOW');
+    await expect(wrapped({ sender: webContents, senderFrame: { url: mainFrame.url } } as never)).rejects.toThrow('IPC_UNTRUSTED_FRAME');
+    await expect(wrapped({ sender: webContents, senderFrame: mainFrame } as never)).resolves.toBe('ok');
+  });
+});

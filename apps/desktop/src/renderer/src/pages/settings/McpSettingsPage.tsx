@@ -35,7 +35,7 @@ export function McpSettingsPage() {
   const toggleAgent = (id: string) => setAgentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const test = async (s: McpServerRow) => {
-    const r = await window.jarvis.invoke('mcp.test', { name: s.name, transport: s.transport, command: s.config.command, args: s.config.args, agentIds: s.config.agentIds }) as { ok: boolean; tools: string[]; error?: string };
+    const r = await window.jarvis.invoke('mcp.test', { id: s.id }) as { ok: boolean; tools: string[]; error?: string };
     setTestResult(prev => ({ ...prev, [s.id]: r.ok ? t('settings.mcp.testOk', { count: r.tools.length }) : `${t('settings.mcp.testFail')}: ${r.error ?? ''}` }));
   };
 
