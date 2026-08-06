@@ -20,6 +20,8 @@ export default defineConfig({
   },
   renderer: {
     resolve: { alias: { '@renderer': resolve('src/renderer/src') } },
-    plugins: [react()]
+    plugins: [react()],
+    // TrustedRendererPolicy only allows 127.0.0.1 / [::1] — not "localhost".
+    server: { host: '127.0.0.1' },
   }
 });
