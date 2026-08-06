@@ -1,0 +1,27 @@
+.jui-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.jui-sidebar__brand {
+  padding: var(--space-4);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.jui-sidebar__nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.jui-sidebar__footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}

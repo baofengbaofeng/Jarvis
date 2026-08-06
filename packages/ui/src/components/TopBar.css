@@ -1,0 +1,19 @@
+.jui-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--shell-topbar-height);
+  padding: 0 var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.jui-topbar__left {
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.jui-topbar__right {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}

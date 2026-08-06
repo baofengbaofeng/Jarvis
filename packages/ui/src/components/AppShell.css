@@ -1,0 +1,24 @@
+.jui-appshell {
+  display: grid;
+  grid-template-columns: var(--shell-sidebar-width) 1fr;
+  grid-template-rows: var(--shell-topbar-height) 1fr;
+  height: 100%;
+  background: var(--bg);
+}
+
+.jui-appshell__sidebar {
+  grid-row: 1 / -1;
+  grid-column: 1;
+}
+
+.jui-appshell__topbar {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.jui-appshell__main {
+  grid-column: 2;
+  grid-row: 2;
+  overflow: auto;
+  min-height: 0;
+}
