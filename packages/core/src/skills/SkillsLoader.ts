@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveSkillTarget, validateSkillName } from '../security/skill-name';
 
 export interface SkillMeta { name: string; description: string; triggers: string[]; path: string }
 
@@ -12,8 +13,9 @@ export function parseSkillFrontmatter(fileText: string): SkillMeta {
     if (i > 0) fields[line.slice(0, i).trim()] = line.slice(i + 1).trim();
   }
   const triggers = /\[([^\]]*)\]/.exec(fields.triggers ?? '[]');
+  const name = validateSkillName(fields.name ?? 'unnamed');
   return {
-    name: fields.name ?? 'unnamed',
+    name,
     description: fields.description ?? '',
     triggers: triggers ? triggers[1].split(',').map(s => s.trim()).filter(Boolean) : [],
     path: ''
@@ -40,15 +42,29 @@ export function buildSkillInjection(metas: SkillMeta[]): string {
   return '\n<available-skills>\n' + metas.map(m => `- ${m.name}: ${m.description}`).join('\n') + '\n</available-skills>';
 }
 
+export interface ImportSkillDocumentOptions {
+  overwrite?: boolean;
+}
+
+export function importSkillDocument(text: string, root: string, opts: ImportSkillDocumentOptions = {}): SkillMeta {
+  const meta = parseSkillFrontmatter(text);
+  const targetPath = resolveSkillTarget(root, meta.name);
+  if (!opts.overwrite && existsSync(targetPath)) {
+    throw new Error('SKILL_EXISTS');
+  }
+  mkdirSync(join(targetPath, '..'), { recursive: true });
+  writeFileSync(targetPath, text, 'utf8');
+  return { ...meta, path: targetPath };
+}
+
 export async function importSkillFromUrl(url: string, destDir: string, deps: { fetchImpl?: typeof fetch } = {}): Promise<SkillMeta> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const res = await fetchImpl(url);
   if (!res.ok) throw new Error(`import skill http ${res.status}`);
   const text = await res.text();
-  const meta = { ...parseSkillFrontmatter(text), path: join(destDir, 'SKILL.md') };
-  // J2 (M3 final review): ensure destDir exists before writing so a URL import
-  // into a fresh directory doesn't throw ENOENT.
-  mkdirSync(destDir, { recursive: true });
-  writeFileSync(meta.path, text, 'utf8');
-  return meta;
+  const meta = parseSkillFrontmatter(text);
+  const targetPath = join(destDir, meta.name, 'SKILL.md');
+  mkdirSync(join(targetPath, '..'), { recursive: true });
+  writeFileSync(targetPath, text, 'utf8');
+  return { ...meta, path: targetPath };
 }

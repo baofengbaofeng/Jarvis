@@ -37,6 +37,7 @@ import { SecureStorage } from '../secrets/SecureStorage';
 import { TrustedRendererPolicy, assertTrustedIpcEvent } from '../security/TrustedRendererPolicy';
 import { PathCapabilityStore, type PathOperation, type PathPickPurpose } from '../security/PathCapabilityStore';
 import { SafeUrlPolicy } from '../security/SafeUrlPolicy';
+import { jarvisDataDir } from '../db/connection';
 import { setDefaultWebSearchHttp } from './search';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
@@ -151,18 +152,31 @@ export class IpcRouter {
     this.register('agent-templates.list', () => agentTemplates.list());
     this.register('agent-templates.createAgent', (_e, input) => agentTemplates.createAgent(_e, input as { templateId: string; name: string; workspaceId?: string }));
     const mcpStore = createMcpStore(this.db);
-    // Pass the agents store so skills.import can copy SKILL.md into every bound
+    // Pass the agents store so skills import can copy SKILL.md into every bound
     // workspace's .jarvis/skills/ (the runtime injection surface), J2 fix.
-    const skillsStore = createSkillsStore(this.db, agents);
+    const skillsStore = createSkillsStore(this.db, agents, {
+      root: join(jarvisDataDir(), 'skills'),
+      http: safeUrlPolicy,
+    });
     this.register('mcp.list', () => mcpStore.list());
     this.register('mcp.create', (_e, input) => mcpStore.create(input as McpServerInput));
     this.register('mcp.delete', (_e, id) => mcpStore.remove(id as string));
     this.register('mcp.test', (_e, args) =>
       testMcpServerById(this.db, ((args ?? {}) as { id: string }).id));
     this.register('skills.list', () => skillsStore.list());
-    this.register('skills.import', (_e, req) => {
+    this.register('skills.importLocal', (_e, req) => {
       const dir = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'skills:import-dir');
       return skillsStore.importFromDir(dir);
+    });
+    this.register('skills.importUrl', async (_e, req) => {
+      try {
+        const { url } = (req ?? {}) as { url: string };
+        const skill = await skillsStore.importFromUrl(url);
+        return { ok: true as const, skill };
+      } catch (e) {
+        const code = e instanceof Error ? e.message : 'SKILL_IMPORT_FAILED';
+        return { ok: false as const, error: code };
+      }
     });
     this.register('skills.delete', (_e, id) => skillsStore.remove(id as string));
     const workspace = createWorkspaceService(this.db);

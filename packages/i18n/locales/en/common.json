@@ -27,7 +27,19 @@
       "testOk": "{{count}} tools available",
       "testFail": "Test failed"
     },
-    "skills": { "import": "Import" },
+    "skills": {
+      "import": "Import",
+      "importLocal": "Import from folder",
+      "importUrl": "Import from URL",
+      "urlPlaceholder": "https://example.com/SKILL.md",
+      "importFailed": "Skill import failed",
+      "errors": {
+        "nameInvalid": "Invalid skill name",
+        "exists": "A skill with this name already exists",
+        "contentType": "URL must return markdown or plain text",
+        "pathEscape": "Skill path escapes the managed directory"
+      }
+    },
     "permissions": { "agent": "Agent", "level": "Sandbox level", "readonly": "Read-only", "readwrite": "Read/write", "system": "System" },
     "env": { "agent": "Agent", "envVars": "Environment variables", "cliArgs": "CLI arguments", "placeholder": "KEY=value", "cliPlaceholder": "-flag arg" },
     "concurrency": { "perAgent": "Per Agent", "machine": "Machine" },
