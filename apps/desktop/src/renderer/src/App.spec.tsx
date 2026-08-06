@@ -66,12 +66,15 @@ describe('App', () => {
     useSettings.setState({ onboardingDone: false });
     render(<App />);
     expect(screen.getByTestId('onboarding')).toBeTruthy();
+    expect(screen.queryByTestId('app-shell')).toBeNull();
   });
 
   it('renders chat page when onboarding is done', () => {
     useSettings.setState({ onboardingDone: true });
     render(<App />);
     expect(screen.getByTestId('chat-page')).toBeTruthy();
+    expect(screen.getByTestId('app-shell')).toBeTruthy();
+    expect(screen.getByTestId('nav-chat')).toBeTruthy();
   });
 
   // M6 Task 10 review finding: the App-root global ApprovalPanel and the
@@ -105,7 +108,7 @@ describe('App', () => {
     expect(screen.getByTestId('canvas-page')).toBeTruthy();
     expect(screen.getByTestId('canvas-view')).toBeTruthy();
     expect(screen.getByTestId('canvas-empty')).toBeTruthy();
-    expect(screen.getByText('画布')).toBeTruthy();
+    expect(screen.getByTestId('nav-canvas')).toBeTruthy();
   });
 
   // M8 final review: the six M8 UI deliverables were orphaned (no route, no nav).

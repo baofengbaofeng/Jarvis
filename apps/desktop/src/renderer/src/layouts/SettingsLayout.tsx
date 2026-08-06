@@ -5,7 +5,7 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher';
 export function SettingsLayout() {
   const { t } = useTranslation('common');
   return (
-    <div data-testid="settings-layout" style={{ display: 'flex', minHeight: '100vh' }}>
+    <div data-testid="settings-layout" style={{ display: 'flex', minHeight: '100%' }}>
       <nav style={{ width: 200, borderRight: '1px solid var(--border)', padding: 16 }}>
         <NavLink to="/settings/providers">{t('settings.nav.providers')}</NavLink>
         <NavLink to="/settings/mcp">{t('settings.nav.mcp')}</NavLink>

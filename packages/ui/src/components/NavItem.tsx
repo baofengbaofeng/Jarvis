@@ -1,11 +1,11 @@
-import type { AnchorHTMLAttributes, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, MouseEventHandler, ReactNode } from 'react';
 import './NavItem.css';
 
 export type NavItemProps = {
   active?: boolean;
   children: ReactNode;
   href?: string;
-  onClick?: () => void;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
   className?: string;
   'data-testid'?: string;
 } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'onClick'>;
