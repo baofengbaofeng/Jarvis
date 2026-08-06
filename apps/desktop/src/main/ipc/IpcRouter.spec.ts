@@ -626,4 +626,15 @@ describe('IpcRouter trusted IPC enforcement', () => {
     await expect(wrapped({ sender: webContents, senderFrame: { url: mainFrame.url } } as never)).rejects.toThrow('IPC_UNTRUSTED_FRAME');
     await expect(wrapped({ sender: webContents, senderFrame: mainFrame } as never)).resolves.toBe('ok');
   });
+
+  it('rejects IPC when getMainWindow is unset', async () => {
+    const { ipcMain } = await import('electron');
+    const mainFrame = { url: 'file:///app/out/renderer/index.html' };
+    const webContents = { id: 1, mainFrame };
+    const router = new IpcRouter(db, { rendererRoot: '/app/out/renderer' });
+    router.register('probe', () => 'ok');
+    router.listen();
+    const wrapped = vi.mocked(ipcMain.handle).mock.calls.find(([ch]) => ch === 'probe')![1];
+    await expect(wrapped({ sender: webContents, senderFrame: mainFrame } as never)).rejects.toThrow('IPC_UNTRUSTED_WINDOW');
+  });
 });

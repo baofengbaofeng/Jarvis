@@ -9,5 +9,8 @@ describe('MarkdownView', () => {
     rerender(<MarkdownView content="[bad](file:///etc/passwd)" />);
     expect(container.querySelector('a')).toBeNull();
     expect(container.textContent).toContain('bad');
+    rerender(<MarkdownView content="[rel](/path)" />);
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.textContent).toContain('rel');
   });
 });

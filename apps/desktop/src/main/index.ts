@@ -45,7 +45,8 @@ export async function bootstrap(): Promise<void> {
   const intervalMin = typeof rawInterval === 'number' && rawInterval > 0 ? rawInterval : 1440;
   backupService.start(intervalMin * 60_000);
   backup = backupService;
-  const ipc = new IpcRouter(db);
+  const windows = new WindowManager();
+  const ipc = new IpcRouter(db, { getMainWindow: () => windows.getMainWindow() });
   ipc.registerAll(daemon, backupService);
   ipc.listen();
 
@@ -67,7 +68,6 @@ export async function bootstrap(): Promise<void> {
   });
   void ideBridge.start();
 
-  const windows = new WindowManager();
   const tray = new TrayManager({
     onQuit: () => app.quit(),
     onOpen: () => windows.createMainWindow(),

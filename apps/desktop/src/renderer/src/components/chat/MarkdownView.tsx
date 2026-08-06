@@ -7,7 +7,12 @@ export function MarkdownView({ content }: { content: string }) {
     <ReactMarkdown
       components={{
         a({ href, children }) {
-          if (!href || new URL(href).protocol !== 'https:') return <span>{children}</span>;
+          if (!href) return <span>{children}</span>;
+          try {
+            if (new URL(href).protocol !== 'https:') return <span>{children}</span>;
+          } catch {
+            return <span>{children}</span>;
+          }
           return <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>;
         },
         // react-markdown v9/v10 passes the unist `node` through ExtraProps;

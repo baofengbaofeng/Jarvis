@@ -408,8 +408,7 @@ export class IpcRouter {
   }
 
   listen(): void {
-    const getMainWindow = (): BrowserWindow | null =>
-      this.opts.getMainWindow?.() ?? BrowserWindow.getAllWindows()[0] ?? null;
+    const getMainWindow = (): BrowserWindow | null => this.opts.getMainWindow?.() ?? null;
     for (const [channel, handler] of this.handlers) {
       ipcMain.handle(channel, async (event, ...args) => {
         assertTrustedIpcEvent(event, getMainWindow(), this.policy);
