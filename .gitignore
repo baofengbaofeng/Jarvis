@@ -4,6 +4,8 @@
 *.db-wal
 *.db-shm
 node_modules/
+.worktrees/
+.superpowers/
 
 # 安装包产物（dist/）：只跟踪安装文件与指纹文件，
 # 其余中间产物（*-unpacked、mac/、构建缓存、日志）忽略。
