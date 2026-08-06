@@ -68,6 +68,15 @@ export class IpcRouter {
     this.capabilities.revokeWindow(ownerWebContentsId);
   }
 
+  /** Call after the main BrowserWindow exists (bootstrap creates window after listen()). */
+  attachMainWindowRevoke(win: BrowserWindow): void {
+    if (win.isDestroyed?.() === true || typeof win.on !== 'function') return;
+    const ownerId = win.webContents.id;
+    const revoke = () => this.revokeCapabilitiesForWindow(ownerId);
+    win.on('closed', revoke);
+    win.webContents.on?.('destroyed', revoke);
+  }
+
   private resolvePath(token: string, owner: number, operation: PathOperation): string {
     return this.capabilities.resolve(token, owner, operation);
   }
@@ -245,18 +254,6 @@ export class IpcRouter {
       } catch (err) {
         return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
       }
-    });
-    // C12 (M8 Task 6): legacy dialog.openFile kept for internal/tests; renderer
-    // must use dialog.pickPath (SEC-02) so absolute paths never cross the boundary.
-    this.register(IpcChannel.dialogOpenFile, async (_e, ...args) => {
-      const { dialog } = await import('electron');
-      const opts = args[0] as { filters?: Array<{ name: string; extensions: string[] }> } | undefined;
-      if (opts && typeof opts === 'object') {
-        const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: opts.filters ?? [] });
-        return { path: r.canceled ? '' : r.filePaths[0] ?? '' };
-      }
-      const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
-      return r.canceled ? null : r.filePaths[0];
     });
     // M8 Task 3 (J5): save-text dialog used by the audit view's CSV/JSONL
     // export. Takes a single { defaultName, content } payload and returns
@@ -455,13 +452,6 @@ export class IpcRouter {
 
   listen(): void {
     const getMainWindow = (): BrowserWindow | null => this.opts.getMainWindow?.() ?? null;
-    const mainWin = getMainWindow();
-    if (mainWin && mainWin.isDestroyed?.() !== true && typeof mainWin.on === 'function') {
-      const ownerId = mainWin.webContents.id;
-      const revoke = () => this.revokeCapabilitiesForWindow(ownerId);
-      mainWin.on('closed', revoke);
-      mainWin.webContents.on?.('destroyed', revoke);
-    }
     for (const [channel, handler] of this.handlers) {
       ipcMain.handle(channel, async (event, ...args) => {
         assertTrustedIpcEvent(event, getMainWindow(), this.policy);

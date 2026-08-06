@@ -591,23 +591,51 @@ describe('IpcRouter config channels (C12)', () => {
     expect(missing.error).toBeTruthy();
   });
 
-  it('dialog.openFile opens a file (with filters) and a directory (without args)', async () => {
+  it('does not register dialog.openFile (SEC-02: renderer uses dialog.pickPath)', async () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
     const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const openFile = handlers.get('dialog.openFile')!;
+    expect(handlers.has('dialog.openFile')).toBe(false);
+  });
+});
+
+describe('IpcRouter capability revoke', () => {
+  let db: Database.Database;
+  let dir: string;
+  beforeEach(() => {
+    db = new Database(':memory:');
+    applyMigrations(db);
+    dir = mkdtempSync(join(tmpdir(), 'jarvis-ipc-revoke-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('attachMainWindowRevoke clears capabilities on window close after late attach (bootstrap order)', async () => {
+    const router = new IpcRouter(db);
+    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
+    router.registerAll(daemon);
+    router.listen();
+    const closedCbs: Array<() => void> = [];
+    const win = {
+      isDestroyed: () => false,
+      on: (event: string, cb: () => void) => { if (event === 'closed') closedCbs.push(cb); },
+      webContents: { id: 99, on: vi.fn() },
+    };
+    router.attachMainWindowRevoke(win as never);
+    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
+    const pickPath = handlers.get('dialog.pickPath')!;
+    const readPicked = handlers.get('config.readPickedFile')!;
     const { dialog } = await import('electron');
     const showOpenDialog = vi.mocked(dialog.showOpenDialog);
-    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/tmp/x.json'] });
-    const fileRes = await openFile({}, { filters: [{ name: 'config', extensions: ['json', 'yaml', 'yml'] }] }) as { path: string };
-    expect(fileRes.path).toBe('/tmp/x.json');
-    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ properties: ['openFile'] }));
-    showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] });
-    expect((await openFile({}, { filters: [] })) as { path: string }).toEqual({ path: '' });
-    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/tmp/dir'] });
-    const dirRes = await openFile({}) as string | null;
-    expect(dirRes).toBe('/tmp/dir');
+    const file = join(dir, 'config.json');
+    writeFileSync(file, '{"schemaVersion": 12}', 'utf8');
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] });
+    const caps = await pickPath({ sender: { id: 99 } }, { purpose: 'config-import' }) as Array<{ token: string }>;
+    expect(await readPicked({ sender: { id: 99 } }, { capability: caps[0]!.token })).toBe('{"schemaVersion": 12}');
+    for (const cb of closedCbs) cb();
+    const revoked = await readPicked({ sender: { id: 99 } }, { capability: caps[0]!.token }) as { ok: boolean; error: string };
+    expect(revoked.ok).toBe(false);
+    expect(revoked.error).toContain('PATH_CAPABILITY');
   });
 });
 

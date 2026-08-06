@@ -10,18 +10,30 @@ export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; 
   const [systemPrompt, setSystemPrompt] = useState(existing?.systemPrompt ?? '');
   const [modelId, setModelId] = useState<string | null>(existing?.modelId ?? null);
   const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(existing?.workspaceId ? t('agent.workspaceBound') : null);
+  const [pendingBindToken, setPendingBindToken] = useState<string | null>(null);
 
   const pickWorkspace = async () => {
     const caps = (await window.jarvis.invoke('dialog.pickPath', { purpose: 'workspace-bind' })) as Array<{ token: string; name: string }>;
     const cap = caps[0];
     if (!cap) return;
     setWorkspaceLabel(cap.name);
-    if (agentId) await window.jarvis.invoke('workspace.bind', agentId, { capability: cap.token });
+    if (agentId) {
+      await window.jarvis.invoke('workspace.bind', agentId, { capability: cap.token });
+      setPendingBindToken(null);
+    } else {
+      setPendingBindToken(cap.token);
+    }
   };
 
   const save = async () => {
-    if (agentId) await update(agentId, { name, systemPrompt, modelId });
-    else await create({ name, systemPrompt, modelId, workspaceId: null });
+    if (agentId) {
+      await update(agentId, { name, systemPrompt, modelId });
+    } else {
+      const created = await create({ name, systemPrompt, modelId, workspaceId: null });
+      if (pendingBindToken) {
+        await window.jarvis.invoke('workspace.bind', created.id, { capability: pendingBindToken });
+      }
+    }
     onClose();
   };
 

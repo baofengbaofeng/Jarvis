@@ -76,7 +76,7 @@ export async function bootstrap(): Promise<void> {
 
   tray.create();
   daemon.start(() => tray.updateDaemonStatus(true), () => tray.updateDaemonStatus(false));
-  windows.createMainWindow();
+  ipc.attachMainWindowRevoke(windows.createMainWindow());
 }
 
 // `jarvis open --file <path[:line]>` opens the file in the external IDE: `code
