@@ -1,30 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-// searchProvider is a pure renderer-safe module, so import its types from the
-// renderer-safe entry (@jarvis/core/renderer) rather than the full barrel,
-// which pulls Node deps. Type-only: the page never calls buildSearchRequest —
-// main does the actual fetch via the webSearch helper.
-import type { SearchProviderConfig, SearchProviderType } from '@jarvis/core/renderer';
+import type { SearchProviderType } from '@jarvis/core/renderer';
 
 const PROVIDER_TYPES: SearchProviderType[] = ['bing', 'brave', 'tavily', 'serper'];
 
-// L25: 联网搜索源配置。Persists settings.search_providers as an array of
-// SearchProviderConfig; the main-side webSearch helper routes web_search by the
-// first enabled entry. Every window.jarvis call is wrapped so a rejected IPC
-// surfaces inline instead of an unhandled rejection (Task 1 convention).
+interface SearchProviderView {
+  type: SearchProviderType;
+  enabled: boolean;
+  hasKey: boolean;
+}
+
+interface SearchProviderDraft extends SearchProviderView {
+  /** Ephemeral user input — never loaded from main. */
+  apiKey: string;
+}
+
+// L25: 联网搜索源配置。Credentials persist as apiKeyRef in settings with the
+// actual key in SecureStorage; the renderer only sees hasKey and sends apiKey on
+// save when the user enters a new value.
 export function SearchProvidersPage() {
   const { t } = useTranslation('common');
-  const [configs, setConfigs] = useState<SearchProviderConfig[]>([]);
+  const [configs, setConfigs] = useState<SearchProviderDraft[]>([]);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
-  const find = (type: SearchProviderType): SearchProviderConfig =>
-    configs.find(c => c.type === type) ?? { type, apiKey: '', enabled: false };
+  const find = (type: SearchProviderType): SearchProviderDraft =>
+    configs.find(c => c.type === type) ?? { type, apiKey: '', enabled: false, hasKey: false };
 
   const refresh = useCallback(async () => {
     try {
-      const v = await window.jarvis.settingsGet('search_providers');
-      setConfigs(Array.isArray(v) ? v as SearchProviderConfig[] : []);
+      const res = await window.jarvis.invoke('search.providers.get') as { ok: boolean; configs?: SearchProviderView[]; error?: string };
+      if (!res.ok) throw new Error(res.error ?? 'search.providers.get failed');
+      const loaded = res.configs ?? [];
+      setConfigs(PROVIDER_TYPES.map(type => {
+        const cfg = loaded.find(c => c.type === type);
+        return { type, apiKey: '', enabled: cfg?.enabled ?? false, hasKey: cfg?.hasKey ?? false };
+      }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -33,18 +44,23 @@ export function SearchProvidersPage() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const patch = (type: SearchProviderType, p: Partial<SearchProviderConfig>) => {
+  const patch = (type: SearchProviderType, p: Partial<SearchProviderDraft>) => {
     setSaved(false);
-    setConfigs(prev => prev.some(c => c.type === type)
-      ? prev.map(c => c.type === type ? { ...c, ...p } : c)
-      : [...prev, { type, apiKey: '', enabled: false, ...p }]);
+    setConfigs(prev => prev.map(c => c.type === type ? { ...c, ...p } : c));
   };
 
   const save = async () => {
     try {
-      await window.jarvis.settingsSet('search_providers', configs);
+      const payload = configs.map(({ type, enabled, apiKey }) => ({
+        type,
+        enabled,
+        ...(apiKey ? { apiKey } : {}),
+      }));
+      const res = await window.jarvis.invoke('search.providers.set', payload) as { ok: boolean; error?: string };
+      if (!res.ok) throw new Error(res.error ?? 'search.providers.set failed');
       setSaved(true);
       setError('');
+      await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -62,7 +78,7 @@ export function SearchProvidersPage() {
               data-testid={`search-provider-key-${type}`}
               type="password"
               value={cfg.apiKey}
-              placeholder={t('searchProviders.apiKeyPlaceholder')}
+              placeholder={cfg.hasKey ? '••••••••' : t('searchProviders.apiKeyPlaceholder')}
               onChange={e => patch(type, { apiKey: e.target.value })}
             />
             <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>

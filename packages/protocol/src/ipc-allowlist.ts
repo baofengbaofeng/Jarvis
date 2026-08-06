@@ -78,6 +78,8 @@ export const ALLOWED_INVOKE = new Set<string>([
   'templates.delete',
   'templates.render',
   'search.global',
+  'search.providers.get',
+  'search.providers.set',
   'runtime.status',
   'runtime.conflicts',
   'runtime.resolveConflict',

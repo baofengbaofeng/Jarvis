@@ -14,7 +14,7 @@ import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
 import { createBusPersist, createSquadEventPush, getMessageBus, registerSquadIpc } from './squad';
-import { globalSearch } from './search';
+import { globalSearch, configureWebSearch, createSearchProviderIpc } from './search';
 import { registerChatHandlers } from './chat';
 import { registerRuntimeHandlers } from './runtime';
 import { registerTaskHandlers } from './tasks';
@@ -39,12 +39,17 @@ import { PathCapabilityStore, type PathOperation, type PathPickPurpose } from '.
 import { SafeUrlPolicy } from '../security/SafeUrlPolicy';
 import { jarvisDataDir } from '../db/connection';
 import { setDefaultWebSearchHttp } from './search';
+import { sqliteAuditSink } from '../audit/sqliteAuditSink';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
 export interface IpcRouterOptions {
   getMainWindow?: () => BrowserWindow | null;
   rendererRoot?: string;
+}
+
+export interface IpcRouterSearchOptions {
+  migrationBlocked?: boolean;
 }
 
 export class IpcRouter {
@@ -84,12 +89,14 @@ export class IpcRouter {
     return this.capabilities.resolve(token, owner, operation);
   }
 
-  registerAll(daemon: DaemonSupervisor, backup?: BackupService): void {
+  registerAll(daemon: DaemonSupervisor, backup?: BackupService, searchOpts: IpcRouterSearchOptions = {}): void {
     const settings = createSettingsStore(this.db);
     const safeUrlPolicy = new SafeUrlPolicy({
       allowLoopbackDev: process.env['JARVIS_ALLOW_LOOPBACK_URLS'] === '1',
     });
     setDefaultWebSearchHttp(safeUrlPolicy);
+    const secrets = new SecureStorage();
+    configureWebSearch({ secrets, migrationBlocked: searchOpts.migrationBlocked ?? false });
     const assertAllowedUrl = async (url: string) => { await safeUrlPolicy.assertAllowed(url); };
     // C5 (M8 Task 7): in-app shortcut bindings read/write the `shortcuts`
     // settings key (merged over defaults). The renderer's useShortcuts hook +
@@ -97,7 +104,6 @@ export class IpcRouter {
     const shortcuts = createShortcutsIpc(k => settings.get(k), (k, v) => settings.set(k, v));
     this.register('shortcuts.get', () => shortcuts.get());
     this.register('shortcuts.set', (_e, bindings) => shortcuts.set(_e, bindings as ShortcutBindings));
-    const secrets = new SecureStorage();
     const providers = createProviderStore(this.db, secrets, { assertAllowedUrl });
     const agents = createAgentStore(this.db);
     this.register(IpcChannel.agentList, () => agents.list());
@@ -449,9 +455,18 @@ export class IpcRouter {
     });
     // M5 Task 10 (L21): global FTS5 search across chat_messages/agents/tasks.
     // Wrap the MATCH so a malformed query returns { ok:false, error } instead
-    // of rejecting the channel. The renderer writes search_providers through the
-    // existing settings.set channel (SearchProvidersPage), so no extra write IPC
-    // is needed here.
+    // of rejecting the channel. Search provider credentials are managed via
+    // search.providers.get/set (apiKeyRef + SecureStorage, never plaintext).
+    const searchProviders = createSearchProviderIpc(this.db, secrets, sqliteAuditSink(this.db));
+    this.register('search.providers.get', () => ({ ok: true as const, configs: searchProviders.getConfigs() }));
+    this.register('search.providers.set', async (_e, inputs) => {
+      try {
+        const configs = await searchProviders.save(inputs as Parameters<typeof searchProviders.save>[0]);
+        return { ok: true as const, configs };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('search.global', (_e, args) => {
       try {
         const { query } = (args ?? {}) as { query?: string };

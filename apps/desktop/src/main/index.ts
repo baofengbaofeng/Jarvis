@@ -13,6 +13,8 @@ import { IdeBridge, parseFileArg, openInExternalIde, resolveFileInWorkspace } fr
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
 import { DaemonSupervisor } from './daemon/DaemonSupervisor';
+import { SecureStorage } from './secrets/SecureStorage';
+import { SearchSecretMigration } from './search/SearchSecretMigration';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
@@ -33,6 +35,9 @@ export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
   const settings = createSettingsStore(db);
+  const secrets = new SecureStorage();
+  const migrationResult = await new SearchSecretMigration(db, secrets).run();
+  const searchMigrationBlocked = !migrationResult.ok;
   // C10: the daemon is sized from the saved settings.concurrency value on every
   // (re)start; the provider reads live so a save + daemon.restart picks it up.
   daemon.setConcurrencyProvider(() => (settings.get('concurrency') ?? {}) as { perAgent?: number; machine?: number });
@@ -47,7 +52,7 @@ export async function bootstrap(): Promise<void> {
   backup = backupService;
   const windows = new WindowManager();
   const ipc = new IpcRouter(db, { getMainWindow: () => windows.getMainWindow() });
-  ipc.registerAll(daemon, backupService);
+  ipc.registerAll(daemon, backupService, { migrationBlocked: searchMigrationBlocked });
   ipc.listen();
 
   // M4 Task 9 (E12): start the external-IDE bridge. resolveFile is CONTAINED to
