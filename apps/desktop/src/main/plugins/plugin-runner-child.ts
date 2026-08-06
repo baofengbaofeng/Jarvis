@@ -3,6 +3,7 @@
  *
  * Receives approved source via the first RPC frame (never a filesystem path).
  * Runs under Node's permission model (--experimental-permission, --no-addons).
+ * Fail-closes when fs/net/child/worker cannot be enforced by the permission model.
  */
 import vm from 'node:vm';
 import {
@@ -14,6 +15,7 @@ import {
   type RestrictedPluginContext,
   type ToolDef,
 } from '../../../../../packages/core/src/plugins/protocol';
+import { evaluatePluginSandboxPolicy } from './pluginSandboxPolicy';
 
 type ToolHandler = (
   args: Record<string, unknown>,
@@ -34,22 +36,6 @@ function send(msg: Parameters<typeof encodeRpcFrame>[0]): void {
   const port = getParentPort();
   if (!port) return;
   port.postMessage(encodeRpcFrame(msg));
-}
-
-function sandboxAvailable(): { ok: boolean; reason?: string } {
-  const perm = (process as NodeJS.Process & {
-    permission?: { has: (scope: string, path?: string) => boolean };
-  }).permission;
-  if (!perm || typeof perm.has !== 'function') {
-    return { ok: false, reason: 'process.permission missing' };
-  }
-  // Electron utilityProcess requires --allow-fs-read=* to load the child entry
-  // (realpath/asar). Child/worker must still be denied; FS for plugin code is
-  // enforced by the frozen VM + static import ban.
-  if (perm.has('child') || perm.has('worker')) {
-    return { ok: false, reason: 'child/worker not denied' };
-  }
-  return { ok: true };
 }
 
 async function receiveApprovedSourceFrame(): Promise<{
@@ -79,7 +65,7 @@ async function receiveApprovedSourceFrame(): Promise<{
 }
 
 async function main(): Promise<void> {
-  const check = sandboxAvailable();
+  const check = await evaluatePluginSandboxPolicy();
   if (!check.ok) {
     send({ type: 'sandbox', available: false, reason: check.reason });
     send({ type: 'error', code: 'PLUGIN_SANDBOX_UNAVAILABLE', message: check.reason ?? '' });
@@ -118,9 +104,8 @@ async function main(): Promise<void> {
   if (!port) return;
 
   port.on('message', async (event) => {
-    let raw: string;
     try {
-      raw = typeof event.data === 'string' ? event.data : String(event.data);
+      const raw = typeof event.data === 'string' ? event.data : String(event.data);
       const msg = decodeRpcFrame(raw);
       if (msg.type === 'shutdown') {
         process.exit(0);

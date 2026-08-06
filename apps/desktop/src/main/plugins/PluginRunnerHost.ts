@@ -13,6 +13,15 @@ import {
   type ToolContext,
   type ToolResult,
 } from '@jarvis/core';
+import {
+  assertPluginSandboxExecArgv,
+  buildPluginSandboxExecArgv,
+} from './pluginSandboxPolicy';
+
+export {
+  assertPluginSandboxExecArgv,
+  buildPluginSandboxExecArgv,
+} from './pluginSandboxPolicy';
 
 export interface UtilityChild {
   postMessage(message: unknown): void;
@@ -57,11 +66,6 @@ interface LoadedPlugin {
 
 const DEFAULT_START_MS = 2_000;
 const DEFAULT_INVOKE_MS = 5_000;
-const SANDBOX_EXEC_ARGV = [
-  '--experimental-permission',
-  '--no-addons',
-  '--max-old-space-size=64',
-] as const;
 
 function defaultChildEntry(): string {
   try {
@@ -127,15 +131,11 @@ export class PluginRunnerHost {
 
     await this.close(descriptor.manifest.id);
 
+    const execArgv = buildPluginSandboxExecArgv(this.childEntry);
+    assertPluginSandboxExecArgv(execArgv);
+
     const child = this.deps.fork(this.childEntry, [], {
-      execArgv: [
-        ...SANDBOX_EXEC_ARGV,
-        // Electron's utilityProcess entry load walks realpath/asar parents; a
-        // single-file allowlist cannot boot. FS isolation for plugin code is
-        // the frozen VM (no process/require/fetch, strings codegen disabled).
-        // Child/worker/addon remain denied by the permission model.
-        '--allow-fs-read=*',
-      ],
+      execArgv,
       env: {},
       serviceName: `jarvis-plugin:${descriptor.manifest.id}`,
     });
