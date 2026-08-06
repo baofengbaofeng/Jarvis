@@ -8,7 +8,7 @@ import { CanvasView } from '../components/canvas/CanvasView';
 export function CanvasPage() {
   const { t } = useTranslation('common');
   return (
-    <div data-testid="canvas-page" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div data-testid="canvas-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <h1 style={{ padding: '8px 12px', borderBottom: '1px solid var(--border, #eee)', fontSize: 16, margin: 0 }}>{t('canvas.title')}</h1>
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
         <CanvasView />

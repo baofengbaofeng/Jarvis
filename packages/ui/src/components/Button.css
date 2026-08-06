@@ -1,0 +1,57 @@
+.jui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.jui-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jui-btn--sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.jui-btn--md {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-md);
+}
+
+.jui-btn--primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+.jui-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.jui-btn--ghost {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.jui-btn--ghost:hover:not(:disabled) {
+  background: var(--border-subtle);
+}
+
+.jui-btn--danger {
+  background: var(--danger);
+  color: var(--accent-fg);
+  border-color: var(--danger);
+}
+
+.jui-btn--danger:hover:not(:disabled) {
+  filter: brightness(1.05);
+}

@@ -225,6 +225,11 @@
     "remove": "Remove",
     "inputPlaceholder": "Input template"
   },
+  "shell": {
+    "groupWork": "Work",
+    "groupCollab": "Collaborate",
+    "navChat": "Chat"
+  },
   "shortcuts": {
     "title": "Keyboard Shortcuts",
     "press_key": "Press a key…",

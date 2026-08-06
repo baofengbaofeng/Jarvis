@@ -3,6 +3,7 @@ import { ThemeProvider } from './components/theme/ThemeProvider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useSettings } from './stores/settings-store';
 import { ChatPage } from './pages/ChatPage';
+import { AppLayout } from './layouts/AppLayout';
 import { SettingsLayout } from './layouts/SettingsLayout';
 import { ProviderSettingsPage } from './pages/settings/ProviderSettingsPage';
 import { LogPanelPage } from './pages/settings/LogPanelPage';
@@ -79,40 +80,42 @@ export default function App() {
             two approve/reject control sets). */}
         <RootApprovalPanel />
         <Routes>
-          <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route path="/agents" element={<AgentListView />} />
-          {/* L30 (M8 Task 8): agent template library — create a new agent from
-              a preset. Top-level next to /agents; reached via the templates
-              button on AgentListView. */}
-          <Route path="/agents/templates" element={<AgentTemplatesPage />} />
-          <Route path="/coding" element={<CodingPanelPage />} />
-          <Route path="/office" element={<OfficePage />} />
-          {/* K5/L14 (M6 Task 10): the squad view — timeline + call graph +
-              ApprovalPanel driven by the FULL squad.current state. */}
-          <Route path="/squad" element={<SquadViewPage />} />
-          {/* K4 (M8 Task 1): six-column task kanban. */}
-          <Route path="/board" element={<TaskBoardPage />} />
-          {/* F10 (M8 Task 9): DAG workflow visual editor + runner. */}
-          <Route path="/workflow" element={<WorkflowPage />} />
-          {/* K6 (M8 Task 10): canvas workspace rendering task artifacts. */}
-          <Route path="/canvas" element={<CanvasPage />} />
-          <Route path="/settings" element={<SettingsLayout />}>
-            <Route path="providers" element={<ProviderSettingsPage />} />
-            <Route path="mcp" element={<McpSettingsPage />} />
-            <Route path="skills" element={<SkillsSettingsPage />} />
-            <Route path="daemon" element={<DaemonManagementPage />} />
-            <Route path="logs" element={<LogPanelPage />} />
-            <Route path="permissions" element={<PermissionsSettingsPage />} />
-            <Route path="env" element={<EnvSettingsPage />} />
-            <Route path="concurrency" element={<ConcurrencySettingsPage />} />
-            {/* M8 final review: wire the remaining M8 settings pages — L18/L20/J4
-                data safety, C12 config transfer, C5 shortcuts, B9 usage, J5 audit. */}
-            <Route path="data-safety" element={<DataSafetyPage />} />
-            <Route path="config" element={<ConfigImportExportView />} />
-            <Route path="shortcuts" element={<ShortcutsSettingsView />} />
-            <Route path="usage" element={<UsageDashboard />} />
-            <Route path="audit" element={<AuditLogView />} />
+          <Route element={<AppLayout />}>
+            <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
+            <Route path="/agents" element={<AgentListView />} />
+            {/* L30 (M8 Task 8): agent template library — create a new agent from
+                a preset. Top-level next to /agents; reached via the templates
+                button on AgentListView. */}
+            <Route path="/agents/templates" element={<AgentTemplatesPage />} />
+            <Route path="/coding" element={<CodingPanelPage />} />
+            <Route path="/office" element={<OfficePage />} />
+            {/* K5/L14 (M6 Task 10): the squad view — timeline + call graph +
+                ApprovalPanel driven by the FULL squad.current state. */}
+            <Route path="/squad" element={<SquadViewPage />} />
+            {/* K4 (M8 Task 1): six-column task kanban. */}
+            <Route path="/board" element={<TaskBoardPage />} />
+            {/* F10 (M8 Task 9): DAG workflow visual editor + runner. */}
+            <Route path="/workflow" element={<WorkflowPage />} />
+            {/* K6 (M8 Task 10): canvas workspace rendering task artifacts. */}
+            <Route path="/canvas" element={<CanvasPage />} />
+            <Route path="/settings" element={<SettingsLayout />}>
+              <Route path="providers" element={<ProviderSettingsPage />} />
+              <Route path="mcp" element={<McpSettingsPage />} />
+              <Route path="skills" element={<SkillsSettingsPage />} />
+              <Route path="daemon" element={<DaemonManagementPage />} />
+              <Route path="logs" element={<LogPanelPage />} />
+              <Route path="permissions" element={<PermissionsSettingsPage />} />
+              <Route path="env" element={<EnvSettingsPage />} />
+              <Route path="concurrency" element={<ConcurrencySettingsPage />} />
+              {/* M8 final review: wire the remaining M8 settings pages — L18/L20/J4
+                  data safety, C12 config transfer, C5 shortcuts, B9 usage, J5 audit. */}
+              <Route path="data-safety" element={<DataSafetyPage />} />
+              <Route path="config" element={<ConfigImportExportView />} />
+              <Route path="shortcuts" element={<ShortcutsSettingsView />} />
+              <Route path="usage" element={<UsageDashboard />} />
+              <Route path="audit" element={<AuditLogView />} />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

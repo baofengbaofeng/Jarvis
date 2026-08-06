@@ -41,6 +41,9 @@ importers:
       '@jarvis/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@jarvis/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-router':
         specifier: ^1.0.0
         version: 1.170.18(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -165,11 +168,28 @@ importers:
         version: 2.1.9(@types/node@20.19.43)(jsdom@30.0.1)
 
   packages/ui:
-    dependencies:
-      '@jarvis/protocol':
-        specifier: workspace:*
-        version: link:../protocol
     devDependencies:
+      '@testing-library/jest-dom':
+        specifier: ^7.0.0
+        version: 7.0.0(@testing-library/dom@10.4.1)
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.4(@types/react@19.2.18)
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

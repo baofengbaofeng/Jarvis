@@ -1,0 +1,17 @@
+.jui-navitem {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.jui-navitem:hover {
+  background: var(--border-subtle);
+}
+
+.jui-navitem--active {
+  background: var(--border-subtle);
+  font-weight: 600;
+}

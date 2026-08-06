@@ -21,6 +21,7 @@
     "@jarvis/core": "workspace:*",
     "@jarvis/i18n": "workspace:*",
     "@jarvis/protocol": "workspace:*",
+    "@jarvis/ui": "workspace:*",
     "@tanstack/react-router": "^1.0.0",
     "better-sqlite3": "^11.3.0",
     "i18next": "^23.0.0",
