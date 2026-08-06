@@ -35,6 +35,7 @@ import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 import { SecureStorage } from '../secrets/SecureStorage';
 import { TrustedRendererPolicy, assertTrustedIpcEvent } from '../security/TrustedRendererPolicy';
+import { PathCapabilityStore, type PathOperation, type PathPickPurpose } from '../security/PathCapabilityStore';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
@@ -46,6 +47,7 @@ export interface IpcRouterOptions {
 export class IpcRouter {
   private handlers = new Map<string, Handler>();
   private readonly policy: TrustedRendererPolicy;
+  private readonly capabilities = new PathCapabilityStore();
   // Teardown handles for resources registerAll subscribes to (the bus persist
   // subscription). dispose() drops them so a discarded router never fires into
   // a stale db (M6 Task 1 review fix — the singleton persists across routers).
@@ -60,6 +62,14 @@ export class IpcRouter {
 
   register(channel: string, handler: Handler): void {
     this.handlers.set(channel, handler);
+  }
+
+  revokeCapabilitiesForWindow(ownerWebContentsId: number): void {
+    this.capabilities.revokeWindow(ownerWebContentsId);
+  }
+
+  private resolvePath(token: string, owner: number, operation: PathOperation): string {
+    return this.capabilities.resolve(token, owner, operation);
   }
 
   registerAll(daemon: DaemonSupervisor, backup?: BackupService): void {
@@ -134,22 +144,32 @@ export class IpcRouter {
     this.register('mcp.test', (_e, args) =>
       testMcpServerById(this.db, ((args ?? {}) as { id: string }).id));
     this.register('skills.list', () => skillsStore.list());
-    this.register('skills.import', (_e, dir) => skillsStore.importFromDir(dir as string));
+    this.register('skills.import', (_e, req) => {
+      const dir = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'skills:import-dir');
+      return skillsStore.importFromDir(dir);
+    });
     this.register('skills.delete', (_e, id) => skillsStore.remove(id as string));
     const workspace = createWorkspaceService(this.db);
-    this.register('workspace.bind', (_e, agentId, path) => { workspace.bind(agentId as string, path as string); return { ok: true }; });
+    this.register('workspace.bind', (_e, agentId, req) => {
+      const path = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'workspace:bind');
+      workspace.bind(agentId as string, path);
+      return { ok: true };
+    });
     this.register('workspace.listBound', () => workspace.listBound());
     this.register('workspace.loadContext', (_e, agentId) => workspace.loadContext(agentId as string));
     // M4 Task 7 (E11/K3): code-panel tree/read IPC. Single-active assumption: the
     // code panel targets ONE workspace — the first agent that has one bound. This
     // mirrors the renderer agent-store, where `current` falls back to agents[0].
     const getWorkspace = (): string | null => agents.list().find(a => a.workspaceId)?.workspaceId ?? null;
-    const workspaceIpc = createWorkspaceIpc(getWorkspace);
+    const workspaceIpc = createWorkspaceIpc(getWorkspace, { resolvePath: (token, owner, op) => this.resolvePath(token, owner, op) });
     this.register('workspace.tree', () => workspaceIpc.tree());
     this.register('workspace.read', (_e, rel) => workspaceIpc.read(rel as string));
     // M5 Task 7 (L22): dropped non-attach files are copied into the active
     // workspace (see createWorkspaceIpc.copyFiles).
-    this.register('workspace.copyFiles', (_e, paths) => workspaceIpc.copyFiles(paths as string[]));
+    this.register('workspace.copyFiles', (_e, req) => {
+      const { capabilities } = (req ?? {}) as { capabilities: string[] };
+      return workspaceIpc.copyFiles(capabilities, _e.sender.id);
+    });
     // M4 Task 6 (E1/L27): code index IPC. The embeddingFn defaults to the
     // deterministic local hashEmbedding; production Provider embedding (M1
     // ModelRouter extension) is a later swap — construct IndexStore with a
@@ -192,10 +212,42 @@ export class IpcRouter {
     this.register('mention.search', async (_e, query) => {
       return searchMentions(query as string, codeIndex, agents.list(), () => flattenTree(workspaceIpc.tree()));
     });
-    // C12 (M8 Task 6): dialog.openFile is polymorphic on first-arg presence.
-    // No args → directory picker (the legacy contract used by AgentDetailPage /
-    // SkillsSettingsPage, returns string | null). With a { filters } payload →
-    // file picker (the ConfigImportExportView contract, returns { path }).
+    const PICK_POLICIES: Record<PathPickPurpose, {
+      kind: 'file' | 'directory';
+      operations: PathOperation[];
+      filters?: Electron.FileFilter[];
+    }> = {
+      'office-file': { kind: 'file', operations: ['office:read'] },
+      'workspace-copy': { kind: 'file', operations: ['workspace:copy'] },
+      'workspace-bind': { kind: 'directory', operations: ['workspace:bind'] },
+      'skills-import': { kind: 'directory', operations: ['skills:import-dir'] },
+      'config-import': { kind: 'file', operations: ['config:read'], filters: [{ name: 'JARVIS config', extensions: ['json', 'yaml', 'yml'] }] },
+    };
+    this.register('dialog.pickPath', async (event, request) => {
+      const { purpose, multiple } = (request ?? {}) as { purpose: PathPickPurpose; multiple?: boolean };
+      const policy = PICK_POLICIES[purpose];
+      if (!policy) throw new Error('PATH_PICK_PURPOSE_INVALID');
+      const { dialog } = await import('electron');
+      const r = await dialog.showOpenDialog({
+        properties: policy.kind === 'directory'
+          ? ['openDirectory']
+          : ['openFile', ...(multiple ? ['multiSelections' as const] : [])],
+        filters: policy.filters ?? [],
+      });
+      return r.canceled ? [] : r.filePaths.map(path =>
+        this.capabilities.issue(path, event.sender.id, policy.operations));
+    });
+    this.register('config.readPickedFile', async (event, req) => {
+      try {
+        const { readFileSync } = await import('node:fs');
+        const path = this.resolvePath((req as { capability: string }).capability, event.sender.id, 'config:read');
+        return readFileSync(path, 'utf8');
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    });
+    // C12 (M8 Task 6): legacy dialog.openFile kept for internal/tests; renderer
+    // must use dialog.pickPath (SEC-02) so absolute paths never cross the boundary.
     this.register(IpcChannel.dialogOpenFile, async (_e, ...args) => {
       const { dialog } = await import('electron');
       const opts = args[0] as { filters?: Array<{ name: string; extensions: string[] }> } | undefined;
@@ -205,16 +257,6 @@ export class IpcRouter {
       }
       const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
       return r.canceled ? null : r.filePaths[0];
-    });
-    // C12: read a config file chosen via dialog.openFile. Returns the file text
-    // on success, { ok:false, error } on failure (never an ipcMain rejection).
-    this.register('fs.readFile', async (_e, path) => {
-      try {
-        const { readFileSync } = await import('node:fs');
-        return readFileSync(path as string, 'utf8');
-      } catch (err) {
-        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
-      }
     });
     // M8 Task 3 (J5): save-text dialog used by the audit view's CSV/JSONL
     // export. Takes a single { defaultName, content } payload and returns
@@ -356,7 +398,11 @@ export class IpcRouter {
     // bridge over the first agent's model binding (see ./office).
     // settings + secrets let the office.image.generate channel resolve its API
     // key the same way other channels do (settings `image.api_key_ref` → keychain).
-    registerOfficeIpc({ register: (ch, h) => this.register(ch, h) }, createOfficeChatStream(this.db, secrets), { settings, secrets });
+    registerOfficeIpc({ register: (ch, h) => this.register(ch, h) }, createOfficeChatStream(this.db, secrets), {
+      settings,
+      secrets,
+      resolvePath: (token, owner, op) => this.resolvePath(token, owner, op),
+    });
     // M5 Task 9 (D15): prompt template library. The store is main-owned; the
     // render channel substitutes {{var}} placeholders against the template body.
     // An unknown id returns { ok:false } instead of an ipcMain rejection so the
@@ -409,6 +455,13 @@ export class IpcRouter {
 
   listen(): void {
     const getMainWindow = (): BrowserWindow | null => this.opts.getMainWindow?.() ?? null;
+    const mainWin = getMainWindow();
+    if (mainWin && mainWin.isDestroyed?.() !== true && typeof mainWin.on === 'function') {
+      const ownerId = mainWin.webContents.id;
+      const revoke = () => this.revokeCapabilitiesForWindow(ownerId);
+      mainWin.on('closed', revoke);
+      mainWin.webContents.on?.('destroyed', revoke);
+    }
     for (const [channel, handler] of this.handlers) {
       ipcMain.handle(channel, async (event, ...args) => {
         assertTrustedIpcEvent(event, getMainWindow(), this.policy);

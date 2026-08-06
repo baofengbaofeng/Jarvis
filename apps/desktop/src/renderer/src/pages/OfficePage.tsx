@@ -46,12 +46,12 @@ export function OfficePage() {
   // attachments (they can be pasted into the composer later); other kinds are
   // routed to workspace.copyFiles by DropZone before reaching onAttach. Every
   // invoke is wrapped (Task 1 convention) and errors are surfaced per file.
-  const handleAttach = async (files: Array<{ name: string; path: string }>) => {
+  const handleAttach = async (files: Array<{ token: string; name: string }>) => {
     setAttached(files.map(f => f.name));
     for (const f of files) {
-      if (classifyFile(f.name) === 'image') continue; // listed, not analyzed
+      if (classifyFile(f.name) === 'image') continue;
       try {
-        const r = (await window.jarvis.invoke('office.file.analyze', f.path, f.name)) as { ok: boolean; result?: string; error?: string };
+        const r = (await window.jarvis.invoke('office.file.analyze', { capability: f.token, name: f.name })) as { ok: boolean; result?: string; error?: string };
         setAnalysis(prev => [...prev, { name: f.name, status: r.ok ? 'ok' : 'error', text: r.ok ? (r.result ?? '') : (r.error ?? t('officeTools.error')) }]);
       } catch (e) {
         setAnalysis(prev => [...prev, { name: f.name, status: 'error', text: e instanceof Error ? e.message : String(e) }]);

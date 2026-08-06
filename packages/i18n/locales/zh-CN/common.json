@@ -51,7 +51,7 @@
   "onboarding": { "title": "欢迎使用 JARVIS", "start": "开始配置", "step1": "Provider", "step2": "Agent", "step3": "工作区" },
   "chat": { "placeholder": "输入消息…", "sessions": "会话列表", "newSession": "新对话" },
   "approval": { "title": "需要审批", "approve": "批准", "deny": "拒绝", "reject": "驳回", "summary": "结果摘要" },
-  "agent": { "bindWorkspace": "绑定工作区", "systemPrompt": "系统提示词", "modelId": "模型 ID" },
+  "agent": { "bindWorkspace": "绑定工作区", "workspaceBound": "已绑定工作区", "systemPrompt": "系统提示词", "modelId": "模型 ID" },
   "board": {
     "title": "任务看板",
     "col": { "queued": "排队", "running": "运行中", "paused": "已暂停", "completed": "已完成", "failed": "失败", "cancelled": "已取消" }
@@ -131,6 +131,7 @@
   },
   "pdf": {
     "path": "PDF 文件路径",
+    "pickFile": "选择 PDF 文件",
     "open": "打开",
     "summarize": "摘要",
     "summarizePage": "本页摘要",

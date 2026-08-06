@@ -449,7 +449,7 @@ describe('IpcRouter wipe channel (L20)', () => {
 });
 
 // M8 Task 6 (C12): config.export / config.import channels registered on the
-// router, plus the file-picker mode of dialog.openFile and fs.readFile that the
+// router, plus dialog.pickPath / config.readPickedFile (SEC-02) that the
 // ConfigImportExportView relies on.
 describe('IpcRouter config channels (C12)', () => {
   let db: Database.Database;
@@ -572,16 +572,21 @@ describe('IpcRouter config channels (C12)', () => {
     expect(p1.base_url).toBe('https://old.example');
   });
 
-  it('fs.readFile returns text on success and { ok:false } on failure', async () => {
+  it('config.readPickedFile returns text via capability and { ok:false } on failure', async () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
     const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const readFile = handlers.get('fs.readFile')!;
+    const pickPath = handlers.get('dialog.pickPath')!;
+    const readPicked = handlers.get('config.readPickedFile')!;
+    const { dialog } = await import('electron');
+    const showOpenDialog = vi.mocked(dialog.showOpenDialog);
     const file = join(dir, 'config.json');
     writeFileSync(file, '{"schemaVersion": 12}', 'utf8');
-    expect(await readFile({}, file)).toBe('{"schemaVersion": 12}');
-    const missing = await readFile({}, join(dir, 'nope.json')) as { ok: boolean; error: string };
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] });
+    const caps = await pickPath({ sender: { id: 42 } }, { purpose: 'config-import' }) as Array<{ token: string }>;
+    expect(await readPicked({ sender: { id: 42 } }, { capability: caps[0]!.token })).toBe('{"schemaVersion": 12}');
+    const missing = await readPicked({ sender: { id: 42 } }, { capability: 'unknown-token' }) as { ok: boolean; error: string };
     expect(missing.ok).toBe(false);
     expect(missing.error).toBeTruthy();
   });

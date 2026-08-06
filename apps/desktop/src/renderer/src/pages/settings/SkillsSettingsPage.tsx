@@ -7,8 +7,9 @@ export function SkillsSettingsPage() {
   const refresh = async () => setSkills((await window.jarvis.invoke('skills.list')) as typeof skills);
   useEffect(() => { void refresh(); }, []);
   const pickImport = async () => {
-    const dir = (await window.jarvis.invoke('dialog.openFile')) as string | null;
-    if (dir) { await window.jarvis.invoke('skills.import', dir); await refresh(); }
+    const caps = (await window.jarvis.invoke('dialog.pickPath', { purpose: 'skills-import' })) as Array<{ token: string }>;
+    const cap = caps[0];
+    if (cap) { await window.jarvis.invoke('skills.import', { capability: cap.token }); await refresh(); }
   };
   return (
     <div data-testid="skills-settings">

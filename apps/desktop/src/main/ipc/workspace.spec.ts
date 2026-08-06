@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -107,31 +107,45 @@ describe('workspace copyFiles IPC', () => {
     tmpDirs.push(srcDir);
     const src = join(srcDir, 'notes.txt');
     writeFileSync(src, 'hello');
-    const ipc = createWorkspaceIpc(() => tmp);
-    expect(ipc.copyFiles([src])).toEqual({ ok: true });
+    const resolvePath = vi.fn(() => src);
+    const ipc = createWorkspaceIpc(() => tmp, { resolvePath });
+    expect(ipc.copyFiles(['cap-1'], 0)).toEqual({ ok: true });
     expect(readFileSync(join(tmp, 'notes.txt'), 'utf8')).toBe('hello');
   });
 
+  it('copies only capability-resolved files', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'jv-outside-'));
+    tmpDirs.push(srcDir);
+    const src = join(srcDir, 'outside.txt');
+    writeFileSync(src, 'safe');
+    const resolvePath = vi.fn(() => src);
+    const ipc = createWorkspaceIpc(() => tmp, { resolvePath });
+    expect(ipc.copyFiles(['cap-1'], 4)).toEqual({ ok: true });
+    expect(resolvePath).toHaveBeenCalledWith('cap-1', 4, 'workspace:copy');
+  });
+
   it('returns an error when no workspace is bound', () => {
-    const ipc = createWorkspaceIpc(() => null);
-    expect(ipc.copyFiles(['/tmp/x.txt'])).toEqual({ ok: false, error: 'no workspace' });
+    const ipc = createWorkspaceIpc(() => null, { resolvePath: vi.fn(() => '/tmp/x.txt') });
+    expect(ipc.copyFiles(['cap'], 0)).toEqual({ ok: false, error: 'no workspace' });
   });
 
   it('rejects a missing source path and copies nothing', () => {
-    const ipc = createWorkspaceIpc(() => tmp);
-    expect(ipc.copyFiles([join(tmp, 'nope.txt')])).toEqual({ ok: false, error: expect.stringContaining('not a file') });
+    const ipc = createWorkspaceIpc(() => tmp, { resolvePath: vi.fn(() => join(tmp, 'nope.txt')) });
+    expect(ipc.copyFiles(['cap'], 0)).toEqual({ ok: false, error: expect.stringContaining('not a file') });
   });
 
   it('returns {ok:false,error} when the copy itself throws (EACCES/ENOSPC)', () => {
-    // deps.copyFile is injected to force a real copy failure; production uses
-    // node's copyFileSync. Without the try/catch this would propagate as a
-    // rejected ipcMain.handle promise instead of an { ok:false } payload.
-    const ipc = createWorkspaceIpc(() => tmp, { copyFile: () => { throw new Error('EACCES: permission denied, copy \'x\' -> \'y\''); } });
-    const srcDir = mkdtempSync(join(tmpdir(), 'jv-src-'));
-    tmpDirs.push(srcDir);
-    const src = join(srcDir, 'a.txt');
-    writeFileSync(src, 'x');
-    expect(ipc.copyFiles([src])).toEqual({ ok: false, error: 'EACCES: permission denied, copy \'x\' -> \'y\'' });
+    const ipc = createWorkspaceIpc(() => tmp, {
+      copyFile: () => { throw new Error('EACCES: permission denied, copy \'x\' -> \'y\''); },
+      resolvePath: vi.fn(() => {
+        const srcDir = mkdtempSync(join(tmpdir(), 'jv-src-'));
+        tmpDirs.push(srcDir);
+        const src = join(srcDir, 'a.txt');
+        writeFileSync(src, 'x');
+        return src;
+      }),
+    });
+    expect(ipc.copyFiles(['cap'], 0)).toEqual({ ok: false, error: 'EACCES: permission denied, copy \'x\' -> \'y\'' });
   });
 
   it('skips a basename collision and reports it instead of overwriting', () => {
@@ -140,8 +154,9 @@ describe('workspace copyFiles IPC', () => {
     const src = join(srcDir, 'notes.txt');
     writeFileSync(src, 'new content');
     writeFileSync(join(tmp, 'notes.txt'), 'original');
-    const ipc = createWorkspaceIpc(() => tmp);
-    expect(ipc.copyFiles([src])).toEqual({ ok: true, skipped: ['notes.txt'] });
+    const resolvePath = vi.fn(() => src);
+    const ipc = createWorkspaceIpc(() => tmp, { resolvePath });
+    expect(ipc.copyFiles(['cap'], 0)).toEqual({ ok: true, skipped: ['notes.txt'] });
     // The existing workspace file is untouched.
     expect(readFileSync(join(tmp, 'notes.txt'), 'utf8')).toBe('original');
   });

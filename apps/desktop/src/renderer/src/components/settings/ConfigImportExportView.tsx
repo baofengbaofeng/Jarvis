@@ -3,11 +3,6 @@ import { useTranslation } from 'react-i18next';
 
 type Strategy = 'skip' | 'overwrite' | 'merge';
 
-// C12 (M8 Task 6): config import/export UI. Export writes jarvis-config.json/yaml
-// through config.export + dialog.saveText; import opens a file via dialog.openFile,
-// reads it via fs.readFile, then applies it via config.import with the chosen
-// skip/overwrite/merge strategy. API keys never leave main (export carries only
-// apiKeyRef), so no keychain access happens here.
 export function ConfigImportExportView() {
   const { t } = useTranslation('common');
   const [strategy, setStrategy] = useState<Strategy>('skip');
@@ -17,11 +12,10 @@ export function ConfigImportExportView() {
     await window.jarvis.invoke('dialog.saveText', { defaultName: `jarvis-config.${format}`, content: text });
   };
   const onImport = async () => {
-    const { path } = (await window.jarvis.invoke('dialog.openFile', {
-      filters: [{ name: 'config', extensions: ['json', 'yaml', 'yml'] }],
-    })) as { path: string };
-    if (!path) return;
-    const text = (await window.jarvis.invoke('fs.readFile', path)) as string;
+    const caps = (await window.jarvis.invoke('dialog.pickPath', { purpose: 'config-import' })) as Array<{ token: string }>;
+    const cap = caps[0];
+    if (!cap) return;
+    const text = (await window.jarvis.invoke('config.readPickedFile', { capability: cap.token })) as string;
     setMsg(JSON.stringify(await window.jarvis.invoke('config.import', text, strategy)));
   };
   return (

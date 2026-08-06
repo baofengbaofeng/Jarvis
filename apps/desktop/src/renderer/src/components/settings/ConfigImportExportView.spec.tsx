@@ -8,8 +8,8 @@ import { ConfigImportExportView } from './ConfigImportExportView';
 const invoke = vi.fn(async (m: string) => {
   if (m === 'config.export') return '{"schemaVersion":11}';
   if (m === 'dialog.saveText') return { ok: true };
-  if (m === 'dialog.openFile') return { path: '/tmp/jarvis-config.json' };
-  if (m === 'fs.readFile') return '{"schemaVersion":11,"providers":[],"models":[],"agents":[],"settings":{}}';
+  if (m === 'dialog.pickPath') return [{ token: 'cap-config', name: 'jarvis-config.json', kind: 'file', sizeBytes: 1, expiresAt: 1 }];
+  if (m === 'config.readPickedFile') return '{"schemaVersion":11,"providers":[],"models":[],"agents":[],"settings":{}}';
   if (m === 'config.import') return { ok: true, created: 1, updated: 0, skipped: 0 };
   return undefined;
 });
@@ -44,10 +44,8 @@ describe('ConfigImportExportView', () => {
     render(<ConfigImportExportView />);
     fireEvent.change(screen.getByTestId('strategy'), { target: { value: 'merge' } });
     fireEvent.click(screen.getByTestId('import'));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.openFile', {
-      filters: [{ name: 'config', extensions: ['json', 'yaml', 'yml'] }],
-    }));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('fs.readFile', '/tmp/jarvis-config.json'));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.pickPath', { purpose: 'config-import' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('config.readPickedFile', { capability: 'cap-config' }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith(
       'config.import',
       '{"schemaVersion":11,"providers":[],"models":[],"agents":[],"settings":{}}',
@@ -57,10 +55,10 @@ describe('ConfigImportExportView', () => {
   });
 
   it('no-ops on import when the file picker is canceled', async () => {
-    invoke.mockImplementationOnce(async (m: string) => (m === 'dialog.openFile' ? { path: '' } : undefined));
+    invoke.mockImplementationOnce(async (m: string) => (m === 'dialog.pickPath' ? [] : undefined));
     render(<ConfigImportExportView />);
     fireEvent.click(screen.getByTestId('import'));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.openFile', expect.anything()));
-    expect(invoke).not.toHaveBeenCalledWith('fs.readFile', expect.anything());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.pickPath', { purpose: 'config-import' }));
+    expect(invoke).not.toHaveBeenCalledWith('config.readPickedFile', expect.anything());
   });
 });

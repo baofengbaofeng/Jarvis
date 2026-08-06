@@ -9,6 +9,9 @@ import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, tran
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { SettingsStore } from './settings';
+import type { PathOperation } from '../security/PathCapabilityStore';
+
+export type ResolvePath = (token: string, owner: number, operation: PathOperation) => string;
 
 // Minimal surface the office.webview channels need from the WebView host. Kept
 // as a structural type so office.ts does NOT statically import WebViewHost
@@ -214,7 +217,12 @@ async function resolveImageApiKey(settings: SettingsStore | undefined, secrets: 
   return (await secrets.get(ref)) ?? null;
 }
 
-export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike>; settings?: SettingsStore; secrets?: Pick<SecureStorage, 'get'>; imageFetch?: typeof fetch } = {}) {
+export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike>; settings?: SettingsStore; secrets?: Pick<SecureStorage, 'get'>; imageFetch?: typeof fetch; resolvePath?: ResolvePath } = {}) {
+  const resolvePath = deps.resolvePath;
+  const requirePath = (token: string, owner: number, operation: PathOperation): string => {
+    if (!resolvePath) throw new Error('PATH_CAPABILITY_RESOLVER_MISSING');
+    return resolvePath(token, owner, operation);
+  };
   // deps.getWebViewHost lets tests inject a fake host; production uses the lazy
   // dynamic-import singleton (see getWebViewHost above).
   const getWeb = deps.getWebViewHost ?? getWebViewHost;
@@ -244,8 +252,9 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
   // same chatText bridge as the other office channels. Errors (missing file, pdf
   // parse failure) are caught and returned as { ok: false, error } so the
   // renderer can surface them without an unhandled rejection.
-  router.register('office.pdf.extract', (async (_e, path: string) => {
+  router.register('office.pdf.extract', (async (event, req: { capability: string }) => {
     try {
+      const path = requirePath(req.capability, event.sender.id, 'office:read');
       const ext = await extractPdf(path);
       // The renderer re-loads the doc with pdfjs-dist to paint the page to a
       // canvas, so ship the raw bytes alongside the page texts. extractPdf
@@ -257,8 +266,10 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   }) as (...a: unknown[]) => unknown);
-  router.register('office.pdf.summarize', (async (_e, path: string, from: number, to: number) => {
+  router.register('office.pdf.summarize', (async (event, req: { capability: string; from: number; to: number }) => {
     try {
+      const path = requirePath(req.capability, event.sender.id, 'office:read');
+      const { from, to } = req;
       const { pageTexts } = await extractPdf(path);
       const chunks = chunkPages(pageTexts.slice(from - 1, to));
       const out: string[] = [];
@@ -338,8 +349,10 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
   // parser-agnostic via extractFileText's injected-extractor design). Any
   // failure — missing file, parser error, chatText error, unsupported kind — is
   // caught and returned as { ok:false, error } so the IPC never rejects.
-  router.register('office.file.analyze', (async (_e, path: string, name: string) => {
+  router.register('office.file.analyze', (async (event, req: { capability: string; name: string }) => {
     try {
+      const path = requirePath(req.capability, event.sender.id, 'office:read');
+      const { name } = req;
       const extractors: Partial<Record<OfficeFileKind, Extractor>> = {
         // extractPdf (Task 3) returns per-page texts; join for a flat document.
         pdf: async () => (await extractPdf(path)).pageTexts.join('\n'),
