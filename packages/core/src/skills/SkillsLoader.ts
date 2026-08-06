@@ -56,15 +56,3 @@ export function importSkillDocument(text: string, root: string, opts: ImportSkil
   writeFileSync(targetPath, text, 'utf8');
   return { ...meta, path: targetPath };
 }
-
-export async function importSkillFromUrl(url: string, destDir: string, deps: { fetchImpl?: typeof fetch } = {}): Promise<SkillMeta> {
-  const fetchImpl = deps.fetchImpl ?? fetch;
-  const res = await fetchImpl(url);
-  if (!res.ok) throw new Error(`import skill http ${res.status}`);
-  const text = await res.text();
-  const meta = parseSkillFrontmatter(text);
-  const targetPath = join(destDir, meta.name, 'SKILL.md');
-  mkdirSync(join(targetPath, '..'), { recursive: true });
-  writeFileSync(targetPath, text, 'utf8');
-  return { ...meta, path: targetPath };
-}

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseSkillFrontmatter, scanSkillsDir, importSkillFromUrl, importSkillDocument } from './SkillsLoader';
+import { parseSkillFrontmatter, scanSkillsDir, importSkillDocument } from './SkillsLoader';
 
 describe('SkillsLoader', () => {
   it('parses frontmatter', () => {
@@ -22,20 +22,6 @@ describe('SkillsLoader', () => {
     expect(metas.map(m => m.name)).toContain('code-review');
   });
 
-  it('imports a SKILL.md from url into destDir', async () => {
-    const dest = mkdtempSync(join(tmpdir(), 'jarvis-skill-'));
-    try {
-      const meta = await importSkillFromUrl('https://example.com/SKILL.md', dest, {
-        fetchImpl: async () => ({ ok: true, text: async () => `---\nname: web-import\ndescription: 从 URL 导入\ntriggers: [import]\n---\nbody` }) as Response
-      });
-      expect(meta.name).toBe('web-import');
-      expect(meta.path).toBe(join(dest, 'web-import', 'SKILL.md'));
-      expect(readFileSync(meta.path, 'utf8')).toContain('name: web-import');
-    } finally {
-      rmSync(dest, { recursive: true, force: true });
-    }
-  });
-
   it('does not overwrite an existing imported skill', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jarvis-skills-'));
     mkdirSync(join(root, 'safe'), { recursive: true });
@@ -44,11 +30,5 @@ describe('SkillsLoader', () => {
       .toThrow('SKILL_EXISTS');
     expect(readFileSync(join(root, 'safe', 'SKILL.md'), 'utf8')).toBe('original');
     rmSync(root, { recursive: true, force: true });
-  });
-
-  it('throws when url fetch fails', async () => {
-    await expect(importSkillFromUrl('https://down.example.com/SKILL.md', '/tmp', {
-      fetchImpl: async () => ({ ok: false, status: 404, text: async () => '' }) as Response
-    })).rejects.toThrow('import skill');
   });
 });

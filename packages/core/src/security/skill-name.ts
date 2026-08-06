@@ -11,11 +11,15 @@ export function validateSkillName(name: string): string {
   return name;
 }
 
+/** Throws when a resolved skill directory relative path would escape the managed root. */
+export function assertSkillRelativePath(rel: string): void {
+  if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error('SKILL_PATH_ESCAPE');
+}
+
 export function resolveSkillTarget(root: string, name: string): string {
   const safe = validateSkillName(name);
   const base = resolve(root);
   const targetDir = resolve(base, safe);
-  const rel = relative(base, targetDir);
-  if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error('SKILL_PATH_ESCAPE');
+  assertSkillRelativePath(relative(base, targetDir));
   return join(targetDir, 'SKILL.md');
 }

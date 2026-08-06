@@ -65,6 +65,8 @@ export function createSkillsStore(
     importFromDir(dir: string): SkillMeta[] {
       const metas = scanSkillsDir(dir);
       const out: SkillMeta[] = [];
+      // Batch import is best-effort: skills persisted before a later failure remain
+      // on disk and in DB (brief requires rollback only for single URL import).
       for (const m of metas) {
         const text = readFileSync(m.path, 'utf8');
         out.push(persistSkill(importSkillDocument(text, root)));
