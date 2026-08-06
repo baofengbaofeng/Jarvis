@@ -29,6 +29,22 @@ describe('openai adapter', () => {
     expect(chunks.join('')).toBe('Hello');
   });
 
+  it('includes tools in the OpenAI request body when provided', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return (await mockFetch(['data: [DONE]'])()) as unknown as Response;
+    };
+    const adapter = createAdapter('openai-compatible', { fetchImpl });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'openai-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true,
+      tools: [{ name: 'get_weather', description: 'weather', parameters: { type: 'object', properties: {} } }]
+    };
+    await adapter.chat(req, { apiKey: 'sk-test', onChunk: () => {} });
+    expect((capturedBody as { tools?: Array<{ function: { name: string } }> }).tools?.[0]?.function?.name).toBe('get_weather');
+  });
+
   it('accumulates multi-delta tool calls into one well-formed chunk', async () => {
     const adapter = createAdapter('openai-compatible', { fetchImpl: mockFetch([
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_weather","arguments":""}}]}}]}',

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './components/theme/ThemeProvider';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useSettings } from './stores/settings-store';
 import { ChatPage } from './pages/ChatPage';
 import { SettingsLayout } from './layouts/SettingsLayout';
@@ -32,6 +33,7 @@ import { AgentTemplatesPage } from './pages/AgentTemplatesPage';
 import { useShortcuts } from './hooks/useShortcuts';
 import { useTaskStore } from './stores/task-store';
 import { useSquadStore } from './stores/squad-store';
+import { IpcChannel } from '@jarvis/protocol';
 
 // C5 (M8 Task 7): the persisted shortcut bindings fire GLOBALLY (the hook is
 // mounted once here, next to the other app-root overlays). focus.input/chat.send
@@ -53,13 +55,14 @@ export default function App() {
     'chat.new': () => { window.location.href = '/'; },
     'task.cancel': () => {
       const id = useTaskStore.getState().activeTaskId;
-      if (id) void window.jarvis.invoke('task.cancel', id);
+      if (id) void window.jarvis.invoke(IpcChannel.taskCancel, id);
     },
     'focus.input': focusChatInput,
     'chat.send': focusChatInput,
   });
   return (
     <ThemeProvider>
+      <ErrorBoundary>
       <ApprovalModal />
       {/* D4 划词: a global mouseup floating overlay, so mount it once at the app
           root (next to the equally-global ApprovalModal) rather than per page. */}
@@ -113,6 +116,7 @@ export default function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }

@@ -28,7 +28,7 @@ export class ApprovalCenter {
       }
       this.pending.set(id, record);
       win.webContents.send(IpcEvent.taskLog, { id: 'approval', line: `approval: ${req.toolName}` });
-      win.webContents.send('approval:request', { id, toolName: req.toolName, args: req.args, prompt: req.prompt });
+      win.webContents.send(IpcEvent.approvalRequest, { id, toolName: req.toolName, args: req.args, prompt: req.prompt });
       // Safety net: a request with no renderer response must never hang a task.
       const timer = setTimeout(() => {
         const r = this.pending.get(id);

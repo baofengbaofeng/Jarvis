@@ -89,7 +89,7 @@ func main() {
 	if cs != nil {
 		extras = append(extras, conflictAdapter{cs})
 	}
-	srv := httpapi.NewServer("0.1.1", q, extras...)
+	srv := httpapi.NewServerWithAuth("0.1.1", q, getenv("JARVIS_DAEMON_TOKEN", ""), extras...)
 	httpSrv := &http.Server{Addr: "127.0.0.1:" + port, Handler: srv.Handler()}
 	// SIGTERM/SIGINT cancels ctx, which stops the Multica Serve goroutine; the
 	// shutdown goroutine then drains the HTTP listener so the daemon terminates.

@@ -40,6 +40,10 @@ export function buildDaemonEnv(
   };
 }
 
+export function daemonAuthHeaders(token: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export interface DaemonStatus {
   running: boolean;
   version: string;
@@ -113,7 +117,8 @@ const DEFAULT_RUNTIME_STATUS: RuntimeStatusData = {
 export interface RuntimePollerOptions {
   port: number;
   intervalMs: number;
-  fetchImpl?: (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+  authToken?: string;
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
   onStatus: (data: RuntimeStatusData) => void;
   onConflicts: (items: ConflictItem[]) => void;
 }
@@ -123,7 +128,8 @@ export interface RuntimePollerOptions {
 // endpoint is handled independently: a daemon that answers status but not
 // conflicts still refreshes the status cache.
 export function createRuntimePoller(opts: RuntimePollerOptions) {
-  const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url));
+  const headers = daemonAuthHeaders(opts.authToken ?? '');
+  const fetchImpl = opts.fetchImpl ?? ((url: string, init?: RequestInit) => fetch(url, { ...init, headers: { ...headers, ...init?.headers } }));
   let timer: NodeJS.Timeout | null = null;
   let stopped = false;
   const tick = async () => {
@@ -186,6 +192,7 @@ export class DaemonSupervisor {
     this.runtimePoller = createRuntimePoller({
       port: this.port,
       intervalMs: 3000,
+      authToken: this.authToken,
       onStatus: (data) => { this.runtimeStatusCache = data; },
       onConflicts: (items) => { this.conflictsCache = items; },
     });
@@ -196,7 +203,7 @@ export class DaemonSupervisor {
   async status(): Promise<DaemonStatus> {
     if (!this.healthy) return UNKNOWN_STATUS;
     try {
-      const res = await fetch(`http://127.0.0.1:${this.port}/status`);
+      const res = await fetch(`http://127.0.0.1:${this.port}/status`, { headers: daemonAuthHeaders(this.authToken) });
       return await res.json() as DaemonStatus;
     } catch {
       return UNKNOWN_STATUS;

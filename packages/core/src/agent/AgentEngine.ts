@@ -54,12 +54,17 @@ export class AgentEngine {
     let finalText = '';
 
     for (let step = 0; step < this.maxSteps; step++) {
+      const allTools = this.cfg.toolRegistry.list();
+      const visible = this.visibleTools
+        ? allTools.filter(t => this.visibleTools!.includes(t.name))
+        : allTools;
       const req: ChatRequest = {
         provider: { id: agent.id, name: agent.name, type: input.provider.type, baseUrl: input.provider.baseUrl, apiKeyRef: '', createdAt: '', updatedAt: '' },
         modelId: input.modelId,
         messages: working,
         stream: true,
-        maxTokens: this.cfg.maxTokens
+        maxTokens: this.cfg.maxTokens,
+        ...(visible.length > 0 ? { tools: visible, toolChoice: 'auto' as const } : {})
       };
 
       let callCalls: ToolCall[] = [];

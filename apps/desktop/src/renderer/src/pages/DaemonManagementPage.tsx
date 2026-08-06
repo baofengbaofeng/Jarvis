@@ -67,7 +67,7 @@ export function DaemonManagementPage() {
 
   return (
     <div data-testid="daemon-management">
-      <h2>Daemon</h2>
+      <h2>{t('daemon.title')}</h2>
       <p data-testid="daemon-running">{status.running ? `● ${t('daemon.running')}` : `○ ${t('daemon.stopped')}`}</p>
       <p data-testid="daemon-version">{t('daemon.version')} {status.version}</p>
       <p data-testid="daemon-tasks">{t('daemon.active')} {status.activeTasks} / {t('daemon.queued')} {status.queued}</p>

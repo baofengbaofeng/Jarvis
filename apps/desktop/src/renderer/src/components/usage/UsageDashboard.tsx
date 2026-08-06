@@ -12,16 +12,16 @@ export function UsageDashboard() {
     <div data-testid="usage-dashboard" className="usage-dashboard">
       <h2 className="usage-dashboard__title">{t('usage.title')}</h2>
       <div className="usage-dashboard__total">
-        <span data-testid="usage-total-tokens">{summary.total.totalTokens}</span> {t('usage.totalTokens')} / {summary.total.calls} calls
+        <span data-testid="usage-total-tokens">{summary.total.totalTokens}</span> {t('usage.totalTokens')} / {summary.total.calls} {t('usage.col.calls')}
       </div>
       <table className="usage-dashboard__table">
         <thead>
           <tr>
             <th>{t('usage.col.agent')}</th>
-            <th>prompt</th>
-            <th>completion</th>
-            <th>total</th>
-            <th>calls</th>
+            <th>{t('usage.col.prompt')}</th>
+            <th>{t('usage.col.completion')}</th>
+            <th>{t('usage.col.total')}</th>
+            <th>{t('usage.col.calls')}</th>
           </tr>
         </thead>
         <tbody>

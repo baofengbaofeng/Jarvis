@@ -122,21 +122,23 @@ function handleOpenArgv(argv: string[]): boolean {
 // M4 Task 9 (E12) CLI wiring: a single app instance owns the IDE bridge, and
 // every later `jarvis open --file` invocation is forwarded to the running
 // instance via the second-instance argv (Electron delivers the full argv of the
-// second launch).
-const gotLock = app.requestSingleInstanceLock();
+// second launch). E2E sets JARVIS_E2E=1 to allow parallel isolated launches.
+const skipSingleInstance = process.env.JARVIS_E2E === '1';
+const gotLock = skipSingleInstance || app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', (_event, argv) => {
-    if (handleOpenArgv(argv)) {
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
-    }
-  });
+  if (!skipSingleInstance) {
+    app.on('second-instance', (_event, argv) => {
+      if (handleOpenArgv(argv)) {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+      }
+    });
+  }
 
   app.whenReady().then(() => {
     void bootstrap();
-    // Handle the very first launch when it IS an `open --file` invocation.
     handleOpenArgv(process.argv);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && windows && ipc) {

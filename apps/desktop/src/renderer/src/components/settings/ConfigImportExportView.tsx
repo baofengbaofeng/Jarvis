@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next';
 
 type Strategy = 'skip' | 'overwrite' | 'merge';
 
+// C12 (M8 Task 6): config import/export UI. Export writes jarvis-config.json/yaml
+// through config.export + dialog.saveText; import picks a file via dialog.pickPath
+// (capability token) and reads it via config.readPickedFile, then applies it via
+// config.import with the chosen skip/overwrite/merge strategy. API keys never
+// leave main (export carries only apiKeyRef), so no keychain access happens here.
 export function ConfigImportExportView() {
   const { t } = useTranslation('common');
   const [strategy, setStrategy] = useState<Strategy>('skip');

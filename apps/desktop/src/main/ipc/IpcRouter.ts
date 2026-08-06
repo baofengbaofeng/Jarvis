@@ -33,7 +33,8 @@ import { registerOfficeIpc, createOfficeChatStream } from './office';
 import { testProviderConnectivity, runDiagnostics } from './diagnostics';
 import { collectEnvInfo } from '../diagnostics/env';
 import { DaemonSupervisor } from '../daemon/DaemonSupervisor';
-import { SecureStorage } from '../secrets/SecureStorage';
+import { createSecureStorage } from '../secrets/createSecureStorage';
+import { assertAllowedWorkspaceRoot, assertWorkspaceRelPath } from './workspace-path-guard';
 import { TrustedRendererPolicy, assertTrustedIpcEvent } from '../security/TrustedRendererPolicy';
 import { PathCapabilityStore, type PathOperation, type PathPickPurpose } from '../security/PathCapabilityStore';
 import { SafeUrlPolicy } from '../security/SafeUrlPolicy';
@@ -95,7 +96,7 @@ export class IpcRouter {
       allowLoopbackDev: process.env['JARVIS_ALLOW_LOOPBACK_URLS'] === '1',
     });
     setDefaultWebSearchHttp(safeUrlPolicy);
-    const secrets = new SecureStorage();
+    const secrets = createSecureStorage();
     configureWebSearch({ secrets, migrationBlocked: searchOpts.migrationBlocked ?? false });
     const assertAllowedUrl = async (url: string) => { await safeUrlPolicy.assertAllowed(url); };
     // C5 (M8 Task 7): in-app shortcut bindings read/write the `shortcuts`
@@ -213,8 +214,14 @@ export class IpcRouter {
     const codeIndex = new IndexStore(createCodeIndexAdapter(this.db), hashEmbedding);
     this.register('index.reindex', async (_e, args) => {
       const { workspaceRoot } = args as { workspaceRoot: string };
-      const res = await reindexWorkspace(codeIndex, workspaceRoot);
-      return { ok: true, ...res };
+      try {
+        const boundRoots = () => agents.list().filter(a => a.workspaceId).map(a => a.workspaceId!);
+        const allowed = assertAllowedWorkspaceRoot(workspaceRoot, getWorkspace, boundRoots);
+        const res = await reindexWorkspace(codeIndex, allowed);
+        return { ok: true, ...res };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
     });
     this.register('index.search', (_e, args) => {
       const { query, limit } = args as { query: string; limit?: number };
@@ -228,13 +235,23 @@ export class IpcRouter {
       const { taskId, path, accepts } = args as { taskId: string; path: string; accepts: boolean[] };
       const ws = getWorkspace();
       if (!ws) return { ok: false, error: 'no workspace' };
-      return applyDiffToFile(ws, path, accepts, taskId, snapshotStore);
+      try {
+        const safePath = assertWorkspaceRelPath(ws, path);
+        return applyDiffToFile(ws, safePath, accepts, taskId, snapshotStore);
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
     });
     this.register('diff.read', (_e, args) => {
       const { taskId, path } = args as { taskId: string; path: string };
       const ws = getWorkspace();
       if (!ws) return { ok: false, error: 'no workspace' };
-      return readDiffFile(ws, path, taskId, snapshotStore);
+      try {
+        const safePath = assertWorkspaceRelPath(ws, path);
+        return readDiffFile(ws, safePath, taskId, snapshotStore);
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
     });
     // mention.search binds the code index, the agent list, and a flattened
     // workspace tree (the current agent's workspace) so the renderer's
@@ -350,7 +367,7 @@ export class IpcRouter {
     // closes the db, so the service returns restart:true and the renderer
     // relaunches via app.relaunch immediately after.
     if (backup) {
-      const backupIpc = createBackupIpc(backup);
+      const backupIpc = createBackupIpc(backup, backup.getBackupDir());
       const migrationBlocked = searchOpts.migrationBlocked ?? false;
       this.register('backup.list', () => backupIpc.list());
       this.register('backup.create', async () => {

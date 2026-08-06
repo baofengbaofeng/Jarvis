@@ -1,47 +1,11 @@
-export const IpcChannel = {
-  settingsGet: 'settings.get',
-  settingsSet: 'settings.set',
-  providerList: 'provider.list',
-  providerCreate: 'provider.create',
-  providerUpdate: 'provider.update',
-  providerDelete: 'provider.delete',
-  agentList: 'agent.list',
-  agentCreate: 'agent.create',
-  agentUpdate: 'agent.update',
-  agentDelete: 'agent.delete',
-  // M6 Task 9 (L31): agent config version history + rollback channels.
-  agentVersions: 'agents.versions',
-  agentRollback: 'agents.rollback',
-  taskCreate: 'task.create',
-  taskCancel: 'task.cancel',
-  taskPause: 'task.pause',
-  taskRetry: 'task.retry',
-  chatSend: 'chat.send',
-  daemonStatus: 'daemon.status',
-  daemonRestart: 'daemon.restart',
-  secretsSet: 'secrets.set',
-  secretsGet: 'secrets.get',
-  secretsDelete: 'secrets.delete',
-  dialogOpenFile: 'dialog.openFile',
-  diagnosticsRun: 'diagnostics.run',
-  envInfo: 'diagnostics.env',
-} as const;
+export { IpcChannel, IpcEvent } from './ipc-channels';
 
-export const IpcEvent = {
-  chatDelta: 'chat:delta',
-  chatDone: 'chat:done',
-  taskLog: 'task:log',
-  taskState: 'task:state',
-  taskComplete: 'task:complete',
-  taskFailed: 'task:failed',
-  squadStatus: 'squad:status',
-  // K5 (M6 Task 10): main pushes squad/agent events (bus subscription + task
-  // log) as { agent, ts, kind, detail } so the renderer's squad timeline
-  // streams live.
-  squadEvent: 'squad:event',
-  // I5 (M6 Task 8): main pushes terminal task/squad outcomes as in-app toasts.
-  toastPush: 'toast:push',
-} as const;
+export {
+  ALLOWED_INVOKE,
+  ALLOWED_EVENTS,
+  assertAllowedInvoke,
+  assertAllowedEvent,
+} from './ipc-allowlist';
 
 export type ProviderType = 'openai-compatible' | 'anthropic-compatible';
 

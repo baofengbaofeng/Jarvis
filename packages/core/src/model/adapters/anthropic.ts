@@ -21,7 +21,11 @@ export class AnthropicAdapter implements ProviderAdapter {
       max_tokens: req.maxTokens ?? 4096,
       system: system || undefined,
       messages: rest,
-      stream: true
+      stream: true,
+      ...(req.tools && req.tools.length > 0 ? {
+        tools: req.tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters })),
+        tool_choice: req.toolChoice === 'none' ? { type: 'none' } : { type: 'auto' }
+      } : {})
     };
     const res = await fetchImpl(url, {
       method: 'POST',

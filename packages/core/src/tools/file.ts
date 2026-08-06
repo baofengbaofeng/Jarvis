@@ -21,8 +21,8 @@ export function createFileTools(registry: ToolRegistry, policy: SandboxPolicy, f
   }, async (args, ctx) => {
     const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
     const path = String(args.path);
-    sandbox.assertRead(path);
-    return { ok: true, output: fsImpl.readFileSync(path) };
+    const canonical = sandbox.assertRead(path);
+    return { ok: true, output: fsImpl.readFileSync(canonical) };
   });
 
   registry.register({
@@ -31,8 +31,8 @@ export function createFileTools(registry: ToolRegistry, policy: SandboxPolicy, f
     const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
     const path = String(args.path);
     const content = String(args.content);
-    sandbox.assertWrite(path);
-    fsImpl.writeFileSync(path, content);
+    const canonical = sandbox.assertWrite(path);
+    fsImpl.writeFileSync(canonical, content);
     return { ok: true, output: `wrote ${path}` };
   });
 
@@ -41,10 +41,10 @@ export function createFileTools(registry: ToolRegistry, policy: SandboxPolicy, f
   }, async (args, ctx) => {
     const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
     const path = String(args.path);
-    sandbox.assertRead(path);
-    const entries = fsImpl.readdirSync(path).map(e => {
+    const canonical = sandbox.assertRead(path);
+    const entries = fsImpl.readdirSync(canonical).map(e => {
       let isDir = false;
-      try { isDir = statSync(join(path, e)).isDirectory(); } catch { /* ignore */ }
+      try { isDir = statSync(join(canonical, e)).isDirectory(); } catch { /* ignore */ }
       return `${isDir ? 'd' : 'f'} ${e}`;
     });
     return { ok: true, output: entries.join('\n') };

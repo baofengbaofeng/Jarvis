@@ -10,6 +10,8 @@
     "start": "electron-vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
+    "e2e:electron": "playwright test --project=electron",
+    "e2e:electron:ci": "electron-vite build && electron-rebuild -f -w better-sqlite3 && playwright test --project=electron",
     "typecheck": "tsc --noEmit",
     "build:daemon": "cd ../../daemon && go build -o ../apps/desktop/resources/daemon/jarvis-daemon ./cmd/jarvis-daemon",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",

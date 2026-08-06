@@ -57,8 +57,10 @@ export function createWorkspaceIpc(getWorkspace: () => string | null, deps: { co
     if (!ws) return { ok: false as const, error: 'no workspace' };
     const sb = new Sandbox(ws, { level: 'readwrite', allowDomains: [], allowCommands: [] });
     const abs = join(ws, rel);
-    try { sb.assertRead(abs); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
-    return { ok: true as const, content: readFileSync(abs, 'utf8') };
+    try {
+      const canonical = sb.assertRead(abs);
+      return { ok: true as const, content: readFileSync(canonical, 'utf8') };
+    } catch (e) { return { ok: false as const, error: (e as Error).message }; }
   };
   // M5 Task 7 (L22): drag-dropped "other" files are copied into the workspace.
   // basename() puts the destination INSIDE the workspace root no matter where the

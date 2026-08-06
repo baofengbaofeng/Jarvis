@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { MentionCandidate } from '@jarvis/core';
+import type { MentionCandidate } from '@jarvis/core/renderer';
 
 export function MentionPicker({ onSelect, onClose }: { onSelect: (c: MentionCandidate) => void; onClose: () => void }) {
   const { t } = useTranslation('common');

@@ -1,4 +1,5 @@
-import { isAbsolute, resolve, relative } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, resolve, relative } from 'node:path';
 import { parseIgnorePatterns, isIgnored } from './ignore';
 
 export type SandboxLevel = 'readonly' | 'readwrite' | 'system';
@@ -46,15 +47,19 @@ export class Sandbox {
     this.ignorePatterns = parseIgnorePatterns(ignorePatterns);
   }
 
-  assertRead(absPath: string): void {
-    this.assertInside(absPath);
-    if (isIgnored(absPath, this.ignorePatterns)) throw new SandboxError(`path ignored by jarvisignore: ${absPath}`);
+  /** Returns the canonical absolute path safe for read IO. */
+  assertRead(absPath: string): string {
+    const canonical = this.resolveReadPath(absPath);
+    if (isIgnored(canonical, this.ignorePatterns)) throw new SandboxError(`path ignored by jarvisignore: ${absPath}`);
+    return canonical;
   }
 
-  assertWrite(absPath: string): void {
+  /** Returns the absolute path safe for write IO (parent must resolve inside workspace). */
+  assertWrite(absPath: string): string {
     if (this.policy.level === 'readonly') throw new SandboxError('readonly sandbox: write not allowed');
-    this.assertInside(absPath);
-    if (isIgnored(absPath, this.ignorePatterns)) throw new SandboxError(`path ignored by jarvisignore: ${absPath}`);
+    const canonical = this.resolveWritePath(absPath);
+    if (isIgnored(canonical, this.ignorePatterns)) throw new SandboxError(`path ignored by jarvisignore: ${absPath}`);
+    return canonical;
   }
 
   assertCommand(cmdline: string): void {
@@ -73,9 +78,29 @@ export class Sandbox {
     if (!this.policy.allowDomains.some(d => host === d || host.endsWith('.' + d))) throw new SandboxError(`domain not allowed: ${host}`);
   }
 
-  private assertInside(absPath: string): void {
+  private resolveReadPath(absPath: string): string {
     const abs = isAbsolute(absPath) ? absPath : resolve(this.workspaceRoot, absPath);
-    const rel = relative(this.workspaceRoot, abs);
-    if (rel.startsWith('..') || isAbsolute(rel)) throw new SandboxError(`outside workspace: ${absPath}`);
+    const real = realpathSync(abs);
+    this.assertRealInside(real);
+    return real;
+  }
+
+  private resolveWritePath(absPath: string): string {
+    const abs = isAbsolute(absPath) ? absPath : resolve(this.workspaceRoot, absPath);
+    if (existsSync(abs)) {
+      const real = realpathSync(abs);
+      this.assertRealInside(real);
+      return real;
+    }
+    const parent = dirname(abs);
+    const realParent = realpathSync(parent);
+    this.assertRealInside(realParent);
+    return abs;
+  }
+
+  private assertRealInside(real: string): void {
+    const root = realpathSync(this.workspaceRoot);
+    const rel = relative(root, real);
+    if (rel.startsWith('..') || isAbsolute(rel)) throw new SandboxError(`outside workspace: ${real}`);
   }
 }

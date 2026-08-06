@@ -56,12 +56,14 @@
       "models": "Models",
       "modelId": "Model ID",
       "modelName": "Display name",
-      "addModel": "Add model"
+      "addModel": "Add model",
+      "typeOpenai": "OpenAI compatible",
+      "typeAnthropic": "Anthropic compatible"
     }
   },
   "theme": { "light": "Light", "dark": "Dark", "system": "System" },
   "onboarding": { "title": "Welcome to JARVIS", "start": "Get started", "step1": "Provider", "step2": "Agent", "step3": "Workspace" },
-  "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat" },
+  "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat", "taskCancelled": "Task cancelled" },
   "approval": { "title": "Approval Required", "approve": "Approve", "deny": "Deny", "reject": "Reject", "summary": "Summary" },
   "agent": { "bindWorkspace": "Bind workspace", "workspaceBound": "Workspace bound", "systemPrompt": "System Prompt", "modelId": "Model ID" },
   "board": {
@@ -70,6 +72,7 @@
   },
   "canvas": { "title": "Canvas", "no_artifacts": "No task artifacts yet" },
   "daemon": {
+    "title": "Daemon management",
     "running": "Running",
     "stopped": "Stopped",
     "version": "Version",
@@ -120,13 +123,14 @@
   "coding": { "selectFile": "Select a file from the left to preview" },
   "usage": {
     "title": "Usage",
-    "col": { "agent": "Agent" },
+    "col": { "agent": "Agent", "prompt": "Prompt", "completion": "Completion", "total": "Total", "calls": "Calls" },
     "totalTokens": "Total tokens"
   },
   "audit": {
     "title": "Audit log",
     "col": { "ts": "Time", "kind": "Kind", "action": "Action", "result": "Result" },
-    "export": "Export"
+    "export": "Export",
+    "filter": { "all": "All", "tool_call": "Tool call", "approval": "Approval" }
   },
   "diff": { "title": "Diff", "accept": "Accept", "reject": "Reject", "apply": "Apply" },
   "versionHistory": { "title": "Version History", "rollback": "Rollback", "rolledBack": "Rolled back", "fields": "Fields" },
@@ -211,6 +215,7 @@
     "saved": "Saved"
   },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" },
+  "error": { "title": "Something went wrong", "reload": "Reload" },
   "workflow": {
     "title": "Workflow Editor",
     "run": "Run",

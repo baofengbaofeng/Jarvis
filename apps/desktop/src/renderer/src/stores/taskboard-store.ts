@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { groupByStatus, type TaskSummary, type BoardColumns } from '@jarvis/core/renderer';
+import { IpcChannel } from '@jarvis/protocol';
 
 const EMPTY: BoardColumns = { queued: [], running: [], paused: [], completed: [], failed: [], cancelled: [] };
 
@@ -16,11 +17,11 @@ export const useTaskboardStore = create<{
   loading: false,
   load: async () => {
     set({ loading: true });
-    const tasks = (await window.jarvis.invoke('taskboard.list')) as TaskSummary[];
+    const tasks = (await window.jarvis.invoke(IpcChannel.taskboardList)) as TaskSummary[];
     set({ cols: groupByStatus(tasks), loading: false });
   },
-  cancel: async (id) => { await window.jarvis.invoke('task.cancel', id); await get().load(); },
-  pause: async (id) => { await window.jarvis.invoke('task.pause', id); await get().load(); },
-  resume: async (id) => { await window.jarvis.invoke('task.resume', id); await get().load(); },
-  retry: async (id) => { await window.jarvis.invoke('task.retry', id); await get().load(); },
+  cancel: async (id) => { await window.jarvis.invoke(IpcChannel.taskCancel, id); await get().load(); },
+  pause: async (id) => { await window.jarvis.invoke(IpcChannel.taskPause, id); await get().load(); },
+  resume: async (id) => { await window.jarvis.invoke(IpcChannel.taskResume, id); await get().load(); },
+  retry: async (id) => { await window.jarvis.invoke(IpcChannel.taskRetry, id); await get().load(); },
 }));

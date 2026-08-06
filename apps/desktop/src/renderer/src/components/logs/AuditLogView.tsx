@@ -20,7 +20,7 @@ export function AuditLogView() {
       <h2 className="audit-log__title">{t('audit.title')}</h2>
       <div className="audit-log__toolbar">
         <select data-testid="audit-kind" value={kind} onChange={e => setKind(e.target.value)}>
-          <option value="">all</option><option value="tool_call">tool_call</option><option value="approval">approval</option>
+          <option value="">{t('audit.filter.all')}</option><option value="tool_call">{t('audit.filter.tool_call')}</option><option value="approval">{t('audit.filter.approval')}</option>
         </select>
         <button onClick={() => void onExport('csv')}>{t('audit.export')} CSV</button>
       </div>
