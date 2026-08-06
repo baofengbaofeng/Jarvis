@@ -1,5 +1,5 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
-import { request as httpsRequest, type RequestOptions } from 'node:https';
+import * as nodeHttps from 'node:https';
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import type { IncomingMessage } from 'node:http';
 import { isRestrictedAddress, type SafeFetchLimits, type SafeHttpClient } from '@jarvis/core';
@@ -37,11 +37,10 @@ export class SafeUrlPolicy implements SafeHttpClient {
   }
 
   async request(url: string, init: RequestInit | undefined, limits: SafeFetchLimits): Promise<Response> {
-    const merged = { ...DEFAULT_LIMITS, ...limits };
     const controller = new AbortController();
     const onAbort = () => controller.abort();
-    merged.signal?.addEventListener('abort', onAbort, { once: true });
-    const timeout = setTimeout(() => controller.abort(), merged.timeoutMs);
+    limits.signal?.addEventListener('abort', onAbort, { once: true });
+    const timeout = setTimeout(() => controller.abort(), limits.timeoutMs);
 
     try {
       let current = await this.verify(url, controller.signal);
@@ -51,10 +50,10 @@ export class SafeUrlPolicy implements SafeHttpClient {
       const body = init?.body ?? undefined;
 
       while (true) {
-        const res = await this.dispatch(current, { method, headers, body }, merged, controller.signal);
+        const res = await this.dispatch(current, { method, headers, body }, limits, controller.signal);
 
         if (isRedirect(res.status)) {
-          if (redirects >= merged.maxRedirects) throw new Error('URL_REDIRECT_LIMIT');
+          if (redirects >= limits.maxRedirects) throw new Error('URL_REDIRECT_LIMIT');
           const location = res.headers.get('location');
           if (!location) throw new Error('URL_REDIRECT_LIMIT');
           current = await this.verify(new URL(location, current.url).href, controller.signal);
@@ -71,7 +70,7 @@ export class SafeUrlPolicy implements SafeHttpClient {
       throw e;
     } finally {
       clearTimeout(timeout);
-      merged.signal?.removeEventListener('abort', onAbort);
+      limits.signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -118,7 +117,7 @@ export class SafeUrlPolicy implements SafeHttpClient {
         callback(null, entry.address, entry.family);
       };
 
-      const options: RequestOptions = {
+      const options: nodeHttps.RequestOptions = {
         protocol: url.protocol,
         hostname: url.hostname,
         port: url.port || 443,
@@ -130,7 +129,7 @@ export class SafeUrlPolicy implements SafeHttpClient {
         signal,
       };
 
-      const req = httpsRequest(options, (incoming) => {
+      const req = nodeHttps.request(options, (incoming) => {
         void readLimitedResponse(incoming, limits.maxResponseBytes)
           .then(({ body, truncated }) => {
             if (truncated) {

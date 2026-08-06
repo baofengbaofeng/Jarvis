@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { applyMigrations } from '../db/migrations';
-import { globalSearch, webSearch } from './search';
+import { globalSearch, webSearch, setDefaultWebSearchHttp } from './search';
+import { SafeUrlPolicy } from '../security/SafeUrlPolicy';
 import type { SettingsStore } from './settings';
 import type { SearchProviderConfig } from '@jarvis/core';
 
@@ -129,5 +130,23 @@ describe('webSearch (L25)', () => {
   it('throws a clear error when nothing is configured', async () => {
     await expect(webSearch(makeSettings(), 'q', { fetchImpl: async () => fakeRes({}) }))
       .rejects.toThrow('未配置联网搜索源');
+  });
+
+  it('routes production webSearch through setDefaultWebSearchHttp policy client', async () => {
+    const lookup = vi.fn().mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    const fetchImpl = vi.fn().mockResolvedValue(fakeRes({ organic: [{ title: 'T', link: 'https://x', snippet: 'S' }] }));
+    setDefaultWebSearchHttp(new SafeUrlPolicy({ lookup, fetchImpl }));
+
+    const settings = makeSettings({
+      search_providers: [{ type: 'serper', apiKey: 'k', enabled: true }] as SearchProviderConfig[],
+    });
+    const out = await webSearch(settings, 'jarvis');
+
+    expect(out[0]).toEqual({ title: 'T', url: 'https://x', snippet: 'S' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchImpl.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(url).toContain('serper');
+    expect(init.headers['X-API-KEY']).toBe('k');
+    expect(lookup).toHaveBeenCalledWith('google.serper.dev');
   });
 });
