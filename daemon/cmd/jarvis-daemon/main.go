@@ -16,7 +16,6 @@ import (
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/httpapi"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/client"
-	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/policy"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 )
 
@@ -74,22 +73,11 @@ func main() {
 
 	// Wire the L39 runtimeState onto /runtime/status and, when a ConflictStore
 	// exists (Multica enabled), the L38 conflicts onto /runtime/conflicts.
-	// SEC-09: shared file pending/approvals so agent writes and daemon HTTP agree.
-	approvalsPath, pendingPath := policy.DefaultInjectionPaths()
-	extras := []httpapi.ServerExtra{
-		st,
-		&httpapi.InjectionApprovalService{
-			Pending:   policy.NewFilePendingStore(pendingPath),
-			Approvals: policy.NewFileApprovalStore(approvalsPath),
-		},
-	}
-	if token := os.Getenv("JARVIS_DAEMON_TOKEN"); token != "" {
-		extras = append(extras, httpapi.AuthToken(token))
-	}
+	extras := []httpapi.ServerExtra{st}
 	if cs != nil {
 		extras = append(extras, conflictAdapter{cs})
 	}
-	srv := httpapi.NewServer("0.1.1", q, extras...)
+	srv := httpapi.NewServerWithAuth("0.1.1", q, getenv("JARVIS_DAEMON_TOKEN", ""), extras...)
 	httpSrv := &http.Server{Addr: "127.0.0.1:" + port, Handler: srv.Handler()}
 	// SIGTERM/SIGINT cancels ctx, which stops the Multica Serve goroutine; the
 	// shutdown goroutine then drains the HTTP listener so the daemon terminates.
@@ -177,10 +165,9 @@ func heartbeatStatus(q *runtime.Queue) string {
 	return "idle"
 }
 
-// agentExec 把任务交给 jarvis-agent 子进程执行并转发流帧(S6 端到端)。C2/SEC-09:
-// 分配 task workspace → ApplyInjection(仅 L38 冲突检测，保留 raw Multica 字段，
-// 不预合并/不落盘 skills)→ ConflictStore → 把 raw payload 交给 invoker；
-// policy gate + MergeInjections 在 jarvis-agent ExecuteTask 内完成。
+// agentExec 把任务交给 jarvis-agent 子进程执行并转发流帧(S6 端到端)。C2 接线:
+// 分配 task workspace → applyInjection(合并注入 + H1.7 skill 落盘)→ L38 冲突写入
+// ConflictStore → 把合并后的 payload(而非原始 payload)交给 invoker。
 func agentExec(invoker client.AgentInvoker, st *runtimeState, pool *runtime.WorkspacePool, skillFS client.SkillFS, conflicts *client.ConflictStore, local acp.Injection) client.ExecFunc {
 	return func(ctx context.Context, p *acp.TaskPayload, onChunk func(runtime.StreamChunk)) (client.TaskResult, error) {
 		st.mu.Lock()

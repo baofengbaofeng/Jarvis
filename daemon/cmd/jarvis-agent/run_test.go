@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"io"
 	"os"
 	"strings"
 	"sync"
@@ -15,7 +14,6 @@ import (
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/client"
-	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/policy"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 )
 
@@ -112,7 +110,6 @@ func TestExecuteTaskProfileEnvOverridesPayloadEnv(t *testing.T) {
 	runner := &fakeRunner{res: RunResult{Status: "completed", Result: "ok"}}
 	prof := &db.Profile{ID: "dev", Env: map[string]string{"LOG_LEVEL": "debug", "SHARED": "profile"}}
 	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{prof: prof})
-	deps.InjectionPolicy = allowingPolicy{env: map[string]string{"LOG_LEVEL": "info", "PAYLOAD_ONLY": "yes"}}
 	var buf bytes.Buffer
 	payload := &acp.TaskPayload{
 		TaskID:      "t-5",
@@ -129,112 +126,6 @@ func TestExecuteTaskProfileEnvOverridesPayloadEnv(t *testing.T) {
 	}
 	if env["SHARED"] != "profile" || env["PAYLOAD_ONLY"] != "yes" {
 		t.Fatalf("unexpected merged env: %+v", env)
-	}
-}
-
-type rejectingPolicy struct {
-	denial   policy.Denial
-	approval policy.ApprovalRequest
-}
-
-func (r rejectingPolicy) Evaluate(_ context.Context, _ policy.CandidateInjection) (acp.Injection, []policy.Denial, []policy.ApprovalRequest, error) {
-	if r.approval.Key.Digest != "" || r.approval.Key.Name != "" {
-		return acp.Injection{}, nil, []policy.ApprovalRequest{r.approval}, nil
-	}
-	if r.denial.Reason != "" {
-		return acp.Injection{}, []policy.Denial{r.denial}, nil, nil
-	}
-	return acp.Injection{}, nil, nil, nil
-}
-
-type allowingPolicy struct {
-	env map[string]string
-	mcp []acp.MCPEntry
-}
-
-func (a allowingPolicy) Evaluate(_ context.Context, c policy.CandidateInjection) (acp.Injection, []policy.Denial, []policy.ApprovalRequest, error) {
-	env := a.env
-	if env == nil {
-		env = c.Env
-	}
-	mcp := a.mcp
-	if mcp == nil {
-		mcp = c.MCPServers
-	}
-	return acp.Injection{Env: env, MCPServers: mcp, CLIArgs: c.CLIArgs, Skills: c.Skills}, nil, nil, nil
-}
-
-func TestExecuteTaskDoesNotRunUnapprovedRemoteMCP(t *testing.T) {
-	runner := &fakeRunner{res: RunResult{Status: "completed"}}
-	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{})
-	deps.InjectionPolicy = rejectingPolicy{approval: policy.ApprovalRequest{
-		Key: policy.ApprovalKey{Kind: "mcp", Name: "remote", Digest: "abc"},
-	}}
-	payload := &acp.TaskPayload{
-		TaskID: "t-policy", Instruction: "go",
-		MCPServers: []acp.MCPEntry{{Name: "remote", Command: "/tmp/remote"}},
-	}
-	err := ExecuteTask(context.Background(), deps, payload, TaskOpts{}, runtime.NewStreamWriter(io.Discard))
-	if err == nil || !strings.Contains(err.Error(), "MULTICA_INJECTION_APPROVAL_REQUIRED") {
-		t.Fatalf("err=%v", err)
-	}
-	if len(runner.specs) != 0 {
-		t.Fatal("runner must not receive an unapproved injection")
-	}
-}
-
-func TestExecuteTaskDoesNotRunDeniedRemoteEnv(t *testing.T) {
-	runner := &fakeRunner{res: RunResult{Status: "completed"}}
-	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{})
-	deps.InjectionPolicy = rejectingPolicy{denial: policy.Denial{Kind: "env", Name: "NODE_OPTIONS", Reason: "DANGEROUS_ENV"}}
-	payload := &acp.TaskPayload{
-		TaskID: "t-deny", Instruction: "go",
-		Env: map[string]string{"NODE_OPTIONS": "--require /tmp/pwn.js"},
-	}
-	err := ExecuteTask(context.Background(), deps, payload, TaskOpts{}, runtime.NewStreamWriter(io.Discard))
-	if err == nil || !strings.Contains(err.Error(), "MULTICA_INJECTION_DENIED") {
-		t.Fatalf("err=%v", err)
-	}
-	if len(runner.specs) != 0 {
-		t.Fatal("runner must not receive a denied injection")
-	}
-}
-
-type recordingAudit struct {
-	entries []policy.InjectionAuditEntry
-}
-
-func (r *recordingAudit) Write(e policy.InjectionAuditEntry) error {
-	r.entries = append(r.entries, e)
-	return nil
-}
-
-func TestExecuteTaskAuditIncludesApprovedMCPDigest(t *testing.T) {
-	runner := &fakeRunner{res: RunResult{Status: "completed"}}
-	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{})
-	audit := &recordingAudit{}
-	deps.InjectionAudit = audit
-	deps.InjectionPolicy = allowingPolicy{mcp: []acp.MCPEntry{{
-		Name: "fs", Command: "/opt/fs", Digest: strings.Repeat("d", 64),
-	}}}
-	payload := &acp.TaskPayload{
-		TaskID: "t-audit", Instruction: "go",
-		MCPServers: []acp.MCPEntry{{Name: "fs", Command: "/opt/fs"}},
-	}
-	if err := ExecuteTask(context.Background(), deps, payload, TaskOpts{}, runtime.NewStreamWriter(io.Discard)); err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, e := range audit.entries {
-		if e.Kind == "mcp" && e.Reason == "MCP_APPROVED" {
-			found = true
-			if e.Digest != strings.Repeat("d", 64) {
-				t.Fatalf("MCP_APPROVED audit missing digest: %#v", e)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("expected MCP_APPROVED audit entry, got %#v", audit.entries)
 	}
 }
 

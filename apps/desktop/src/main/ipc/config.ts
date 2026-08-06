@@ -4,7 +4,6 @@ import {
   buildExport,
   planImport,
   validateSchema,
-  redactExportSettings,
   type AgentExport,
   type ExportPayload,
   type ImportStrategy,
@@ -50,7 +49,7 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
     }>;
     const models = db.prepare('SELECT id, provider_id AS providerId, model_id AS modelId, name FROM models').all() as ExportPayload['models'];
     const agents = db.prepare('SELECT id, name, slug, description, system_prompt AS systemPrompt, model_id AS modelId FROM agents').all() as ExportPayload['agents'];
-    return buildExport(providers, models, agents, redactExportSettings(readSettings()));
+    return buildExport(providers, models, agents, readSettings());
   };
 
   const exportConfig = (format: 'json' | 'yaml' = 'json') => {

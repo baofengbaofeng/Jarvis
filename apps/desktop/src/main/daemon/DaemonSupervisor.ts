@@ -1,7 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import { InjectionApprovalClient } from './InjectionApprovalClient';
 
 const DEFAULT_PORT = 17890;
 // Fallbacks mirror daemon/cmd/jarvis-daemon/main.go getenvInt defaults.
@@ -13,31 +12,22 @@ export interface ConcurrencyConfig {
   machine?: number;
 }
 
-/** Prefer an explicit env token; otherwise mint a per-process secret for SEC-09. */
-export function resolveDaemonAuthToken(env: NodeJS.ProcessEnv = process.env): string {
-  const existing = env.JARVIS_DAEMON_TOKEN?.trim();
-  if (existing) return existing;
-  return randomBytes(32).toString('hex');
-}
-
 // Pure helper so the env wiring is unit-testable without spawning a process.
 // The daemon reads JARVIS_CONCURRENCY_PER_AGENT / JARVIS_CONCURRENCY_MACHINE
 // to size its queue (M3 Task 9, C10: closes the Task 8 deferral so the
 // ConcurrencySettingsPage's save + daemon.restart actually takes effect).
-// JARVIS_DAEMON_TOKEN is always set so /v1 injection-approval routes can auth.
-export function buildDaemonEnv(
-  base: NodeJS.ProcessEnv,
-  port: number,
-  concurrency: ConcurrencyConfig,
-  token: string,
-): NodeJS.ProcessEnv {
+export function buildDaemonEnv(base: NodeJS.ProcessEnv, port: number, concurrency: ConcurrencyConfig, token?: string): NodeJS.ProcessEnv {
   return {
     ...base,
     JARVIS_DAEMON_PORT: String(port),
     JARVIS_CONCURRENCY_PER_AGENT: String(concurrency.perAgent ?? DEFAULT_CONCURRENCY_PER_AGENT),
     JARVIS_CONCURRENCY_MACHINE: String(concurrency.machine ?? DEFAULT_CONCURRENCY_MACHINE),
-    JARVIS_DAEMON_TOKEN: token,
+    ...(token ? { JARVIS_DAEMON_TOKEN: token } : {})
   };
+}
+
+export function daemonAuthHeaders(token: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export interface DaemonStatus {
@@ -113,7 +103,8 @@ const DEFAULT_RUNTIME_STATUS: RuntimeStatusData = {
 export interface RuntimePollerOptions {
   port: number;
   intervalMs: number;
-  fetchImpl?: (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+  authToken?: string;
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
   onStatus: (data: RuntimeStatusData) => void;
   onConflicts: (items: ConflictItem[]) => void;
 }
@@ -123,7 +114,8 @@ export interface RuntimePollerOptions {
 // endpoint is handled independently: a daemon that answers status but not
 // conflicts still refreshes the status cache.
 export function createRuntimePoller(opts: RuntimePollerOptions) {
-  const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url));
+  const headers = daemonAuthHeaders(opts.authToken ?? '');
+  const fetchImpl = opts.fetchImpl ?? ((url: string, init?: RequestInit) => fetch(url, { ...init, headers: { ...headers, ...init?.headers } }));
   let timer: NodeJS.Timeout | null = null;
   let stopped = false;
   const tick = async () => {
@@ -156,12 +148,11 @@ export class DaemonSupervisor {
   private poller: ReturnType<typeof createHealthPoller> | null = null;
   private runtimePoller: ReturnType<typeof createRuntimePoller> | null = null;
   private port = Number(process.env.JARVIS_DAEMON_PORT ?? DEFAULT_PORT);
+  private token = randomBytes(32).toString('hex');
   private healthy = false;
   private concurrencyProvider: (() => ConcurrencyConfig) | null = null;
   private runtimeStatusCache: RuntimeStatusData = { ...DEFAULT_RUNTIME_STATUS };
   private conflictsCache: ConflictItem[] = [];
-  /** Shared with the spawned daemon via JARVIS_DAEMON_TOKEN (SEC-09). */
-  private readonly authToken: string = resolveDaemonAuthToken();
 
   constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
 
@@ -174,9 +165,7 @@ export class DaemonSupervisor {
 
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
-    this.child = spawn(this.binaryPath, [], {
-      env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}, this.authToken),
-    });
+    this.child = spawn(this.binaryPath, [], { env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}, this.token) });
     this.child.on('error', () => { this.healthy = false; this.resetRuntimeCache(); this.child = null; });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
     void this.poller.start(() => { this.healthy = true; onReady?.(); });
@@ -186,6 +175,7 @@ export class DaemonSupervisor {
     this.runtimePoller = createRuntimePoller({
       port: this.port,
       intervalMs: 3000,
+      authToken: this.token,
       onStatus: (data) => { this.runtimeStatusCache = data; },
       onConflicts: (items) => { this.conflictsCache = items; },
     });
@@ -196,7 +186,7 @@ export class DaemonSupervisor {
   async status(): Promise<DaemonStatus> {
     if (!this.healthy) return UNKNOWN_STATUS;
     try {
-      const res = await fetch(`http://127.0.0.1:${this.port}/status`);
+      const res = await fetch(`http://127.0.0.1:${this.port}/status`, { headers: daemonAuthHeaders(this.token) });
       return await res.json() as DaemonStatus;
     } catch {
       return UNKNOWN_STATUS;
@@ -205,10 +195,6 @@ export class DaemonSupervisor {
 
   getRuntimeStatus(): RuntimeStatusData { return { ...this.runtimeStatusCache }; }
   getRuntimeConflicts(): ConflictItem[] { return [...this.conflictsCache]; }
-
-  injectionApprovalClient(): InjectionApprovalClient {
-    return new InjectionApprovalClient(`http://127.0.0.1:${this.port}`, this.authToken);
-  }
 
   private resetRuntimeCache(): void {
     this.runtimeStatusCache = { ...DEFAULT_RUNTIME_STATUS };

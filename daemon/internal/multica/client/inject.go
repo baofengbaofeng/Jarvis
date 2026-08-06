@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,6 +18,12 @@ type SkillFS interface {
 	Copy(src, dst string) error
 	MkdirAll(dir string) error
 }
+
+// errSkillNotPresent is returned by DefaultSkillFS.Copy when the source skill is
+// absent from the workspace. ApplyInjection treats it as a best-effort skip: M7
+// has no skill-content delivery source (§Wire), so a claimed skill name with no
+// staged content must not fail the task (round-2 re-review).
+var errSkillNotPresent = errors.New("skill not present in workspace")
 
 // DefaultSkillFS returns a SkillFS backed by the real filesystem (H1.7, C2).
 func DefaultSkillFS() SkillFS { return defaultSkillFS{} }
@@ -41,9 +48,13 @@ func (defaultSkillFS) MkdirAll(dir string) error { return os.MkdirAll(dir, 0o755
 
 // copyPath copies src to dst, recursively for directories. Skills in the Multica
 // payload are directory names, so the default fs must handle both files and dirs.
+// A missing src (ENOENT) is reported as errSkillNotPresent so the caller can skip.
 func copyPath(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %s", errSkillNotPresent, src)
+		}
 		return err
 	}
 	if !info.IsDir() {
@@ -71,49 +82,54 @@ func copyPath(src, dst string) error {
 	return nil
 }
 
-// ApplyInjection computes L38 name conflicts between local and Multica injections
-// but does NOT merge remote into the payload or materialize skills (SEC-09).
-// The returned payload keeps Multica MCP/Env/CLI/Skills fields raw so
-// jarvis-agent CandidateFromPayload + policy.Evaluate remain remote-only;
-// skill copy / MergeInjections happen only after the agent policy gate.
+// ApplyInjection merges local + Multica injections (H1.6-H1.8), copies Multica
+// skills into the task workspace .jarvis/skills/ (H1.7), and returns the merged
+// TaskPayload handed to `jarvis-agent run`, plus L38 conflicts.
 func ApplyInjection(ctx context.Context, p *acp.TaskPayload, local acp.Injection, workspace string, fs SkillFS) (*acp.TaskPayload, []acp.SkillConflict, []acp.MCPConflict, error) {
-	_ = ctx
-	_ = workspace
-	_ = fs
-
-	remote := acp.Injection{
-		MCPServers: append([]acp.MCPEntry{}, p.MCPServers...),
-		Env:        cloneEnv(p.Env),
-		CLIArgs:    append([]string{}, p.CLIArgs...),
-	}
+	dst := filepath.Join(workspace, ".jarvis", "skills")
+	remote := acp.Injection{MCPServers: p.MCPServers, Env: p.Env, CLIArgs: p.CLIArgs}
+	// Represent Multica-injected skills as SkillSpecs so L38 name collisions with
+	// local skills are surfaced as SkillConflicts (C2: H1.7 skill-copy + L38).
+	// Skill names are server-controlled input, so each name is validated before
+	// any path is built (J3: injected skills act only within the task workspace);
+	// an invalid name is skipped with a log, not fatal (round-3 re-review).
+	var toCopy []string
 	for _, name := range p.Skills {
 		if err := validSkillName(name); err != nil {
 			log.Printf("multica: skipping invalid skill name %q: %v", name, err)
 			continue
 		}
-		remote.Skills = append(remote.Skills, acp.SkillSpec{Source: "multica", Name: name})
+		remote.Skills = append(remote.Skills, acp.SkillSpec{Source: "multica", Name: name, Path: filepath.Join(dst, name)})
+		toCopy = append(toCopy, name)
 	}
-	_, sc, mc := acp.MergeInjections(local, remote)
+	merged, sc, mc := acp.MergeInjections(local, remote)
 
-	// Preserve Multica-authored fields exactly — never fold local MCP/env/CLI
-	// into payload fields that CandidateFromPayload treats as remote.
 	out := *p
-	out.MCPServers = append([]acp.MCPEntry{}, p.MCPServers...)
-	out.Env = cloneEnv(p.Env)
-	out.CLIArgs = append([]string{}, p.CLIArgs...)
-	out.Skills = append([]string{}, p.Skills...)
-	return &out, sc, mc, nil
-}
+	out.MCPServers = merged.MCPServers
+	out.Env = merged.Env
+	out.CLIArgs = merged.CLIArgs
 
-func cloneEnv(in map[string]string) map[string]string {
-	if in == nil {
-		return nil
+	if len(toCopy) > 0 {
+		if err := fs.MkdirAll(dst); err != nil {
+			return nil, nil, nil, fmt.Errorf("mkdir skills: %w", err)
+		}
+		for _, name := range toCopy {
+			src := filepath.Join(workspace, name)
+			target := filepath.Join(dst, name)
+			if err := fs.Copy(src, target); err != nil {
+				// Best-effort (round-2 re-review): a claimed skill name with no
+				// staged content in the workspace is skipped, not fatal. Copy when
+				// present; skip (with a log) when the source is missing.
+				if errors.Is(err, errSkillNotPresent) {
+					log.Printf("multica: skill %q not present in workspace %s; skipping copy", name, workspace)
+					continue
+				}
+				return nil, nil, nil, fmt.Errorf("copy skill %s: %w", name, err)
+			}
+		}
+		out.Skills = nil // Skill 内容已落盘 .jarvis/skills/,由 M3 SkillsLoader 扫描
 	}
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
+	return &out, sc, mc, nil
 }
 
 // validSkillName rejects server-supplied skill names that could escape the task

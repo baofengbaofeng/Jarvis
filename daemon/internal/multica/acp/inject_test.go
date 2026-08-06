@@ -57,18 +57,7 @@ func TestMergeInjectionCLIArgs(t *testing.T) {
 	local := Injection{CLIArgs: []string{"--local"}}
 	remote := Injection{CLIArgs: []string{"--remote-1", "--remote-2"}}
 	merged, _, _ := MergeInjections(local, remote)
-	if len(merged.CLIArgs) != 3 || merged.CLIArgs[0] != "--local" || merged.CLIArgs[1] != "--remote-1" {
-		t.Fatalf("local CLI args first, then approved remote: %v", merged.CLIArgs)
-	}
-}
-
-func TestMergeInjectionRequiresApprovedRemoteOnly(t *testing.T) {
-	// Document the SEC-09 contract: MergeInjections trusts its remote argument.
-	// Unapproved candidates must be filtered by policy.Evaluate before this call.
-	local := Injection{}
-	remote := Injection{Env: map[string]string{"SAFE": "1"}}
-	merged, _, _ := MergeInjections(local, remote)
-	if merged.Env["SAFE"] != "1" {
-		t.Fatalf("approved remote env missing: %+v", merged.Env)
+	if len(merged.CLIArgs) != 2 || merged.CLIArgs[0] != "--remote-1" {
+		t.Fatalf("multica CLI args should be used: %v", merged.CLIArgs)
 	}
 }

@@ -1,12 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  createHealthPoller,
-  createRuntimePoller,
-  buildDaemonEnv,
-  resolveDaemonAuthToken,
-  type RuntimeStatusData,
-  type ConflictItem,
-} from './DaemonSupervisor';
+import { createHealthPoller, createRuntimePoller, buildDaemonEnv, type RuntimeStatusData, type ConflictItem } from './DaemonSupervisor';
 
 describe('createHealthPoller', () => {
   it('calls onReady when health ok', async () => {
@@ -47,36 +40,21 @@ describe('createRuntimePoller', () => {
 
 describe('buildDaemonEnv', () => {
   it('injects saved concurrency limits into the daemon env', () => {
-    const env = buildDaemonEnv({ PATH: '/usr/bin' }, 17890, { perAgent: 4, machine: 10 }, 'tok');
+    const env = buildDaemonEnv({ PATH: '/usr/bin' }, 17890, { perAgent: 4, machine: 10 });
     expect(env.JARVIS_DAEMON_PORT).toBe('17890');
     expect(env.JARVIS_CONCURRENCY_PER_AGENT).toBe('4');
     expect(env.JARVIS_CONCURRENCY_MACHINE).toBe('10');
-    expect(env.JARVIS_DAEMON_TOKEN).toBe('tok');
     expect(env.PATH).toBe('/usr/bin'); // base env is preserved
   });
 
   it('falls back to 6/20 when no concurrency is configured', () => {
-    const env = buildDaemonEnv({}, 17890, {}, 'tok');
+    const env = buildDaemonEnv({}, 17890, {});
     expect(env.JARVIS_CONCURRENCY_PER_AGENT).toBe('6');
     expect(env.JARVIS_CONCURRENCY_MACHINE).toBe('20');
   });
 
-  it('always forwards the shared auth token for injection approvals', () => {
-    const env = buildDaemonEnv({ JARVIS_DAEMON_TOKEN: 'stale' }, 17890, {}, 'fresh-secret');
-    expect(env.JARVIS_DAEMON_TOKEN).toBe('fresh-secret');
-  });
-});
-
-describe('resolveDaemonAuthToken', () => {
-  it('reuses JARVIS_DAEMON_TOKEN when already set', () => {
-    expect(resolveDaemonAuthToken({ JARVIS_DAEMON_TOKEN: ' from-env ' })).toBe('from-env');
-  });
-
-  it('mints a non-empty token when unset', () => {
-    const a = resolveDaemonAuthToken({});
-    const b = resolveDaemonAuthToken({});
-    expect(a.length).toBeGreaterThanOrEqual(32);
-    expect(b.length).toBeGreaterThanOrEqual(32);
-    expect(a).not.toBe(b);
+  it('injects daemon auth token when provided', () => {
+    const env = buildDaemonEnv({}, 17890, {}, 'tok-abc');
+    expect(env.JARVIS_DAEMON_TOKEN).toBe('tok-abc');
   });
 });

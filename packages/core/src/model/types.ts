@@ -12,6 +12,12 @@ export interface ModelMessage {
   name?: string;
 }
 
+export interface ChatToolDef {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
 export interface ChatRequest {
   provider: Provider;
   modelId: string;
@@ -20,6 +26,8 @@ export interface ChatRequest {
   maxTokens?: number;
   temperature?: number;
   reasoning?: 'low' | 'medium' | 'high';
+  tools?: ChatToolDef[];
+  toolChoice?: 'auto' | 'none';
 }
 
 export interface ToolCall {

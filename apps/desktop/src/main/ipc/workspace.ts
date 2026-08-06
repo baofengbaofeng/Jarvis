@@ -3,9 +3,6 @@ import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, copyFi
 import { join, basename } from 'node:path';
 import { buildTree, isIgnored, parseIgnorePatterns, Sandbox } from '@jarvis/core';
 import { createAgentStore } from './agents';
-import type { PathOperation } from '../security/PathCapabilityStore';
-
-export type ResolvePath = (token: string, owner: number, operation: PathOperation) => string;
 
 const JARVIS_MD_TEMPLATE = `# JARVIS 工作区上下文
 更新此文件以记录本项目的构建、测试命令与约定,Agent 每次任务都会读取。`;
@@ -44,7 +41,7 @@ export function createWorkspaceService(db: Database.Database) {
 // from Dirent flags, so it would be an unused import under strict noUnusedLocals.
 const IGNORE_DEFAULT = ['node_modules/', '.git/', 'dist/', 'build/'];
 
-export function createWorkspaceIpc(getWorkspace: () => string | null, deps: { copyFile?: (src: string, dest: string) => void; resolvePath?: ResolvePath } = {}) {
+export function createWorkspaceIpc(getWorkspace: () => string | null, deps: { copyFile?: (src: string, dest: string) => void } = {}) {
   const tree = () => {
     const ws = getWorkspace();
     if (!ws) return [];
@@ -57,8 +54,10 @@ export function createWorkspaceIpc(getWorkspace: () => string | null, deps: { co
     if (!ws) return { ok: false as const, error: 'no workspace' };
     const sb = new Sandbox(ws, { level: 'readwrite', allowDomains: [], allowCommands: [] });
     const abs = join(ws, rel);
-    try { sb.assertRead(abs); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
-    return { ok: true as const, content: readFileSync(abs, 'utf8') };
+    try {
+      const canonical = sb.assertRead(abs);
+      return { ok: true as const, content: readFileSync(canonical, 'utf8') };
+    } catch (e) { return { ok: false as const, error: (e as Error).message }; }
   };
   // M5 Task 7 (L22): drag-dropped "other" files are copied into the workspace.
   // basename() puts the destination INSIDE the workspace root no matter where the
@@ -72,10 +71,7 @@ export function createWorkspaceIpc(getWorkspace: () => string | null, deps: { co
   // promise. deps.copyFile is injected so tests can force a throw; production
   // uses node's copyFileSync.
   const copyFile = deps.copyFile ?? copyFileSync;
-  const resolvePath = deps.resolvePath;
-  const copyFiles = (capabilities: string[], owner: number): { ok: boolean; error?: string; skipped?: string[] } => {
-    if (!resolvePath) return { ok: false, error: 'PATH_CAPABILITY_RESOLVER_MISSING' };
-    const paths = capabilities.map(token => resolvePath(token, owner, 'workspace:copy'));
+  const copyFiles = (paths: string[]): { ok: boolean; error?: string; skipped?: string[] } => {
     const ws = getWorkspace();
     if (!ws) return { ok: false, error: 'no workspace' };
     for (const p of paths) {

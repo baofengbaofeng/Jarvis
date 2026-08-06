@@ -20,6 +20,8 @@ export class BackupService {
     mkdirSync(dir, { recursive: true });
   }
 
+  getBackupDir(): string { return this.dir; }
+
   start(intervalMs = 24 * 60 * 60 * 1000): void {
     this.stop();
     this.timer = setInterval(() => { void this.createBackup(); }, intervalMs);

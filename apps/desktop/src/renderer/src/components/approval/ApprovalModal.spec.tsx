@@ -4,6 +4,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
 import type { ApprovalRequest } from '../../stores/approval-store';
+import { IpcEvent } from '@jarvis/protocol';
 
 // J2 (M3 final review): the approval modal must render a pending
 // `approval:request` and route Approve/Deny back through
@@ -11,6 +12,7 @@ import type { ApprovalRequest } from '../../stores/approval-store';
 // module load, so the store+component are imported dynamically AFTER the
 // window.jarvis bridge is installed (mirroring the chat-store guard).
 let emitApproval: ((payload: unknown) => void) | undefined;
+const handlers = new Map<string, (payload: unknown) => void>();
 const invoke = vi.fn(async () => ({ ok: true }));
 let useApprovalStore: { getState(): { pending: ApprovalRequest[]; resolve(id: string, ok: boolean): Promise<void> }; setState(p: Partial<{ pending: ApprovalRequest[] }>): void };
 let ApprovalModal: () => React.JSX.Element | null;
@@ -19,8 +21,14 @@ beforeAll(async () => {
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
   (window as unknown as { jarvis: unknown }).jarvis = {
     invoke,
-    onDidReceive: (_channel: string, cb: (payload: unknown) => void) => { emitApproval = cb; return () => {}; }
+    onDidReceive: (channel: string, cb: (payload: unknown) => void) => {
+      handlers.set(channel, cb);
+      if (channel === IpcEvent.approvalRequest) emitApproval = cb;
+      return () => handlers.delete(channel);
+    }
   };
+  const subs = await import('../../stores/ipc-subscriptions');
+  subs.initIpcSubscriptions();
   const store = await import('../../stores/approval-store');
   const modal = await import('./ApprovalModal');
   useApprovalStore = store.useApprovalStore;

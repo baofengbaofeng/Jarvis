@@ -9,6 +9,7 @@ import { createProviderStore } from './providers';
 import { createAgentStore } from './agents';
 import { BackupService } from '../backup/BackupService';
 import { getMessageBus, __resetBusForTests } from './squad';
+import { IpcChannel } from '@jarvis/protocol';
 import type { DaemonSupervisor } from '../daemon/DaemonSupervisor';
 
 // IpcRouter imports electron at runtime; stub it so the router can be
@@ -73,12 +74,14 @@ describe('IpcRouter code index channels (E1/L27)', () => {
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
     const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const reindex = handlers.get('index.reindex')!;
+    const reindex = handlers.get(IpcChannel.indexReindex)!;
     const search = handlers.get('index.search')!;
     expect(reindex).toBeTruthy();
     expect(search).toBeTruthy();
 
     const ws = mkdtempSync(join(tmpdir(), 'jarvis-ipc-idx-'));
+    const agents = createAgentStore(db);
+    await agents.create({ name: 'Coder', systemPrompt: '', modelId: null, workspaceId: ws });
     try {
       writeFileSync(join(ws, 'add.ts'), 'export function add(a: number, b: number) { return a + b; }');
       const r = await reindex({}, { workspaceRoot: ws }) as { ok: boolean; indexed: number };
@@ -403,21 +406,6 @@ describe('IpcRouter backup channels (L18)', () => {
     expect(rl.ok).toBe(true);
   });
 
-  it('rejects backup.create when search migration is blocked', async () => {
-    const mainPath = join(dir, 'main.db');
-    const main = new Database(mainPath);
-    main.exec('CREATE TABLE t (v TEXT)');
-    const backup = new BackupService(main, join(dir, 'backups'), mainPath);
-    const router = new IpcRouter(db);
-    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
-    router.registerAll(daemon, backup, { migrationBlocked: true });
-    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const create = handlers.get('backup.create')!;
-    const res = await create({}) as { ok: false; error: string };
-    expect(res.ok).toBe(false);
-    expect(res.error).toBe('SEARCH_SECRET_MIGRATION_REQUIRED');
-  });
-
   it('does not register backup.* when no BackupService is threaded in', () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
@@ -464,8 +452,7 @@ describe('IpcRouter wipe channel (L20)', () => {
 });
 
 // M8 Task 6 (C12): config.export / config.import channels registered on the
-// router, plus dialog.pickPath / config.readPickedFile (SEC-02) that the
-// ConfigImportExportView relies on.
+// ConfigImportExportView relies on config.readPickedFile (dialog-gated reads).
 describe('IpcRouter config channels (C12)', () => {
   let db: Database.Database;
   let dir: string;
@@ -493,17 +480,6 @@ describe('IpcRouter config channels (C12)', () => {
     expect(out).not.toContain('sk-');
     const yaml = await exportCfg({}, 'yaml') as string;
     expect(yaml).toContain('schemaVersion: 12');
-  });
-
-  it('rejects config.export when search migration is blocked', async () => {
-    const router = new IpcRouter(db);
-    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
-    router.registerAll(daemon, undefined, { migrationBlocked: true });
-    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const exportCfg = handlers.get('config.export')!;
-    const res = await exportCfg({}, 'json') as { ok: false; error: string };
-    expect(res.ok).toBe(false);
-    expect(res.error).toBe('SEARCH_SECRET_MIGRATION_REQUIRED');
   });
 
   it('config.import applies skip/overwrite/merge and skips agents whose model is missing', async () => {
@@ -598,102 +574,38 @@ describe('IpcRouter config channels (C12)', () => {
     expect(p1.base_url).toBe('https://old.example');
   });
 
-  it('config.readPickedFile returns text via capability and { ok:false } on failure', async () => {
+  it('config.readPickedFile returns text only for dialog-picked paths', async () => {
+    const { setLastPickedFile } = await import('./picked-file');
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
     const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const pickPath = handlers.get('dialog.pickPath')!;
     const readPicked = handlers.get('config.readPickedFile')!;
-    const { dialog } = await import('electron');
-    const showOpenDialog = vi.mocked(dialog.showOpenDialog);
     const file = join(dir, 'config.json');
     writeFileSync(file, '{"schemaVersion": 12}', 'utf8');
-    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] });
-    const caps = await pickPath({ sender: { id: 42 } }, { purpose: 'config-import' }) as Array<{ token: string }>;
-    expect(await readPicked({ sender: { id: 42 } }, { capability: caps[0]!.token })).toBe('{"schemaVersion": 12}');
-    const missing = await readPicked({ sender: { id: 42 } }, { capability: 'unknown-token' }) as { ok: boolean; error: string };
-    expect(missing.ok).toBe(false);
-    expect(missing.error).toBeTruthy();
+    setLastPickedFile(file);
+    expect(await readPicked({}, file)).toBe('{"schemaVersion": 12}');
+    const rejected = await readPicked({}, join(dir, 'nope.json')) as { ok: boolean; error: string };
+    expect(rejected.ok).toBe(false);
+    expect(rejected.error).toContain('file picker');
   });
 
-  it('does not register dialog.openFile (SEC-02: renderer uses dialog.pickPath)', async () => {
+  it('dialog.openFile opens a file (with filters) and a directory (without args)', async () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
     const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    expect(handlers.has('dialog.openFile')).toBe(false);
-  });
-});
-
-describe('IpcRouter capability revoke', () => {
-  let db: Database.Database;
-  let dir: string;
-  beforeEach(() => {
-    db = new Database(':memory:');
-    applyMigrations(db);
-    dir = mkdtempSync(join(tmpdir(), 'jarvis-ipc-revoke-'));
-  });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
-
-  it('attachMainWindowRevoke clears capabilities on window close after late attach (bootstrap order)', async () => {
-    const router = new IpcRouter(db);
-    const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
-    router.registerAll(daemon);
-    router.listen();
-    const closedCbs: Array<() => void> = [];
-    const win = {
-      isDestroyed: () => false,
-      on: (event: string, cb: () => void) => { if (event === 'closed') closedCbs.push(cb); },
-      webContents: { id: 99, on: vi.fn() },
-    };
-    router.attachMainWindowRevoke(win as never);
-    const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
-    const pickPath = handlers.get('dialog.pickPath')!;
-    const readPicked = handlers.get('config.readPickedFile')!;
+    const openFile = handlers.get('dialog.openFile')!;
     const { dialog } = await import('electron');
     const showOpenDialog = vi.mocked(dialog.showOpenDialog);
-    const file = join(dir, 'config.json');
-    writeFileSync(file, '{"schemaVersion": 12}', 'utf8');
-    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] });
-    const caps = await pickPath({ sender: { id: 99 } }, { purpose: 'config-import' }) as Array<{ token: string }>;
-    expect(await readPicked({ sender: { id: 99 } }, { capability: caps[0]!.token })).toBe('{"schemaVersion": 12}');
-    for (const cb of closedCbs) cb();
-    const revoked = await readPicked({ sender: { id: 99 } }, { capability: caps[0]!.token }) as { ok: boolean; error: string };
-    expect(revoked.ok).toBe(false);
-    expect(revoked.error).toContain('PATH_CAPABILITY');
-  });
-});
-
-describe('IpcRouter trusted IPC enforcement', () => {
-  let db: Database.Database;
-  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
-
-  it('wraps every ipcMain handler with trusted main-frame enforcement', async () => {
-    const { ipcMain } = await import('electron');
-    const mainFrame = { url: 'file:///app/out/renderer/index.html' };
-    const webContents = { id: 1, mainFrame };
-    const win = { webContents };
-    const router = new IpcRouter(db, {
-      getMainWindow: () => win as never,
-      rendererRoot: '/app/out/renderer',
-    });
-    router.register('probe', () => 'ok');
-    router.listen();
-    const wrapped = vi.mocked(ipcMain.handle).mock.calls.find(([ch]) => ch === 'probe')![1];
-    await expect(wrapped({ sender: { id: 2 }, senderFrame: mainFrame } as never)).rejects.toThrow('IPC_UNTRUSTED_WINDOW');
-    await expect(wrapped({ sender: webContents, senderFrame: { url: mainFrame.url } } as never)).rejects.toThrow('IPC_UNTRUSTED_FRAME');
-    await expect(wrapped({ sender: webContents, senderFrame: mainFrame } as never)).resolves.toBe('ok');
-  });
-
-  it('rejects IPC when getMainWindow is unset', async () => {
-    const { ipcMain } = await import('electron');
-    const mainFrame = { url: 'file:///app/out/renderer/index.html' };
-    const webContents = { id: 1, mainFrame };
-    const router = new IpcRouter(db, { rendererRoot: '/app/out/renderer' });
-    router.register('probe', () => 'ok');
-    router.listen();
-    const wrapped = vi.mocked(ipcMain.handle).mock.calls.find(([ch]) => ch === 'probe')![1];
-    await expect(wrapped({ sender: webContents, senderFrame: mainFrame } as never)).rejects.toThrow('IPC_UNTRUSTED_WINDOW');
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/tmp/x.json'] });
+    const fileRes = await openFile({}, { filters: [{ name: 'config', extensions: ['json', 'yaml', 'yml'] }] }) as { path: string };
+    expect(fileRes.path).toBe('/tmp/x.json');
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ properties: ['openFile'] }));
+    showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] });
+    expect((await openFile({}, { filters: [] })) as { path: string }).toEqual({ path: '' });
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/tmp/dir'] });
+    const dirRes = await openFile({}) as string | null;
+    expect(dirRes).toBe('/tmp/dir');
   });
 });

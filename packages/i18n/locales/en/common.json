@@ -27,19 +27,7 @@
       "testOk": "{{count}} tools available",
       "testFail": "Test failed"
     },
-    "skills": {
-      "import": "Import",
-      "importLocal": "Import from folder",
-      "importUrl": "Import from URL",
-      "urlPlaceholder": "https://example.com/SKILL.md",
-      "importFailed": "Skill import failed",
-      "errors": {
-        "nameInvalid": "Invalid skill name",
-        "exists": "A skill with this name already exists",
-        "contentType": "URL must return markdown or plain text",
-        "pathEscape": "Skill path escapes the managed directory"
-      }
-    },
+    "skills": { "import": "Import" },
     "permissions": { "agent": "Agent", "level": "Sandbox level", "readonly": "Read-only", "readwrite": "Read/write", "system": "System" },
     "env": { "agent": "Agent", "envVars": "Environment variables", "cliArgs": "CLI arguments", "placeholder": "KEY=value", "cliPlaceholder": "-flag arg" },
     "concurrency": { "perAgent": "Per Agent", "machine": "Machine" },
@@ -56,34 +44,30 @@
       "models": "Models",
       "modelId": "Model ID",
       "modelName": "Display name",
-      "addModel": "Add model"
+      "addModel": "Add model",
+      "typeOpenai": "OpenAI compatible",
+      "typeAnthropic": "Anthropic compatible"
     }
   },
   "theme": { "light": "Light", "dark": "Dark", "system": "System" },
   "onboarding": { "title": "Welcome to JARVIS", "start": "Get started", "step1": "Provider", "step2": "Agent", "step3": "Workspace" },
-  "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat" },
+  "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat", "taskCancelled": "Task cancelled" },
   "approval": { "title": "Approval Required", "approve": "Approve", "deny": "Deny", "reject": "Reject", "summary": "Summary" },
-  "agent": { "bindWorkspace": "Bind workspace", "workspaceBound": "Workspace bound", "systemPrompt": "System Prompt", "modelId": "Model ID" },
+  "agent": { "bindWorkspace": "Bind workspace", "systemPrompt": "System Prompt", "modelId": "Model ID" },
   "board": {
     "title": "Task Board",
     "col": { "queued": "Queued", "running": "Running", "paused": "Paused", "completed": "Completed", "failed": "Failed", "cancelled": "Cancelled" }
   },
   "canvas": { "title": "Canvas", "no_artifacts": "No task artifacts yet" },
   "daemon": {
+    "title": "Daemon management",
     "running": "Running",
     "stopped": "Stopped",
     "version": "Version",
     "active": "Active",
     "queued": "Queued",
     "perAgent": "Per-agent",
-    "concurrency": "Machine concurrency",
-    "injectionApprovals": {
-      "title": "Pending injection approvals",
-      "none": "No pending approvals",
-      "source": "Remote",
-      "approve": "Approve",
-      "retryHint": "Approved. Retry the original task to apply the injection."
-    }
+    "concurrency": "Machine concurrency"
   },
   "runtime": {
     "mode": { "local": "Local mode", "runtime_registered": "Runtime registered", "runtime_busy": "Runtime busy" },
@@ -120,13 +104,14 @@
   "coding": { "selectFile": "Select a file from the left to preview" },
   "usage": {
     "title": "Usage",
-    "col": { "agent": "Agent" },
+    "col": { "agent": "Agent", "prompt": "Prompt", "completion": "Completion", "total": "Total", "calls": "Calls" },
     "totalTokens": "Total tokens"
   },
   "audit": {
     "title": "Audit log",
     "col": { "ts": "Time", "kind": "Kind", "action": "Action", "result": "Result" },
-    "export": "Export"
+    "export": "Export",
+    "filter": { "all": "All", "tool_call": "Tool call", "approval": "Approval" }
   },
   "diff": { "title": "Diff", "accept": "Accept", "reject": "Reject", "apply": "Apply" },
   "versionHistory": { "title": "Version History", "rollback": "Rollback", "rolledBack": "Rolled back", "fields": "Fields" },
@@ -150,7 +135,6 @@
   },
   "pdf": {
     "path": "PDF file path",
-    "pickFile": "Choose PDF file",
     "open": "Open",
     "summarize": "Summarize",
     "summarizePage": "Summarize page",
@@ -211,6 +195,7 @@
     "saved": "Saved"
   },
   "common": { "ok": "OK", "cancel": "Cancel", "save": "Save", "loading": "Loading…", "edit": "Edit" },
+  "error": { "title": "Something went wrong", "reload": "Reload" },
   "workflow": {
     "title": "Workflow Editor",
     "run": "Run",

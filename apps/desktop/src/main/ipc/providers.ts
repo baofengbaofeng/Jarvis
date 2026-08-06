@@ -6,15 +6,7 @@ import type { SecureStorage } from '../secrets/SecureStorage';
 export interface ProviderInput { name: string; type: 'openai-compatible' | 'anthropic-compatible'; baseUrl: string; apiKey: string }
 export interface ModelInput { modelId: string; name: string }
 
-export interface ProviderStoreDeps {
-  assertAllowedUrl?: (url: string) => Promise<void>;
-}
-
-export function createProviderStore(
-  db: Database.Database,
-  secrets: Pick<SecureStorage, 'set' | 'get' | 'delete'>,
-  deps: ProviderStoreDeps = {},
-) {
+export function createProviderStore(db: Database.Database, secrets: Pick<SecureStorage, 'set' | 'get' | 'delete'>) {
   const now = () => new Date().toISOString();
   const rowToProvider = (r: Record<string, unknown>): Provider => ({
     id: r.id as string, name: r.name as string, type: r.type as Provider['type'],
@@ -22,16 +14,11 @@ export function createProviderStore(
     createdAt: r.created_at as string, updatedAt: r.updated_at as string
   });
 
-  const validateUrl = async (baseUrl: string) => {
-    if (deps.assertAllowedUrl) await deps.assertAllowedUrl(baseUrl);
-  };
-
   return {
     list(): Provider[] {
       return (db.prepare('SELECT * FROM providers ORDER BY created_at').all() as Record<string, unknown>[]).map(rowToProvider);
     },
     async create(input: ProviderInput): Promise<Provider> {
-      await validateUrl(input.baseUrl);
       const id = randomUUID();
       const ref = `provider:${id}:key`;
       // Write the keychain entry FIRST so a keychain failure leaves no dangling api_key_ref row.
@@ -43,11 +30,10 @@ export function createProviderStore(
     async update(id: string, patch: Partial<ProviderInput>): Promise<Provider> {
       const cur = db.prepare('SELECT * FROM providers WHERE id = ?').get(id) as Record<string, unknown> | undefined;
       if (!cur) throw new Error(`provider not found: ${id}`);
-      const baseUrl = patch.baseUrl ?? cur.base_url as string;
-      await validateUrl(baseUrl);
       if (patch.apiKey !== undefined) await secrets.set(`provider:${id}:key`, patch.apiKey);
       const name = patch.name ?? cur.name as string;
       const type = patch.type ?? cur.type as Provider['type'];
+      const baseUrl = patch.baseUrl ?? cur.base_url as string;
       db.prepare('UPDATE providers SET name=?, type=?, base_url=?, updated_at=? WHERE id=?').run(name, type, baseUrl, now(), id);
       return rowToProvider(db.prepare('SELECT * FROM providers WHERE id = ?').get(id) as Record<string, unknown>);
     },

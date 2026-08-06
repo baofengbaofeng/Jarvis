@@ -1,24 +1,36 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createGitTools } from './git';
+import type { SandboxPolicy } from '../sandbox/Sandbox';
 import { ToolRegistry } from '../agent/ToolRegistry';
 
 describe('git tools', () => {
+  let ws: string;
+  let outside: string;
+  const policy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: ['git status'] };
+  const reg = new ToolRegistry();
+
+  beforeEach(() => {
+    ws = mkdtempSync(join(tmpdir(), 'jarvis-git-ws-'));
+    outside = mkdtempSync(join(tmpdir(), 'jarvis-git-out-'));
+    createGitTools(reg, policy, { execImpl: async () => ({ stdout: '## main', stderr: '' }) });
+  });
+
+  afterEach(() => {
+    rmSync(ws, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+
   it('runs git status within workspace', async () => {
-    const reg = new ToolRegistry();
-    const policy = { level: 'readwrite' as const, allowDomains: [], allowCommands: [] };
-    createGitTools(reg, policy, { execImpl: async (_cmd: string) => ({ stdout: '## main', stderr: '' }) });
-    const r = await reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: '/ws', env: {}, workspaceRoot: '/ws' });
+    const r = await reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: ws, env: {}, workspaceRoot: ws });
     expect(r.output).toContain('main');
   });
 
   it('rejects a workspace outside the per-execution sandbox root', async () => {
-    const reg = new ToolRegistry();
-    const policy = { level: 'readwrite' as const, allowDomains: [], allowCommands: [] };
-    createGitTools(reg, policy, { execImpl: async (_cmd: string) => ({ stdout: '', stderr: '' }) });
-    // The execution ctx points at /ws but the tool runs with cwd=/outside; the
-    // per-execution sandbox rooted at ctx.workspaceRoot must reject it.
     await expect(
-      reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: '/outside', env: {}, workspaceRoot: '/ws' })
+      reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: outside, env: {}, workspaceRoot: ws })
     ).rejects.toThrow('outside workspace');
   });
 });

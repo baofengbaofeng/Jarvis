@@ -1,6 +1,5 @@
 import { BrowserWindow, screen, shell } from 'electron';
 import { join } from 'node:path';
-import { TrustedRendererPolicy, installNavigationGuards } from '../security/TrustedRendererPolicy';
 
 export interface DisplayBounds { x: number; y: number; width: number; height: number; }
 
@@ -18,11 +17,6 @@ export class WindowManager {
 
   createMainWindow(): BrowserWindow {
     if (this.main && !this.main.isDestroyed()) return this.main;
-    const rendererRoot = join(import.meta.dirname, '../renderer');
-    const policy = new TrustedRendererPolicy({
-      rendererRoot,
-      devOrigin: process.env['ELECTRON_RENDERER_URL'],
-    });
     this.main = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -33,7 +27,7 @@ export class WindowManager {
         preload: this.preloadPath(),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true,
+        sandbox: false
       }
     });
     this.main.setMenuBarVisibility(false);
@@ -42,16 +36,12 @@ export class WindowManager {
     if (rendererUrl) {
       void this.main.loadURL(rendererUrl);
     } else {
-      const rendererIndex = join(rendererRoot, 'index.html');
+      const rendererIndex = join(import.meta.dirname, '../renderer/index.html');
       void this.main.loadFile(rendererIndex);
     }
 
-    installNavigationGuards(this.main, policy, shell.openExternal);
+    this.main.webContents.setWindowOpenHandler(({ url }) => { void shell.openExternal(url); return { action: 'deny' }; });
     return this.main;
-  }
-
-  getMainWindow(): BrowserWindow | null {
-    return this.main && !this.main.isDestroyed() ? this.main : null;
   }
 
   setSnapMode(on: boolean): void {
@@ -66,7 +56,9 @@ export class WindowManager {
     this.setSnapMode(true);
   }
 
+  // electron-vite emits the preload as ESM (.mjs) because package.json is
+  // "type": "module"; ESM preloads require sandbox disabled.
   private preloadPath(): string {
-    return join(import.meta.dirname, '../preload/index.cjs');
+    return join(import.meta.dirname, '../preload/index.mjs');
   }
 }

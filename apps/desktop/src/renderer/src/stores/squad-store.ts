@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { IpcEvent } from '@jarvis/protocol';
+import { IpcChannel } from '@jarvis/protocol';
 
 // K5 (M6 Task 10): a single squad/agent event on the timeline. Main pushes
 // these on 'squad:event' (bus subscription + task log); the renderer's
@@ -25,13 +25,7 @@ export function clearSquadEvents(): void {
 }
 
 // K5 (M6 Task 10): main pushes every squad/agent event on 'squad:event'.
-// Module-level guard matches toast-store/task-store so the subscription only
-// installs in the real preload bridge (specs without window.jarvis skip it).
-if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
-  window.jarvis.onDidReceive(IpcEvent.squadEvent, (payload) => {
-    pushSquadEvent(payload as SquadEvent);
-  });
-}
+// Subscriptions are installed by initIpcSubscriptions() from init-store.
 
 export interface SquadReview {
   id: string;
@@ -53,7 +47,7 @@ export const useSquadStore = create<SquadState>((set) => ({
   review: null,
   setReview: (r) => set({ review: r }),
   async start({ id, input }) {
-    const res = (await window.jarvis.invoke('squad.start', { id, input })) as {
+    const res = (await window.jarvis.invoke(IpcChannel.squadStart, { id, input })) as {
       ok: boolean; result?: { status: string; summary: string; members: Array<{ agent: string; result: string }> };
     };
     if (res.ok && res.result?.status === 'in_review') {
@@ -62,23 +56,4 @@ export const useSquadStore = create<SquadState>((set) => ({
   }
 }));
 
-// F15 (M6 Task 8): a squad reaching in_review shows the ApprovalPanel; leaving
-// it (approve → completed, reject → in_progress, cancel/fail) clears it. The
-// squad:status event only carries { id, state }, so when it arrives WITHOUT a
-// start() through this store the summary/members are left EMPTY — the
-// ApprovalPanel then renders a clean "pending approval" state (title + buttons)
-// instead of showing the raw squad UUID, and the squad.start invoke result
-// remains the richer source when Task 10's squad view drives start().
-if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
-  window.jarvis.onDidReceive('squad:status', (payload) => {
-    const { id, state } = payload as { id: string; state: string };
-    const cur = useSquadStore.getState().review;
-    if (state === 'in_review') {
-      // Don't clobber a start()-provided review that already carries the full
-      // detail for this id; only seed when the event is the first signal.
-      if (!cur || cur.id !== id) useSquadStore.setState({ review: { id, summary: '', members: [] } });
-    } else if (cur?.id === id) {
-      useSquadStore.setState({ review: null });
-    }
-  });
-}
+// F15 (M6 Task 8): squad:status updates review state — see initIpcSubscriptions().

@@ -4,6 +4,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
 import { DEFAULT_SHORTCUTS } from '@jarvis/core/renderer';
+import { IpcChannel } from '@jarvis/protocol';
 import App from './App';
 import { useSettings } from './stores/settings-store';
 import { useSquadStore } from './stores/squad-store';
@@ -141,7 +142,7 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('chat-page')).toBeTruthy());
     fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => {
-      expect((window as unknown as { jarvis: { invoke: ReturnType<typeof vi.fn> } }).jarvis.invoke).toHaveBeenCalledWith('task.cancel', 't1');
+      expect((window as unknown as { jarvis: { invoke: ReturnType<typeof vi.fn> } }).jarvis.invoke).toHaveBeenCalledWith(IpcChannel.taskCancel, 't1');
     });
   });
 

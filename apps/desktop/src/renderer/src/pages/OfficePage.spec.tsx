@@ -8,15 +8,8 @@ import { OfficePage } from './OfficePage';
 beforeAll(async () => {
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
   (window as unknown as { jarvis: unknown }).jarvis = {
-    invoke: async (m: string, args?: unknown) => {
+    invoke: async (m: string) => {
       if (m === 'templates.list') return [{ id: 't1', name: 'review', content: 'Review {{name}}' }];
-      if (m === 'dialog.pickPath') {
-        const req = args as { purpose: string };
-        if (req.purpose === 'office-file') {
-          return [{ token: 'cap-doc', name: 'report.docx', kind: 'file', sizeBytes: 1, expiresAt: 1 }];
-        }
-        return [];
-      }
       if (m === 'office.file.analyze') return { ok: true, result: '分析结果' };
       return [];
     },
@@ -83,24 +76,21 @@ describe('OfficePage', () => {
   it('analyzes a dropped docx via office.file.analyze and shows the result', async () => {
     render(<OfficePage />);
     const zone = screen.getByTestId('drop-zone');
-    fireEvent.drop(zone, { dataTransfer: { files: [{ name: 'report.docx' }] } });
+    fireEvent.drop(zone, { dataTransfer: { files: [{ name: 'report.docx', path: '/tmp/report.docx' }] } });
     await waitFor(() => expect(screen.getByTestId('office-analysis')).toBeTruthy());
     expect(screen.getByTestId('office-analysis-0').textContent).toContain('report.docx');
     expect(screen.getByTestId('office-analysis-0').textContent).toContain('分析结果');
   });
 
   it('surfaces a per-file analyze error inline', async () => {
-    const invoke = vi.fn(async (m: string, args?: unknown) => {
-      if (m === 'dialog.pickPath') {
-        return [{ token: 'cap-broken', name: 'broken.docx', kind: 'file', sizeBytes: 1, expiresAt: 1 }];
-      }
+    const invoke = vi.fn(async (m: string) => {
       if (m === 'office.file.analyze') return { ok: false, error: 'boom' };
       return [];
     });
     (window as unknown as { jarvis: unknown }).jarvis = { invoke, settingsGet: async () => [], settingsSet: async () => {}, onDidReceive: () => () => {} };
     render(<OfficePage />);
     const zone = screen.getByTestId('drop-zone');
-    fireEvent.drop(zone, { dataTransfer: { files: [{ name: 'broken.docx' }] } });
+    fireEvent.drop(zone, { dataTransfer: { files: [{ name: 'broken.docx', path: '/tmp/broken.docx' }] } });
     await waitFor(() => expect(screen.getByTestId('office-analysis')).toBeTruthy());
     expect(screen.getByTestId('office-analysis-0').textContent).toContain('boom');
   });

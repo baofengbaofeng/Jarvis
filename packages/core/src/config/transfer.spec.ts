@@ -4,7 +4,6 @@ import {
   validateSchema,
   planImport,
   mergeEntity,
-  redactExportSettings,
   CURRENT_SCHEMA,
   type ExportPayload,
   type ProviderExport,
@@ -57,17 +56,6 @@ describe('transfer', () => {
     const planMg = planImport(payload, current, 'merge');
     expect(mergeEntity(current.providers[0], payload.providers[0]).baseUrl).toBe('https://x.example');
     expect(planMg.update[0].apiKeyRef).toBe('keychain:p1');
-  });
-
-  it('redacts secret-shaped settings and preserves search refs', () => {
-    expect(redactExportSettings({
-      search_providers: [{ type: 'serper', apiKey: 'secret', apiKeyRef: 'search:serper:key', enabled: true }],
-      image: { apiKey: 'secret-2' },
-      concurrency: { perAgent: 2 },
-    })).toEqual({
-      search_providers: [{ type: 'serper', apiKeyRef: 'search:serper:key', enabled: true }],
-      concurrency: { perAgent: 2 },
-    });
   });
 
   it('planImport collects brand-new providers/agents into create', () => {

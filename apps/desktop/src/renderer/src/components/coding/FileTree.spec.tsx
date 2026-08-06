@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { FileTree } from './FileTree';
-import type { TreeNode } from '@jarvis/core';
+import type { TreeNode } from '@jarvis/core/renderer';
 
 const NODES: TreeNode[] = [
   { name: 'src', path: 'src', type: 'dir', children: [{ name: 'a.ts', path: 'src/a.ts', type: 'file', children: [] }] },

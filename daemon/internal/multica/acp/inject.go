@@ -33,13 +33,12 @@ type MCPConflict struct {
 
 // MergeInjections merges local and Multica injections. 本地优先(Local 在前,Multica 不覆盖);
 // 同名冲突不进 merged,返回冲突列表由 UI 决策(L38);无冲突的 Multica 项追加。
-// remote 必须已通过本地 policy（SEC-09）；未批准的远端候选不得传入。
 func MergeInjections(local, remote Injection) (Injection, []SkillConflict, []MCPConflict) {
 	merged := Injection{
 		MCPServers: append([]MCPEntry{}, local.MCPServers...),
 		Skills:     append([]SkillSpec{}, local.Skills...),
 		Env:        map[string]string{},
-		CLIArgs:    append(append([]string{}, local.CLIArgs...), remote.CLIArgs...),
+		CLIArgs:    append([]string{}, remote.CLIArgs...),
 	}
 	for k, v := range local.Env {
 		merged.Env[k] = v

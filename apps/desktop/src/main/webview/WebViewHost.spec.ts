@@ -95,29 +95,4 @@ describe('WebViewHost', () => {
     await expect(host.extract()).resolves.toBe('page text');
     expect(second.wasClosed).toBe(false); // second window untouched
   });
-
-  it('waits for assertAllowedUrl before createWindow', async () => {
-    const order: string[] = [];
-    const { createWindow } = fakeWindowFactory();
-    const host = new WebViewHost({
-      createWindow: (_partition) => {
-        order.push('createWindow');
-        return createWindow();
-      },
-      assertAllowedUrl: async () => { order.push('assertAllowedUrl'); },
-    });
-    await host.open('https://example.com');
-    expect(order).toEqual(['assertAllowedUrl', 'createWindow']);
-  });
-
-  it('does not create a BrowserWindow when assertAllowedUrl rejects', async () => {
-    const { windows, createWindow } = fakeWindowFactory();
-    const host = new WebViewHost({
-      createWindow,
-      assertAllowedUrl: async () => { throw new Error('URL_PRIVATE_ADDRESS'); },
-    });
-    await expect(host.open('https://internal.example')).rejects.toThrow('URL_PRIVATE_ADDRESS');
-    expect(windows).toHaveLength(0);
-    expect(host.isOpen()).toBe(false);
-  });
 });

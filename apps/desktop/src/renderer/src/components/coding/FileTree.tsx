@@ -1,4 +1,4 @@
-import type { TreeNode } from '@jarvis/core';
+import type { TreeNode } from '@jarvis/core/renderer';
 
 export function FileTree({ nodes, onSelect, depth = 0 }: { nodes: TreeNode[]; onSelect: (path: string) => void; depth?: number }) {
   return (

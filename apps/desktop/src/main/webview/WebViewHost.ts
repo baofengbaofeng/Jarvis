@@ -15,7 +15,6 @@ export interface WebViewHostDeps {
   // Electron main process. Defaults to a real BrowserWindow on a throwaway
   // in-memory partition.
   createWindow?: (partition: string) => WebViewWindow;
-  assertAllowedUrl?: (url: string) => Promise<void>;
 }
 
 // I8 会话隔离: every open() uses a fresh in-memory partition
@@ -33,7 +32,6 @@ export class WebViewHost {
   private static seq = 0;
   private win: WebViewWindow | null = null;
   private readonly createWindow: (partition: string) => WebViewWindow;
-  private readonly assertAllowedUrl?: (url: string) => Promise<void>;
 
   constructor(deps: WebViewHostDeps = {}) {
     this.createWindow = deps.createWindow ?? ((partition: string) => {
@@ -46,11 +44,9 @@ export class WebViewHost {
         webPreferences: { partition, sandbox: true }
       });
     });
-    this.assertAllowedUrl = deps.assertAllowedUrl;
   }
 
   async open(url: string): Promise<void> {
-    if (this.assertAllowedUrl) await this.assertAllowedUrl(url);
     // Close any window already up (office.webview.open leaves one open) so a
     // second open can't orphan it. The 'closed' handler is guarded so a stale
     // window's close event (fired later) can't null the reference to the CURRENT

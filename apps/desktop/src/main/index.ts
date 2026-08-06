@@ -12,12 +12,7 @@ import { createAgentStore } from './ipc/agents';
 import { IdeBridge, parseFileArg, openInExternalIde, resolveFileInWorkspace } from './external/IdeBridge';
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
-import { openMainWindow } from './mainWindowLifecycle';
 import { DaemonSupervisor } from './daemon/DaemonSupervisor';
-import type { IpcRouter } from './ipc/IpcRouter';
-import { SecureStorage } from './secrets/SecureStorage';
-import { SearchSecretMigration } from './search/SearchSecretMigration';
-import { pluginRunner } from './plugins/PluginRunnerHost';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
@@ -33,17 +28,11 @@ let ideBridge: IdeBridge | null = null;
 // started on boot, a best-effort backup is taken on quit, and the same instance
 // is threaded into IpcRouter so the renderer can list/create/restore backups.
 let backup: BackupService | null = null;
-let searchMigrationBlocked = false;
-let windows: WindowManager | null = null;
-let ipc: IpcRouter | null = null;
 
 export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
   const settings = createSettingsStore(db);
-  const secrets = new SecureStorage();
-  const migrationResult = await new SearchSecretMigration(db, secrets).run();
-  searchMigrationBlocked = !migrationResult.ok;
   // C10: the daemon is sized from the saved settings.concurrency value on every
   // (re)start; the provider reads live so a save + daemon.restart picks it up.
   daemon.setConcurrencyProvider(() => (settings.get('concurrency') ?? {}) as { perAgent?: number; machine?: number });
@@ -54,11 +43,10 @@ export async function bootstrap(): Promise<void> {
   const backupService = new BackupService(db, join(jarvisDataDir(), 'backups'), dbPath);
   const rawInterval = settings.get('backup_interval_min', 1440);
   const intervalMin = typeof rawInterval === 'number' && rawInterval > 0 ? rawInterval : 1440;
-  if (!searchMigrationBlocked) backupService.start(intervalMin * 60_000);
+  backupService.start(intervalMin * 60_000);
   backup = backupService;
-  windows = new WindowManager();
-  ipc = new IpcRouter(db, { getMainWindow: () => windows!.getMainWindow() });
-  ipc.registerAll(daemon, backupService, { migrationBlocked: searchMigrationBlocked });
+  const ipc = new IpcRouter(db);
+  ipc.registerAll(daemon, backupService);
   ipc.listen();
 
   // M4 Task 9 (E12): start the external-IDE bridge. resolveFile is CONTAINED to
@@ -79,15 +67,16 @@ export async function bootstrap(): Promise<void> {
   });
   void ideBridge.start();
 
+  const windows = new WindowManager();
   const tray = new TrayManager({
     onQuit: () => app.quit(),
-    onOpen: () => openMainWindow(windows!, ipc!),
+    onOpen: () => windows.createMainWindow(),
     onRestartDaemon: () => daemon.restart()
   });
 
   tray.create();
   daemon.start(() => tray.updateDaemonStatus(true), () => tray.updateDaemonStatus(false));
-  openMainWindow(windows, ipc);
+  windows.createMainWindow();
 }
 
 // `jarvis open --file <path[:line]>` opens the file in the external IDE: `code
@@ -122,25 +111,27 @@ function handleOpenArgv(argv: string[]): boolean {
 // M4 Task 9 (E12) CLI wiring: a single app instance owns the IDE bridge, and
 // every later `jarvis open --file` invocation is forwarded to the running
 // instance via the second-instance argv (Electron delivers the full argv of the
-// second launch).
-const gotLock = app.requestSingleInstanceLock();
+// second launch). E2E sets JARVIS_E2E=1 to allow parallel isolated launches.
+const skipSingleInstance = process.env.JARVIS_E2E === '1';
+const gotLock = skipSingleInstance || app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', (_event, argv) => {
-    if (handleOpenArgv(argv)) {
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
-    }
-  });
+  if (!skipSingleInstance) {
+    app.on('second-instance', (_event, argv) => {
+      if (handleOpenArgv(argv)) {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+      }
+    });
+  }
 
   app.whenReady().then(() => {
     void bootstrap();
-    // Handle the very first launch when it IS an `open --file` invocation.
     handleOpenArgv(process.argv);
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0 && windows && ipc) {
-        openMainWindow(windows, ipc);
+      if (BrowserWindow.getAllWindows().length === 0) {
+        new WindowManager().createMainWindow();
       }
     });
   });
@@ -156,11 +147,10 @@ app.on('will-quit', () => {
   daemon.stop();
   closeAllMcpClients();
   void ideBridge?.close();
-  void pluginRunner.closeAll();
   // L18 (M8 Task 4): best-effort backup on graceful quit. The backup is async,
   // so this is fire-and-forget (a partial backup on hard-quit is acceptable;
   // the periodic backups are the durable copy). The catch guards the restore
   // path: after a restore the service's db handle is closed (createBackup is a
   // guarded no-op then), and any other backup failure must not crash the quit.
-  void (searchMigrationBlocked ? Promise.resolve() : backup?.createBackup().catch(() => {}));
+  void backup?.createBackup().catch(() => {});
 });

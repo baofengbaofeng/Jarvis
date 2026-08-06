@@ -48,40 +48,6 @@ export interface ExportPayload {
 
 export type ImportStrategy = 'skip' | 'overwrite' | 'merge';
 
-/** Settings keys safe to include in config export (no plaintext secrets). */
-const EXPORT_ALLOWED_SETTINGS_KEYS = new Set([
-  'concurrency',
-  'backup_interval_min',
-  'shortcuts',
-  'proxy_json',
-  'search_providers',
-  'image.api_key_ref',
-  'data_policy',
-  'multica.conflicts',
-]);
-
-function redactSearchProviders(value: unknown): unknown {
-  if (!Array.isArray(value)) return undefined;
-  return value.map(item => {
-    const o = item as Record<string, unknown>;
-    return {
-      type: o.type,
-      apiKeyRef: o.apiKeyRef,
-      enabled: o.enabled,
-    };
-  });
-}
-
-/** Strip secret-shaped settings before export; only explicit allowlist keys pass through. */
-export function redactExportSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(settings)) {
-    if (!EXPORT_ALLOWED_SETTINGS_KEYS.has(key)) continue;
-    out[key] = key === 'search_providers' ? redactSearchProviders(value) : value;
-  }
-  return out;
-}
-
 export interface ImportPlan {
   create: Array<ProviderExport | AgentExport>;
   update: Array<ProviderExport | AgentExport>;

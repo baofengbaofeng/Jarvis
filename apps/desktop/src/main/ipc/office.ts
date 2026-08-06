@@ -5,13 +5,10 @@ import type Database from 'better-sqlite3';
 // throws. The legacy build is the Node entry point — same getDocument API, no
 // DOM at import time. The renderer keeps the browser build (see PdfReaderPage).
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, parseVideoUrl, fetchVideoMeta, summarizeVideo, createOpenAiImageAdapter, extractFileText, extractPptx, type ChatChunk, type ChatRequest, type Extractor, type ModelMessage, type ModelRole, type OfficeFileKind, type ProviderAdapter, type SelectionAction, type WritingAction, type VideoMeta } from '@jarvis/core';
+import { createAdapter, chatText, buildSelectionPrompt, buildWritingPrompt, translateWhileTyping, chunkPages, buildPdfSummaryPrompt, extractMainText, isHttpUrl, parseVideoUrl, fetchVideoMeta, summarizeVideo, createOpenAiImageAdapter, extractFileText, extractPptx, type ChatChunk, type ChatRequest, type Extractor, type ModelMessage, type ModelRole, type OfficeFileKind, type ProviderAdapter, type SelectionAction, type WritingAction, type VideoMeta } from '@jarvis/core';
 import type { Provider } from '@jarvis/protocol';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { SettingsStore } from './settings';
-import type { PathOperation } from '../security/PathCapabilityStore';
-
-export type ResolvePath = (token: string, owner: number, operation: PathOperation) => string;
 
 // Minimal surface the office.webview channels need from the WebView host. Kept
 // as a structural type so office.ts does NOT statically import WebViewHost
@@ -29,11 +26,10 @@ export interface WebViewLike {
 // stay out of the module graph until a webview channel actually runs. The
 // dynamic import below is only reached from the Electron main process.
 let cachedWebViewHost: WebViewLike | null = null;
-let webViewHostDeps: { assertAllowedUrl?: (url: string) => Promise<void> } = {};
 async function getWebViewHost(): Promise<WebViewLike> {
   if (cachedWebViewHost) return cachedWebViewHost;
   const { WebViewHost } = await import('../webview/WebViewHost');
-  cachedWebViewHost = new WebViewHost(webViewHostDeps);
+  cachedWebViewHost = new WebViewHost();
   return cachedWebViewHost;
 }
 
@@ -64,6 +60,7 @@ export async function summarizeWebPage(
   summarize: (text: string) => Promise<string>
 ): Promise<{ ok: true; result: string } | { ok: false; error: string }> {
   try {
+    if (!isHttpUrl(url)) return { ok: false, error: '只支持 http/https 网页地址' };
     await web.open(url);
     const raw = await web.extract();
     // extract() returns the rendered innerText — that is the primary text source
@@ -217,13 +214,7 @@ async function resolveImageApiKey(settings: SettingsStore | undefined, secrets: 
   return (await secrets.get(ref)) ?? null;
 }
 
-export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike>; settings?: SettingsStore; secrets?: Pick<SecureStorage, 'get'>; imageFetch?: typeof fetch; resolvePath?: ResolvePath; assertAllowedUrl?: (url: string) => Promise<void> } = {}) {
-  if (deps.assertAllowedUrl) webViewHostDeps = { assertAllowedUrl: deps.assertAllowedUrl };
-  const resolvePath = deps.resolvePath;
-  const requirePath = (token: string, owner: number, operation: PathOperation): string => {
-    if (!resolvePath) throw new Error('PATH_CAPABILITY_RESOLVER_MISSING');
-    return resolvePath(token, owner, operation);
-  };
+export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike>; settings?: SettingsStore; secrets?: Pick<SecureStorage, 'get'>; imageFetch?: typeof fetch } = {}) {
   // deps.getWebViewHost lets tests inject a fake host; production uses the lazy
   // dynamic-import singleton (see getWebViewHost above).
   const getWeb = deps.getWebViewHost ?? getWebViewHost;
@@ -253,9 +244,8 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
   // same chatText bridge as the other office channels. Errors (missing file, pdf
   // parse failure) are caught and returned as { ok: false, error } so the
   // renderer can surface them without an unhandled rejection.
-  router.register('office.pdf.extract', (async (event: { sender: { id: number } }, req: { capability: string }) => {
+  router.register('office.pdf.extract', (async (_e, path: string) => {
     try {
-      const path = requirePath(req.capability, event.sender.id, 'office:read');
       const ext = await extractPdf(path);
       // The renderer re-loads the doc with pdfjs-dist to paint the page to a
       // canvas, so ship the raw bytes alongside the page texts. extractPdf
@@ -267,10 +257,8 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   }) as (...a: unknown[]) => unknown);
-  router.register('office.pdf.summarize', (async (event: { sender: { id: number } }, req: { capability: string; from: number; to: number }) => {
+  router.register('office.pdf.summarize', (async (_e, path: string, from: number, to: number) => {
     try {
-      const path = requirePath(req.capability, event.sender.id, 'office:read');
-      const { from, to } = req;
       const { pageTexts } = await extractPdf(path);
       const chunks = chunkPages(pageTexts.slice(from - 1, to));
       const out: string[] = [];
@@ -291,6 +279,7 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
   // chat → close cycle through summarizeWebPage (which always closes, even on
   // error).
   router.register('office.webview.open', (async (_e, url: string) => {
+    if (!isHttpUrl(url)) return { ok: false, error: '只支持 http/https 网页地址' };
     const web = await getWeb();
     try {
       await web.open(url);
@@ -349,10 +338,8 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
   // parser-agnostic via extractFileText's injected-extractor design). Any
   // failure — missing file, parser error, chatText error, unsupported kind — is
   // caught and returned as { ok:false, error } so the IPC never rejects.
-  router.register('office.file.analyze', (async (event: { sender: { id: number } }, req: { capability: string; name: string }) => {
+  router.register('office.file.analyze', (async (_e, path: string, name: string) => {
     try {
-      const path = requirePath(req.capability, event.sender.id, 'office:read');
-      const { name } = req;
       const extractors: Partial<Record<OfficeFileKind, Extractor>> = {
         // extractPdf (Task 3) returns per-page texts; join for a flat document.
         pdf: async () => (await extractPdf(path)).pageTexts.join('\n'),

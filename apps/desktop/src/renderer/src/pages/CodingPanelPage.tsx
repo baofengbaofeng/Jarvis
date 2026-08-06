@@ -4,7 +4,7 @@ import { FileTree } from '../components/coding/FileTree';
 import { CodePreview } from '../components/coding/CodePreview';
 import { SplitLayout } from '../components/coding/SplitLayout';
 import { DiffPanel } from '../components/coding/DiffPanel';
-import type { TreeNode } from '@jarvis/core';
+import type { TreeNode } from '@jarvis/core/renderer';
 import { useTaskStore } from '../stores/task-store';
 
 interface DiffState { taskId: string; path: string; base: string; modified: string }

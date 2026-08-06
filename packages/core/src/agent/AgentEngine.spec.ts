@@ -63,4 +63,19 @@ describe('AgentEngine', () => {
     expect(calls).toBe(maxSteps);
     expect(result.toolCalls).toBe(maxSteps);
   });
+
+  it('passes registered tools to the model router', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: 'echo', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    let captured: { tools?: Array<{ name: string }> } | null = null;
+    const chat = async (req: { tools?: Array<{ name: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      captured = req;
+      opts.onChunk?.({ kind: 'delta', delta: 'ok' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 1 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(captured?.tools?.map(t => t.name)).toEqual(['echo']);
+  });
 });

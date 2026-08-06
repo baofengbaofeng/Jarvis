@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 export function jarvisDataDir(): string {
-  const dir = join(homedir(), '.jarvis');
+  const dir = process.env.JARVIS_DATA_DIR ?? join(homedir(), '.jarvis');
   mkdirSync(dir, { recursive: true });
   return dir;
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { ChatRequest, ProviderAdapter } from '@jarvis/core';
 import { streamAdapter, summarizeWebPage, registerOfficeIpc, resolveCjsDefault } from './office';
 
@@ -117,16 +117,9 @@ describe('summarizeWebPage', () => {
 
   it('rejects non-http URLs without opening the window', async () => {
     let opened = false;
-    const web = {
-      open: async (u: string) => {
-        if (u.startsWith('file:')) throw new Error('URL_HTTPS_REQUIRED');
-        opened = true;
-      },
-      extract: async () => '',
-      close: () => {},
-    };
+    const web = { open: async () => { opened = true; }, extract: async () => '', close: () => {} };
     const result = await summarizeWebPage('file:///etc/passwd', web, async () => 'x');
-    expect(result).toEqual({ ok: false, error: 'URL_HTTPS_REQUIRED' });
+    expect(result).toEqual({ ok: false, error: '只支持 http/https 网页地址' });
     expect(opened).toBe(false);
   });
 
@@ -211,23 +204,13 @@ describe('office video/image channels', () => {
 // pptx extraction would need binary fixtures — the routing contract is covered
 // here and in packages/core/src/office/files.spec.ts.
 describe('office.file.analyze', () => {
-  it('resolves office files only through a capability owned by the sender', async () => {
-    const router = makeRouter();
-    const resolvePath = vi.fn(() => '/fixtures/report.docx');
-    registerOfficeIpc(router, { async *chat() { yield { deltaText: 'ok' }; } }, { resolvePath });
-    const h = router.handlers.get('office.file.analyze')!;
-    await h({ sender: { id: 9 } } as never, { capability: 'cap-1', name: 'report.docx' });
-    expect(resolvePath).toHaveBeenCalledWith('cap-1', 9, 'office:read');
-  });
-
   it('returns the unsupported-type error for an unclassifiable file and never calls chatText', async () => {
     const router = makeRouter();
     const chatCalls: unknown[] = [];
     const modelRouter = { async *chat(req: unknown) { chatCalls.push(req); } };
-    const resolvePath = vi.fn(() => '/tmp/notes.txt');
-    registerOfficeIpc(router, modelRouter, { resolvePath });
+    registerOfficeIpc(router, modelRouter);
     const h = router.handlers.get('office.file.analyze')!;
-    const res = await h({ sender: { id: 0 } } as never, { capability: 'cap', name: 'notes.txt' });
+    const res = await h({} as never, '/tmp/notes.txt', 'notes.txt');
     expect(res).toEqual({ ok: false, error: 'unsupported file type: other' });
     expect(chatCalls).toHaveLength(0);
   });

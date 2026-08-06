@@ -11,12 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/db"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/acp"
-	"github.com/baofengbaofeng/Jarvis/daemon/internal/multica/policy"
 	"github.com/baofengbaofeng/Jarvis/daemon/internal/runtime"
 	"github.com/spf13/cobra"
 )
@@ -62,37 +59,13 @@ type ProfileStore interface {
 	Get(ctx context.Context, id string) (*db.Profile, error)
 }
 
-// InjectionPolicy evaluates remote Multica injection candidates (SEC-09).
-type InjectionPolicy interface {
-	Evaluate(context.Context, policy.CandidateInjection) (acp.Injection, []policy.Denial, []policy.ApprovalRequest, error)
-}
-
-// InjectionAudit writes redacted injection audit entries (SEC-09).
-type InjectionAudit interface {
-	Write(policy.InjectionAuditEntry) error
-}
-
-// InjectionSource returns the trusted local injection snapshot for an agent.
-type InjectionSource interface {
-	ForAgent(context.Context, string) (acp.Injection, error)
-}
-
-// InjectionPending records outstanding MCP digest approvals for the local UI.
-type InjectionPending interface {
-	Put(policy.PendingApproval)
-}
-
 // RunDeps are the injected dependencies of the `run` command.
 type RunDeps struct {
-	Runner           Runner
-	History          HistoryLoader
-	Recorder         TaskRecorder
-	Pool             *runtime.WorkspacePool
-	Profiles         ProfileStore
-	InjectionPolicy  InjectionPolicy
-	InjectionAudit   InjectionAudit
-	InjectionSource  InjectionSource
-	InjectionPending InjectionPending
+	Runner   Runner
+	History  HistoryLoader
+	Recorder TaskRecorder
+	Pool     *runtime.WorkspacePool
+	Profiles ProfileStore
 }
 
 // TaskOpts are the command-level options for one execution.
@@ -101,8 +74,8 @@ type TaskOpts struct {
 }
 
 // ExecuteTask orchestrates one ACP task: history (H1.5) -> profile (H1.14) ->
-// local snapshot + remote candidate policy (SEC-09) -> injection merge (H1.6-H1.8)
-// -> workspace (H1.12) -> REACT loop -> stream (H1.4) -> id mapping (L36)。
+// injection merge (H1.6-H1.8) -> workspace (H1.12) -> REACT loop -> stream (H1.4)
+// -> id mapping (L36)。
 func ExecuteTask(ctx context.Context, deps RunDeps, payload *acp.TaskPayload, opts TaskOpts, stream *runtime.StreamWriter) error {
 	msgs := acp.BuildInitialMessages(payload)
 
@@ -114,17 +87,7 @@ func ExecuteTask(ctx context.Context, deps RunDeps, payload *acp.TaskPayload, op
 		msgs = append(hist, msgs...)
 	}
 
-	local := acp.Injection{Env: map[string]string{}}
-	if deps.InjectionSource != nil {
-		snap, err := deps.InjectionSource.ForAgent(ctx, payload.Agent)
-		if err != nil {
-			return fmt.Errorf("load local injection: %w", err)
-		}
-		local = snap
-		if local.Env == nil {
-			local.Env = map[string]string{}
-		}
-	}
+	env := map[string]string{}
 	if payload.Profile != "" {
 		prof, err := deps.Profiles.Get(ctx, payload.Profile)
 		if err != nil {
@@ -132,45 +95,24 @@ func ExecuteTask(ctx context.Context, deps RunDeps, payload *acp.TaskPayload, op
 		}
 		if prof != nil {
 			for k, v := range prof.Env {
-				if _, ok := local.Env[k]; !ok {
-					local.Env[k] = v
+				if _, ok := env[k]; !ok {
+					env[k] = v
 				}
 			}
 		}
 	}
-
-	candidate := policy.CandidateFromPayload(payload)
-	var approvedRemote acp.Injection
-	if candidateNonEmpty(candidate) {
-		if deps.InjectionPolicy == nil {
-			return fmt.Errorf("MULTICA_INJECTION_DENIED: POLICY_NOT_CONFIGURED")
+	for k, v := range payload.Env {
+		if _, ok := env[k]; !ok {
+			env[k] = v
 		}
-		inj, denials, approvals, err := deps.InjectionPolicy.Evaluate(ctx, candidate)
-		if err != nil {
-			return err
-		}
-		writeInjectionAudit(deps.InjectionAudit, payload.TaskID, denials, approvals, inj)
-		if len(denials) > 0 {
-			return fmt.Errorf("MULTICA_INJECTION_DENIED: %s", denials[0].Reason)
-		}
-		if len(approvals) > 0 {
-			if deps.InjectionPending != nil {
-				for _, a := range approvals {
-					deps.InjectionPending.Put(policy.PendingApproval{
-						Kind:      a.Key.Kind,
-						Name:      a.Key.Name,
-						Digest:    a.Key.Digest,
-						TaskID:    payload.TaskID,
-						CreatedAt: time.Now().UTC().Format(time.RFC3339),
-					})
-				}
-			}
-			return fmt.Errorf("MULTICA_INJECTION_APPROVAL_REQUIRED: %s", approvals[0].Key.Digest)
-		}
-		approvedRemote = inj
 	}
 
-	merged, _, _ := acp.MergeInjections(local, approvedRemote)
+	local := acp.Injection{Env: env}
+	merged, _, _ := acp.MergeInjections(local, acp.Injection{
+		MCPServers: payload.MCPServers,
+		Env:        payload.Env,
+		CLIArgs:    payload.CLIArgs,
+	})
 
 	ws, err := deps.Pool.Allocate(payload.TaskID)
 	if err != nil {
@@ -209,50 +151,6 @@ func ExecuteTask(ctx context.Context, deps RunDeps, payload *acp.TaskPayload, op
 		}
 	}
 	return nil
-}
-
-func candidateNonEmpty(c policy.CandidateInjection) bool {
-	return len(c.MCPServers) > 0 || len(c.Skills) > 0 || len(c.CLIArgs) > 0 || len(c.Env) > 0
-}
-
-func writeInjectionAudit(a InjectionAudit, taskID string, denials []policy.Denial, approvals []policy.ApprovalRequest, allowed acp.Injection) {
-	if a == nil {
-		return
-	}
-	for _, d := range denials {
-		_ = a.Write(policy.InjectionAuditEntry{
-			TaskID: taskID, Source: "multica", Kind: d.Kind, Name: d.Name,
-			Digest: d.Digest, Result: "denied", Reason: d.Reason,
-		})
-	}
-	for _, ap := range approvals {
-		_ = a.Write(policy.InjectionAuditEntry{
-			TaskID: taskID, Source: "multica", Kind: ap.Key.Kind, Name: ap.Key.Name,
-			Digest: ap.Key.Digest, Result: "approval_required", Reason: "MCP_APPROVAL_REQUIRED",
-		})
-	}
-	for k := range allowed.Env {
-		_ = a.Write(policy.InjectionAuditEntry{
-			TaskID: taskID, Source: "multica", Kind: "env", Name: k,
-			Result: "allowed", Reason: "ENV_ALLOWED",
-		})
-	}
-	for _, arg := range allowed.CLIArgs {
-		name := arg
-		if i := strings.IndexByte(arg, '='); i >= 0 {
-			name = arg[:i]
-		}
-		_ = a.Write(policy.InjectionAuditEntry{
-			TaskID: taskID, Source: "multica", Kind: "cli", Name: name,
-			Result: "allowed", Reason: "CLI_ALLOWED",
-		})
-	}
-	for _, m := range allowed.MCPServers {
-		_ = a.Write(policy.InjectionAuditEntry{
-			TaskID: taskID, Source: "multica", Kind: "mcp", Name: m.Name,
-			Digest: m.Digest, Result: "allowed", Reason: "MCP_APPROVED",
-		})
-	}
 }
 
 // NodeRunner spawns the embedded Node headless process running packages/core

@@ -1,16 +1,13 @@
-// L25 联网搜索源配置: 把「一个 SearchProviderRuntime」转成具体的 HTTP 请求
+// L25 联网搜索源配置: 把「一个 SearchProviderConfig」转成具体的 HTTP 请求
 // (buildSearchRequest) 并把响应体解析成统一 SearchResultItem 行。纯函数、
 // 无 fetch 副作用,main 进程负责实际请求(webSearch helper 注入 fetch 以便测试)。
 
 export type SearchProviderType = 'bing' | 'brave' | 'tavily' | 'serper';
-/** Persisted shape — apiKey lives in SecureStorage under apiKeyRef. */
-export interface SearchProviderConfig { type: SearchProviderType; apiKeyRef: string; enabled: boolean }
-/** Runtime shape passed to buildSearchRequest after key resolution. */
-export interface SearchProviderRuntime { type: SearchProviderType; apiKey: string; enabled: boolean }
+export interface SearchProviderConfig { type: SearchProviderType; apiKey: string; enabled: boolean }
 export interface SearchResultItem { title: string; url: string; snippet: string }
 export interface SearchRequest { url: string; headers: Record<string, string>; body?: string }
 
-export function buildSearchRequest(provider: SearchProviderRuntime, query: string, opts: { limit?: number } = {}): SearchRequest {
+export function buildSearchRequest(provider: SearchProviderConfig, query: string, opts: { limit?: number } = {}): SearchRequest {
   const limit = opts.limit ?? 5;
   switch (provider.type) {
     case 'tavily':

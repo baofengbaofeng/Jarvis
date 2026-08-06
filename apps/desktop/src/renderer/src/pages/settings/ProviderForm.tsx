@@ -19,8 +19,8 @@ export function ProviderForm({ onDone }: { onDone: () => void }) {
     <form data-testid="provider-form">
       <input data-testid="provider-name" placeholder={t('settings.provider.name')} value={name} onChange={e => setName(e.target.value)} />
       <select data-testid="provider-type" value={type} onChange={e => setType(e.target.value as typeof type)}>
-        <option value="openai-compatible">OpenAI Compatible</option>
-        <option value="anthropic-compatible">Anthropic Compatible</option>
+        <option value="openai-compatible">{t('settings.provider.typeOpenai')}</option>
+        <option value="anthropic-compatible">{t('settings.provider.typeAnthropic')}</option>
       </select>
       <input data-testid="provider-baseurl" placeholder={t('settings.provider.baseUrl')} value={baseUrl} onChange={e => setBaseUrl(e.target.value)} />
       <input data-testid="provider-apikey" type="password" placeholder={t('settings.provider.apiKey')} value={apiKey} onChange={e => setApiKey(e.target.value)} />

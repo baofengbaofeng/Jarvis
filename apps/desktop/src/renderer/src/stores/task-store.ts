@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { IpcChannel } from '@jarvis/protocol';
 
 interface TaskState {
   activeTaskId: string | null;
@@ -18,19 +19,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   status: null,
   logs: [],
   async createTask(agentId, prompt, sessionId) {
-    const { id } = (await window.jarvis.invoke('task.create', { agentId, prompt, sessionId })) as { id: string };
+    const { id } = (await window.jarvis.invoke(IpcChannel.taskCreate, { agentId, prompt, sessionId })) as { id: string };
     set({ activeTaskId: id, status: 'queued', logs: [] });
     return id;
   },
-  async cancel() { if (get().activeTaskId) await window.jarvis.invoke('task.cancel', get().activeTaskId); },
-  async pause() { if (get().activeTaskId) await window.jarvis.invoke('task.pause', get().activeTaskId); },
-  async resume() { if (get().activeTaskId) await window.jarvis.invoke('task.resume', get().activeTaskId); },
-  async retry() { if (get().activeTaskId) await window.jarvis.invoke('task.retry', get().activeTaskId); },
+  async cancel() { if (get().activeTaskId) await window.jarvis.invoke(IpcChannel.taskCancel, get().activeTaskId); },
+  async pause() { if (get().activeTaskId) await window.jarvis.invoke(IpcChannel.taskPause, get().activeTaskId); },
+  async resume() { if (get().activeTaskId) await window.jarvis.invoke(IpcChannel.taskResume, get().activeTaskId); },
+  async retry() { if (get().activeTaskId) await window.jarvis.invoke(IpcChannel.taskRetry, get().activeTaskId); },
   setStatus(_id, status) { set({ status }); },
   appendLog(line) { set(s => ({ logs: [...s.logs, line] })); }
 }));
-
-if (typeof window !== 'undefined' && window.jarvis?.onDidReceive) {
-  window.jarvis.onDidReceive('task:state', (p) => { const { id, state } = p as { id: string; state: TaskState['status'] }; useTaskStore.getState().setStatus(id, state); });
-  window.jarvis.onDidReceive('task:log', (p) => { const { line } = p as { id: string; line: string }; useTaskStore.getState().appendLog(line); });
-}
