@@ -41,6 +41,9 @@ importers:
       '@jarvis/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@jarvis/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-router':
         specifier: ^1.0.0
         version: 1.170.18(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

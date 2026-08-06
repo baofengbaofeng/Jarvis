@@ -4,6 +4,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
 import App from './App';
+import '@jarvis/ui/tokens.css';
 import './styles/globals.css';
 import { initRendererState } from './stores/init-store';
 
