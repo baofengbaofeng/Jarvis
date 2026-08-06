@@ -1,16 +1,28 @@
+# OS / editor
 .DS_Store
-**/.DS_Store
-*.db
-*.db-wal
-*.db-shm
+.idea/
+.claude/
+
+# Dependencies & local tooling caches
 node_modules/
+.turbo/
 .worktrees/
 .superpowers/
 
-# 安装包产物（dist/）：只跟踪安装文件与指纹文件，
-# 其余中间产物（*-unpacked、mac/、构建缓存、日志）忽略。
-# 边界按文件大小可调；若产物超 GitHub 单文件上限（100MB），改回整体忽略并走 GitHub Releases。
-dist/*
-!dist/*.msi
-!dist/*.dmg
-!dist/*.sha256
+# Local SQLite artifacts (anywhere)
+*.db
+*.db-wal
+*.db-shm
+
+# Root installer outputs: track packages + checksums only
+/dist/*
+!/dist/*.msi
+!/dist/*.dmg
+!/dist/*.sha256
+
+# apps/desktop build & e2e artifacts
+apps/desktop/out/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+apps/desktop/blob-report/
+apps/desktop/resources/
