@@ -225,6 +225,11 @@
     "remove": "删除",
     "inputPlaceholder": "输入模板"
   },
+  "shell": {
+    "groupWork": "工作",
+    "groupCollab": "协作",
+    "navChat": "对话"
+  },
   "shortcuts": {
     "title": "键盘快捷键",
     "press_key": "按下按键…",
