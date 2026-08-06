@@ -70,7 +70,8 @@ type Evaluator struct {
 }
 
 // CandidateFromPayload lifts remote Multica fields into a CandidateInjection.
-// Skills are name-only here; path materialization remains ApplyInjection's job.
+// Skills are name-only here; path materialization is deferred until after the
+// agent policy gate (SEC-09) — claim-path ApplyInjection must not copy skills.
 func CandidateFromPayload(p *acp.TaskPayload) CandidateInjection {
 	if p == nil {
 		return CandidateInjection{}
@@ -226,6 +227,7 @@ func (e *Evaluator) evaluateMCP(ctx context.Context, mcp acp.MCPEntry) (*Denial,
 		Command: resolved,
 		Args:    append([]string{}, subOut.CLIArgs...),
 		Env:     subOut.Env,
+		Digest:  digest,
 	}
 	return nil, nil, &entry, nil
 }

@@ -177,9 +177,10 @@ func heartbeatStatus(q *runtime.Queue) string {
 	return "idle"
 }
 
-// agentExec 把任务交给 jarvis-agent 子进程执行并转发流帧(S6 端到端)。C2 接线:
-// 分配 task workspace → applyInjection(合并注入 + H1.7 skill 落盘)→ L38 冲突写入
-// ConflictStore → 把合并后的 payload(而非原始 payload)交给 invoker。
+// agentExec 把任务交给 jarvis-agent 子进程执行并转发流帧(S6 端到端)。C2/SEC-09:
+// 分配 task workspace → ApplyInjection(仅 L38 冲突检测，保留 raw Multica 字段，
+// 不预合并/不落盘 skills)→ ConflictStore → 把 raw payload 交给 invoker；
+// policy gate + MergeInjections 在 jarvis-agent ExecuteTask 内完成。
 func agentExec(invoker client.AgentInvoker, st *runtimeState, pool *runtime.WorkspacePool, skillFS client.SkillFS, conflicts *client.ConflictStore, local acp.Injection) client.ExecFunc {
 	return func(ctx context.Context, p *acp.TaskPayload, onChunk func(runtime.StreamChunk)) (client.TaskResult, error) {
 		st.mu.Lock()

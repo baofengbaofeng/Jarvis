@@ -34,6 +34,9 @@ type MCPEntry struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
+	// Digest is set by local policy after SHA-256 of the resolved executable
+	// (SEC-09 audit). Multica payloads must not supply a trusted digest.
+	Digest string `json:"digest,omitempty"`
 }
 
 // InitialMessage is a REACT-loop input message (role + content).

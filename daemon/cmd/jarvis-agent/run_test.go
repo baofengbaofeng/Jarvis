@@ -149,6 +149,7 @@ func (r rejectingPolicy) Evaluate(_ context.Context, _ policy.CandidateInjection
 
 type allowingPolicy struct {
 	env map[string]string
+	mcp []acp.MCPEntry
 }
 
 func (a allowingPolicy) Evaluate(_ context.Context, c policy.CandidateInjection) (acp.Injection, []policy.Denial, []policy.ApprovalRequest, error) {
@@ -156,7 +157,11 @@ func (a allowingPolicy) Evaluate(_ context.Context, c policy.CandidateInjection)
 	if env == nil {
 		env = c.Env
 	}
-	return acp.Injection{Env: env, MCPServers: c.MCPServers, CLIArgs: c.CLIArgs, Skills: c.Skills}, nil, nil, nil
+	mcp := a.mcp
+	if mcp == nil {
+		mcp = c.MCPServers
+	}
+	return acp.Injection{Env: env, MCPServers: mcp, CLIArgs: c.CLIArgs, Skills: c.Skills}, nil, nil, nil
 }
 
 func TestExecuteTaskDoesNotRunUnapprovedRemoteMCP(t *testing.T) {
@@ -192,6 +197,44 @@ func TestExecuteTaskDoesNotRunDeniedRemoteEnv(t *testing.T) {
 	}
 	if len(runner.specs) != 0 {
 		t.Fatal("runner must not receive a denied injection")
+	}
+}
+
+type recordingAudit struct {
+	entries []policy.InjectionAuditEntry
+}
+
+func (r *recordingAudit) Write(e policy.InjectionAuditEntry) error {
+	r.entries = append(r.entries, e)
+	return nil
+}
+
+func TestExecuteTaskAuditIncludesApprovedMCPDigest(t *testing.T) {
+	runner := &fakeRunner{res: RunResult{Status: "completed"}}
+	deps, _ := testDeps(runner, &fakeHistory{}, &fakeRecorder{}, &fakeProfiles{})
+	audit := &recordingAudit{}
+	deps.InjectionAudit = audit
+	deps.InjectionPolicy = allowingPolicy{mcp: []acp.MCPEntry{{
+		Name: "fs", Command: "/opt/fs", Digest: strings.Repeat("d", 64),
+	}}}
+	payload := &acp.TaskPayload{
+		TaskID: "t-audit", Instruction: "go",
+		MCPServers: []acp.MCPEntry{{Name: "fs", Command: "/opt/fs"}},
+	}
+	if err := ExecuteTask(context.Background(), deps, payload, TaskOpts{}, runtime.NewStreamWriter(io.Discard)); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range audit.entries {
+		if e.Kind == "mcp" && e.Reason == "MCP_APPROVED" {
+			found = true
+			if e.Digest != strings.Repeat("d", 64) {
+				t.Fatalf("MCP_APPROVED audit missing digest: %#v", e)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected MCP_APPROVED audit entry, got %#v", audit.entries)
 	}
 }
 

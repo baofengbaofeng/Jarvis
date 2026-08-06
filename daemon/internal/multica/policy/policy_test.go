@@ -106,6 +106,9 @@ func TestEvaluateAllowsApprovedMCP(t *testing.T) {
 	if len(inj.MCPServers) != 1 || inj.MCPServers[0].Name != "fs" {
 		t.Fatalf("approved MCP missing: %#v", inj.MCPServers)
 	}
+	if inj.MCPServers[0].Digest != key.Digest {
+		t.Fatalf("approved MCP missing digest: %#v", inj.MCPServers[0])
+	}
 }
 
 func TestEvaluateRejectsRelativeMCPAndPositionals(t *testing.T) {

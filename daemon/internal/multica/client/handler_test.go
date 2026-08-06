@@ -2,8 +2,6 @@ package client
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -169,84 +167,74 @@ func (f *fakeSkillFS) Copy(src, dst string) error {
 }
 func (f *fakeSkillFS) MkdirAll(d string) error { f.dirs[d] = true; return nil }
 
-func TestApplyInjectionCopiesSkills(t *testing.T) {
+func TestApplyInjectionKeepsRawRemoteAndDoesNotMaterialize(t *testing.T) {
 	fs := &fakeSkillFS{dirs: map[string]bool{}}
-	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"s1"}}
-	merged, sc, mc, err := ApplyInjection(context.Background(), p, acp.Injection{}, "/ws/t1", fs)
+	local := acp.Injection{
+		MCPServers: []acp.MCPEntry{{Name: "fs", Command: "/local/fs"}},
+		Env:        map[string]string{"LOG_LEVEL": "local"},
+		CLIArgs:    []string{"--local"},
+		Skills:     []acp.SkillSpec{{Source: "local", Name: "review", Path: "/local/review"}},
+	}
+	p := &acp.TaskPayload{
+		TaskID: "t1", Instruction: "x",
+		Skills:     []string{"review", "extra"},
+		MCPServers: []acp.MCPEntry{{Name: "fs", Command: "/remote/fs"}, {Name: "other", Command: "/remote/other"}},
+		Env:        map[string]string{"LOG_LEVEL": "remote", "REMOTE_ONLY": "1"},
+		CLIArgs:    []string{"--remote"},
+	}
+	out, sc, mc, err := ApplyInjection(context.Background(), p, local, "/ws/t1", fs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sc) != 0 || len(mc) != 0 {
-		t.Fatalf("no conflicts expected: %v %v", sc, mc)
+	// SEC-09: no skill materialization before the agent policy gate.
+	if len(fs.copies) != 0 || len(fs.dirs) != 0 {
+		t.Fatalf("skills must not be copied pre-policy: copies=%v dirs=%v", fs.copies, fs.dirs)
 	}
-	if len(fs.copies) != 1 || fs.copies[0][1] != "/ws/t1/.jarvis/skills/s1" {
-		t.Fatalf("skill not copied: %v", fs.copies)
+	// Raw Multica fields preserved — local must not be folded into candidate fields.
+	if out.Env["LOG_LEVEL"] != "remote" || out.Env["REMOTE_ONLY"] != "1" {
+		t.Fatalf("payload env must stay remote-only: %+v", out.Env)
 	}
-	if !fs.dirs["/ws/t1/.jarvis/skills"] {
-		t.Fatalf("skills dir not created: %v", fs.dirs)
+	if len(out.CLIArgs) != 1 || out.CLIArgs[0] != "--remote" {
+		t.Fatalf("payload CLI must stay remote-only: %v", out.CLIArgs)
 	}
-	// Skills 内容已落盘 .jarvis/skills/,由 M3 SkillsLoader 扫描,payload.Skills 置空。
-	if merged.Skills != nil {
-		t.Fatalf("expected skills cleared after copy to disk, got %v", merged.Skills)
+	if len(out.MCPServers) != 2 || out.MCPServers[0].Command != "/remote/fs" {
+		t.Fatalf("payload MCP must stay remote-only: %+v", out.MCPServers)
 	}
-}
-
-// TestApplyInjectionRealSkillFSBestEffort exercises DefaultSkillFS/copyPath
-// against a REAL temp directory (round-2 re-review): a present skill file is
-// copied into .jarvis/skills/ and a claimed skill with no staged content is
-// SKIPPED (no error) rather than ENOENT-failing the task.
-func TestApplyInjectionRealSkillFSBestEffort(t *testing.T) {
-	ws := t.TempDir()
-	// Stage one skill's content in the workspace root; leave "missing" unstaged.
-	if err := os.WriteFile(filepath.Join(ws, "present"), []byte("skill-body"), 0o644); err != nil {
-		t.Fatal(err)
+	if len(out.Skills) != 2 || out.Skills[0] != "review" {
+		t.Fatalf("payload skills must stay raw Multica names: %v", out.Skills)
 	}
-
-	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"present", "missing"}}
-	merged, sc, mc, err := ApplyInjection(context.Background(), p, acp.Injection{}, ws, DefaultSkillFS())
-	if err != nil {
-		t.Fatalf("missing skill must not fail the task: %v", err)
+	// L38 conflicts still surfaced for UI.
+	if len(sc) != 1 || sc[0].Name != "review" {
+		t.Fatalf("want skill conflict review: %+v", sc)
 	}
-	if len(sc) != 0 || len(mc) != 0 {
-		t.Fatalf("no conflicts expected with empty local injection: %v %v", sc, mc)
-	}
-	if merged.Skills != nil {
-		t.Fatalf("expected skills cleared after copy, got %v", merged.Skills)
-	}
-
-	// The present skill was copied with content; the missing one was skipped.
-	dst := filepath.Join(ws, ".jarvis", "skills")
-	got, err := os.ReadFile(filepath.Join(dst, "present"))
-	if err != nil {
-		t.Fatalf("present skill not copied: %v", err)
-	}
-	if string(got) != "skill-body" {
-		t.Fatalf("present skill content wrong: %q", got)
-	}
-	if _, err := os.Stat(filepath.Join(dst, "missing")); !os.IsNotExist(err) {
-		t.Fatalf("missing skill should not have been copied (err=%v)", err)
+	if len(mc) != 1 || mc[0].Name != "fs" {
+		t.Fatalf("want mcp conflict fs: %+v", mc)
 	}
 }
 
 // TestApplyInjectionSkipsTraversalSkillName is the round-3 security regression:
-// a server-supplied skill name containing ".." must never reach a path-building
-// or copy call (J3 — injected skills act only within the task workspace). The
-// invalid name is skipped with a log; the task still succeeds and a valid
-// sibling skill is still copied.
+// a server-supplied skill name containing ".." must never participate in
+// conflict path metadata (J3). The invalid name is skipped with a log; the
+// task still succeeds and raw Multica skills (including the invalid name string
+// as authored) remain on the payload for the agent policy gate to deny.
 func TestApplyInjectionSkipsTraversalSkillName(t *testing.T) {
 	fs := &fakeSkillFS{dirs: map[string]bool{}}
+	local := acp.Injection{Skills: []acp.SkillSpec{{Source: "local", Name: "ok", Path: "/local/ok"}}}
 	p := &acp.TaskPayload{TaskID: "t1", Instruction: "x", Skills: []string{"../evil", "ok"}}
-	merged, sc, mc, err := ApplyInjection(context.Background(), p, acp.Injection{}, "/ws/t1", fs)
+	out, sc, mc, err := ApplyInjection(context.Background(), p, local, "/ws/t1", fs)
 	if err != nil {
 		t.Fatalf("invalid skill name must be skipped, not fail the task: %v", err)
 	}
-	if len(fs.copies) != 1 || fs.copies[0][0] != "/ws/t1/ok" || fs.copies[0][1] != "/ws/t1/.jarvis/skills/ok" {
-		t.Fatalf("only the valid skill should be copied; no path may escape the workspace, got %v", fs.copies)
+	if len(fs.copies) != 0 {
+		t.Fatalf("no skill may be copied pre-policy, got %v", fs.copies)
 	}
-	if merged == nil || merged.Skills != nil {
-		t.Fatalf("expected merged payload with skills cleared, got %+v", merged)
+	if len(out.Skills) != 2 {
+		t.Fatalf("raw Multica skill names preserved for agent gate: %+v", out.Skills)
 	}
-	_ = sc
+	// Only the valid name participates in L38 conflict detection.
+	if len(sc) != 1 || sc[0].Name != "ok" {
+		t.Fatalf("want conflict on ok only: %+v", sc)
+	}
 	_ = mc
 }
 

@@ -250,7 +250,7 @@ func writeInjectionAudit(a InjectionAudit, taskID string, denials []policy.Denia
 	for _, m := range allowed.MCPServers {
 		_ = a.Write(policy.InjectionAuditEntry{
 			TaskID: taskID, Source: "multica", Kind: "mcp", Name: m.Name,
-			Result: "allowed", Reason: "MCP_APPROVED",
+			Digest: m.Digest, Result: "allowed", Reason: "MCP_APPROVED",
 		})
 	}
 }

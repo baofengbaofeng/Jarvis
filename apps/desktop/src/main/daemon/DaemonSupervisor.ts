@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { InjectionApprovalClient } from './InjectionApprovalClient';
 
@@ -12,16 +13,30 @@ export interface ConcurrencyConfig {
   machine?: number;
 }
 
+/** Prefer an explicit env token; otherwise mint a per-process secret for SEC-09. */
+export function resolveDaemonAuthToken(env: NodeJS.ProcessEnv = process.env): string {
+  const existing = env.JARVIS_DAEMON_TOKEN?.trim();
+  if (existing) return existing;
+  return randomBytes(32).toString('hex');
+}
+
 // Pure helper so the env wiring is unit-testable without spawning a process.
 // The daemon reads JARVIS_CONCURRENCY_PER_AGENT / JARVIS_CONCURRENCY_MACHINE
 // to size its queue (M3 Task 9, C10: closes the Task 8 deferral so the
 // ConcurrencySettingsPage's save + daemon.restart actually takes effect).
-export function buildDaemonEnv(base: NodeJS.ProcessEnv, port: number, concurrency: ConcurrencyConfig): NodeJS.ProcessEnv {
+// JARVIS_DAEMON_TOKEN is always set so /v1 injection-approval routes can auth.
+export function buildDaemonEnv(
+  base: NodeJS.ProcessEnv,
+  port: number,
+  concurrency: ConcurrencyConfig,
+  token: string,
+): NodeJS.ProcessEnv {
   return {
     ...base,
     JARVIS_DAEMON_PORT: String(port),
     JARVIS_CONCURRENCY_PER_AGENT: String(concurrency.perAgent ?? DEFAULT_CONCURRENCY_PER_AGENT),
-    JARVIS_CONCURRENCY_MACHINE: String(concurrency.machine ?? DEFAULT_CONCURRENCY_MACHINE)
+    JARVIS_CONCURRENCY_MACHINE: String(concurrency.machine ?? DEFAULT_CONCURRENCY_MACHINE),
+    JARVIS_DAEMON_TOKEN: token,
   };
 }
 
@@ -145,6 +160,8 @@ export class DaemonSupervisor {
   private concurrencyProvider: (() => ConcurrencyConfig) | null = null;
   private runtimeStatusCache: RuntimeStatusData = { ...DEFAULT_RUNTIME_STATUS };
   private conflictsCache: ConflictItem[] = [];
+  /** Shared with the spawned daemon via JARVIS_DAEMON_TOKEN (SEC-09). */
+  private readonly authToken: string = resolveDaemonAuthToken();
 
   constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
 
@@ -157,7 +174,9 @@ export class DaemonSupervisor {
 
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
-    this.child = spawn(this.binaryPath, [], { env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}) });
+    this.child = spawn(this.binaryPath, [], {
+      env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}, this.authToken),
+    });
     this.child.on('error', () => { this.healthy = false; this.resetRuntimeCache(); this.child = null; });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
     void this.poller.start(() => { this.healthy = true; onReady?.(); });
@@ -188,8 +207,7 @@ export class DaemonSupervisor {
   getRuntimeConflicts(): ConflictItem[] { return [...this.conflictsCache]; }
 
   injectionApprovalClient(): InjectionApprovalClient {
-    const token = process.env.JARVIS_DAEMON_TOKEN ?? '';
-    return new InjectionApprovalClient(`http://127.0.0.1:${this.port}`, token);
+    return new InjectionApprovalClient(`http://127.0.0.1:${this.port}`, this.authToken);
   }
 
   private resetRuntimeCache(): void {
