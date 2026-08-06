@@ -111,5 +111,3 @@ export interface DiagnosticsReport {
   checkedAt: string;
   items: Array<{ id: string; ok: boolean; detail: string }>;
 }
-
-export { ALLOWED_INVOKE, ALLOWED_EVENTS, assertAllowedInvoke, assertAllowedEvent } from './ipc-allowlist';

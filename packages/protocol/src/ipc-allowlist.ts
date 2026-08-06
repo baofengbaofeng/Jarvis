@@ -1,4 +1,4 @@
-import { IpcChannel, IpcEvent } from './index';
+import { IpcChannel, IpcEvent } from './ipc-channels';
 
 /** Renderer may invoke only these IPC channels (preload gate). */
 export const ALLOWED_INVOKE = new Set<string>([
@@ -17,13 +17,22 @@ export const ALLOWED_INVOKE = new Set<string>([
   IpcChannel.taskCreate,
   IpcChannel.taskCancel,
   IpcChannel.taskPause,
+  IpcChannel.taskResume,
+  IpcChannel.taskRollback,
   IpcChannel.taskRetry,
+  IpcChannel.approvalResolve,
   IpcChannel.chatSend,
+  IpcChannel.chatListSessions,
+  IpcChannel.chatCreateSession,
+  IpcChannel.chatLoadMessages,
+  IpcChannel.squadStart,
+  IpcChannel.squadCurrent,
   IpcChannel.daemonStatus,
   IpcChannel.daemonRestart,
   'dialog.pickPath',
   IpcChannel.diagnosticsRun,
   IpcChannel.envInfo,
+  IpcChannel.taskboardList,
   'shortcuts.get',
   'shortcuts.set',
   'agent-templates.list',
@@ -108,6 +117,7 @@ export const ALLOWED_EVENTS = new Set<string>([
   IpcEvent.squadStatus,
   IpcEvent.squadEvent,
   IpcEvent.toastPush,
+  IpcEvent.approvalRequest,
 ]);
 
 export function assertAllowedInvoke(channel: string): void {

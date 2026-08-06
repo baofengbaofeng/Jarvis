@@ -17,7 +17,13 @@ describe('protocol contract', () => {
   });
   it('IpcChannel values are on the preload invoke allowlist', () => {
     for (const ch of Object.values(IpcChannel)) {
-      if (ch === IpcChannel.secretsGet || ch === IpcChannel.secretsSet || ch === IpcChannel.secretsDelete) continue;
+      // secrets.* stay main-only; dialog.openFile is replaced by dialog.pickPath (SEC-02).
+      if (
+        ch === IpcChannel.secretsGet ||
+        ch === IpcChannel.secretsSet ||
+        ch === IpcChannel.secretsDelete ||
+        ch === IpcChannel.dialogOpenFile
+      ) continue;
       expect(ALLOWED_INVOKE.has(ch)).toBe(true);
     }
   });

@@ -80,6 +80,13 @@ describe('IpcRouter code index channels (E1/L27)', () => {
 
     const ws = mkdtempSync(join(tmpdir(), 'jarvis-ipc-idx-'));
     try {
+      // SEC-07 / workspace-path-guard: reindex only accepts bound workspace roots.
+      createAgentStore(db).create({
+        name: 'idx',
+        systemPrompt: 'x',
+        modelId: null,
+        workspaceId: ws,
+      });
       writeFileSync(join(ws, 'add.ts'), 'export function add(a: number, b: number) { return a + b; }');
       const r = await reindex({}, { workspaceRoot: ws }) as { ok: boolean; indexed: number };
       expect(r.ok).toBe(true);
