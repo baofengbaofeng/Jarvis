@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Panel, Select, Textarea } from '@jarvis/ui';
+import { Button, Input, Panel, Textarea } from '@jarvis/ui';
 import { useAgentStore } from '../stores/agent-store';
 
 export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; onClose: () => void }) {

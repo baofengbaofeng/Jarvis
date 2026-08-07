@@ -5,7 +5,6 @@ import {
   AgentEngine,
   ToolRegistry,
   createAdapter,
-  createGuard,
   createApprovalGate,
   createFileTools,
   createShellTool,

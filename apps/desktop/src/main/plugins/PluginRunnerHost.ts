@@ -30,8 +30,8 @@ export interface UtilityChild {
   on(event: 'exit', listener: (code: number) => void): unknown;
   on(event: 'error', listener: (err: Error) => void): unknown;
   on(event: 'spawn', listener: () => void): unknown;
-  removeListener?(event: string, listener: (...args: never[]) => void): unknown;
-  off?(event: string, listener: (...args: never[]) => void): unknown;
+  removeListener?(event: string, listener: (...args: unknown[]) => void): unknown;
+  off?(event: string, listener: (...args: unknown[]) => void): unknown;
 }
 
 export interface PluginForkOptions {

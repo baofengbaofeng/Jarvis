@@ -90,7 +90,7 @@ describe('OfficePage', () => {
   });
 
   it('surfaces a per-file analyze error inline', async () => {
-    const invoke = vi.fn(async (m: string, args?: unknown) => {
+    const invoke = vi.fn(async (m: string, _args?: unknown) => {
       if (m === 'dialog.pickPath') {
         return [{ token: 'cap-broken', name: 'broken.docx', kind: 'file', sizeBytes: 1, expiresAt: 1 }];
       }

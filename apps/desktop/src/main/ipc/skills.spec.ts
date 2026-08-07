@@ -9,7 +9,7 @@ import { createSkillsStore } from './skills';
 describe('createSkillsStore', () => {
   let db: Database.Database;
   let root: string;
-  const agents = { list: () => [] as Array<{ workspaceId?: string | null }> };
+  const agents = { list: () => [] as import('@jarvis/protocol').AgentConfig[] };
 
   beforeEach(() => {
     db = new Database(':memory:');

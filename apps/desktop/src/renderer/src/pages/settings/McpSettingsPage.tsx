@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, PageHeader, Panel, Select } from '@jarvis/ui';
+import { Button, Input, PageHeader, Panel } from '@jarvis/ui';
 
 interface McpServerRow { id: string; name: string; transport: string; config: { command?: string; args?: string[]; agentIds?: string[] } }
 interface AgentOption { id: string; name: string }

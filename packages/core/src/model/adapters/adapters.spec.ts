@@ -35,14 +35,14 @@ describe('openai adapter', () => {
       capturedBody = JSON.parse(String(init?.body));
       return (await mockFetch(['data: [DONE]'])()) as unknown as Response;
     };
-    const adapter = createAdapter('openai-compatible', { fetchImpl });
+    const adapter = createAdapter('openai-compatible', { fetchImpl: fetchImpl as typeof fetch });
     const req: ChatRequest = {
       provider: { id: 'p1', name: 'p', type: 'openai-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
       modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true,
       tools: [{ name: 'get_weather', description: 'weather', parameters: { type: 'object', properties: {} } }]
     };
     await adapter.chat(req, { apiKey: 'sk-test', onChunk: () => {} });
-    expect((capturedBody as { tools?: Array<{ function: { name: string } }> }).tools?.[0]?.function?.name).toBe('get_weather');
+    expect((capturedBody as unknown as { tools?: Array<{ function: { name: string } }> }).tools?.[0]?.function?.name).toBe('get_weather');
   });
 
   it('accumulates multi-delta tool calls into one well-formed chunk', async () => {

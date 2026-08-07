@@ -14,7 +14,6 @@ import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
 import { openMainWindow } from './mainWindowLifecycle';
 import { DaemonSupervisor } from './daemon/DaemonSupervisor';
-import type { IpcRouter } from './ipc/IpcRouter';
 import { SecureStorage } from './secrets/SecureStorage';
 import { SearchSecretMigration } from './search/SearchSecretMigration';
 import { pluginRunner } from './plugins/PluginRunnerHost';

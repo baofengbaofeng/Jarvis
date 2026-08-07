@@ -76,6 +76,6 @@ describe('AgentEngine', () => {
     };
     const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 1 });
     await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
-    expect(captured?.tools?.map(t => t.name)).toEqual(['echo']);
+    expect(captured!.tools?.map((t: { name: string }) => t.name)).toEqual(['echo']);
   });
 });

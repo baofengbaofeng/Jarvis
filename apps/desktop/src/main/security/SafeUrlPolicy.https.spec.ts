@@ -36,7 +36,7 @@ function emitResponse(
   httpsRequestMock.mockImplementationOnce((options, callback: (incoming: IncomingMessage) => void) => {
     const req = new EventEmitter() as ClientRequest & EventEmitter;
     req.write = vi.fn();
-    req.end = vi.fn(() => {
+    req.end = vi.fn(function (this: ClientRequest & EventEmitter) {
       const run = () => {
         if (options.signal?.aborted) {
           req.emit('error', new Error('aborted'));
@@ -59,7 +59,8 @@ function emitResponse(
       };
       if (opts.delayMs) setTimeout(run, opts.delayMs);
       else run();
-    });
+      return this;
+    }) as ClientRequest['end'];
     req.destroy = vi.fn();
     req.on = req.addListener.bind(req);
     return req;
@@ -128,9 +129,10 @@ describe('SafeUrlPolicy (https.request path)', () => {
     httpsRequestMock.mockImplementationOnce((_options, _callback) => {
       const req = new EventEmitter() as ClientRequest & EventEmitter;
       req.write = vi.fn();
-      req.end = vi.fn(() => {
+      req.end = vi.fn(function (this: ClientRequest & EventEmitter) {
         setTimeout(() => req.emit('error', new Error('ECONNRESET')), 50);
-      });
+        return this;
+      }) as ClientRequest['end'];
       req.destroy = vi.fn();
       req.on = req.addListener.bind(req);
       return req;
@@ -148,7 +150,7 @@ describe('SafeUrlPolicy (https.request path)', () => {
     expect(lookup).toHaveBeenCalledTimes(1);
     const options = httpsRequestMock.mock.calls[0]![0] as { lookup: (...a: unknown[]) => void };
     await new Promise<void>((resolve, reject) => {
-      options.lookup('public.example', {}, (err, address) => {
+      options.lookup('public.example', {}, (err: NodeJS.ErrnoException | null, address: string) => {
         try {
           expect(err).toBeNull();
           expect(address).toBe('203.0.113.10');

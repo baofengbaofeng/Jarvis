@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactFlow, { Background, Controls, type Edge, type Node, type Connection, addEdge, useEdgesState, useNodesState } from 'reactflow';
+import ReactFlow, { Background, Controls, type Edge, type Connection, addEdge, useEdgesState, useNodesState } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button, EmptyState, Input, PageHeader, Panel, Select } from '@jarvis/ui';
 import { useWorkflowStore } from '../../stores/workflow-store';
@@ -36,7 +36,7 @@ export function WorkflowEditor() {
   const { t } = useTranslation('common');
   const { nodes, edges, agents, outputs, loadAgents, addNode, removeNode, connect, setInput, run } = useWorkflowStore();
   const [view, setView] = useState<'list' | 'graph'>('list');
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>([]);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<{ label: string }>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => { void loadAgents(); }, [loadAgents]);

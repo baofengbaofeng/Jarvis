@@ -114,14 +114,14 @@ export function PdfReaderPage() {
   return (
     <Panel data-testid="pdf-reader" className="pdf-reader">
       <div className="pdf-reader__toolbar">
-        <Button data-testid="pdf-pick" type="button" variant="secondary" onClick={() => void pickFile()} disabled={loading}>
+        <Button data-testid="pdf-pick" type="button" variant="ghost" onClick={() => void pickFile()} disabled={loading}>
           {picked?.name ?? t('pdf.pickFile')}
         </Button>
-        <Button data-testid="pdf-open" variant="secondary" onClick={() => void load()} disabled={!hasFile || loading}>{t('pdf.open')}</Button>
+        <Button data-testid="pdf-open" variant="ghost" onClick={() => void load()} disabled={!hasFile || loading}>{t('pdf.open')}</Button>
       </div>
       <div className="pdf-reader__toolbar">
-        <Button data-testid="pdf-summarize-page" variant="secondary" onClick={summarizePage} disabled={!hasFile || loading || !pages}>{t('pdf.summarizePage')}</Button>
-        <Button data-testid="pdf-summarize" variant="secondary" onClick={summarizeAll} disabled={!hasFile || loading || !pages}>{t('pdf.summarize')}</Button>
+        <Button data-testid="pdf-summarize-page" variant="ghost" onClick={summarizePage} disabled={!hasFile || loading || !pages}>{t('pdf.summarizePage')}</Button>
+        <Button data-testid="pdf-summarize" variant="ghost" onClick={summarizeAll} disabled={!hasFile || loading || !pages}>{t('pdf.summarize')}</Button>
       </div>
       <canvas ref={canvasRef} data-testid="pdf-canvas" className="pdf-reader__canvas" />
       {pages > 0 && (

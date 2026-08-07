@@ -5,7 +5,7 @@ import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
 import { AgentDetailPage } from './AgentDetailPage';
 
-const invoke = vi.fn(async (m: string, ...args: unknown[]) => {
+const invoke = vi.fn(async (m: string, ..._args: unknown[]) => {
   if (m === 'dialog.pickPath') return [{ token: 'cap-ws', name: 'my-project', kind: 'directory', sizeBytes: 0, expiresAt: 1 }];
   if (m === 'agent.create') return { id: 'new-agent', name: 'Test', slug: 'test', description: '', systemPrompt: '', modelId: null, workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' };
   if (m === 'workspace.bind') return { ok: true };
