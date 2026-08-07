@@ -2,13 +2,11 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { makeTempWorkspace, removeTempWorkspace } from '../helpers/fixtures';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 import { seedChatStack } from '../helpers/seed-chat-stack';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -33,7 +31,7 @@ test('07-coding P0: coding panel shows file tree for bound workspace', async () 
       await window.jarvis.invoke('agent.update', id, { workspaceId: path });
     }, { id: agentId, path: workspaceDir });
 
-    await window.goto(`${RENDERER_URL}/coding`);
+    await window.goto(rendererHref('/coding'));
     const panel = window.getByTestId('coding-panel');
     await panel.waitFor({ timeout: 30_000 });
     await expect(panel.getByTestId('file-tree').first()).toBeVisible();
@@ -82,7 +80,7 @@ test('07-coding P1: diff hunk accept when task snapshot seeded', async () => {
       `diff.read did not report changes (ok=${diffProbe.ok} changed=${diffProbe.changed} err=${diffProbe.error ?? ''})`,
     ).toBeTruthy();
 
-    await window.goto(`${RENDERER_URL}/coding`);
+    await window.goto(rendererHref('/coding'));
     const panel = window.getByTestId('coding-panel');
     await panel.waitFor({ timeout: 30_000 });
 

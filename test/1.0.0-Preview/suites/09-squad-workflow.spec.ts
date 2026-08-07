@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 import { seedChatStack } from '../helpers/seed-chat-stack';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test('09-squad P0: squad view renders', async () => {
   const dataDir = createIsolatedDataDir();
@@ -13,7 +11,7 @@ test('09-squad P0: squad view renders', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/squad`);
+    await window.goto(rendererHref('/squad'));
     await expect(window.getByTestId('squad-view')).toBeVisible({ timeout: 30_000 });
   } finally {
     await closeJarvisElectron(app);
@@ -27,7 +25,7 @@ test('09-squad P0: workflow editor renders', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/workflow`);
+    await window.goto(rendererHref('/workflow'));
     await expect(window.getByTestId('workflow-editor')).toBeVisible({ timeout: 30_000 });
   } finally {
     await closeJarvisElectron(app);
@@ -41,7 +39,7 @@ test('09-squad P0: squad create form exposes fields', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/squad`);
+    await window.goto(rendererHref('/squad'));
     await window.getByTestId('squad-view').waitFor({ timeout: 30_000 });
     await window.getByTestId('squad-new').click();
     await expect(window.getByTestId('squad-create-form')).toBeVisible();
@@ -73,7 +71,7 @@ test('09-squad P1: squad create submit does not crash with seeded agents', async
     await window.reload();
     await window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
 
-    await window.goto(`${RENDERER_URL}/squad`);
+    await window.goto(rendererHref('/squad'));
     await window.getByTestId('squad-view').waitFor({ timeout: 30_000 });
     await window.getByTestId('squad-new').click();
     await window.getByTestId('squad-create-form').waitFor();

@@ -10,7 +10,13 @@ const ELECTRON_EXECUTABLE = require('electron') as string;
 const HELPERS_DIR = dirname(fileURLToPath(import.meta.url));
 const DESKTOP_ROOT = join(HELPERS_DIR, '../..');
 const MAIN_ENTRY = join(DESKTOP_ROOT, 'out/main/index.js');
-const RENDERER_URL = process.env.JARVIS_E2E_RENDERER_URL ?? 'http://127.0.0.1:5173';
+const RENDERER_ORIGIN = process.env.JARVIS_E2E_RENDERER_URL ?? 'http://127.0.0.1:5173';
+
+export function rendererHref(path = '/'): string {
+  const origin = RENDERER_ORIGIN.replace(/\/$/, '');
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${origin}/#${normalized}`;
+}
 
 let portSeq = 17900;
 
@@ -41,7 +47,7 @@ export async function launchJarvisElectron(dataDir?: string): Promise<LaunchedJa
       JARVIS_E2E: '1',
       JARVIS_DATA_DIR: isolated,
       JARVIS_DAEMON_PORT: String(daemonPort),
-      ELECTRON_RENDERER_URL: RENDERER_URL,
+      ELECTRON_RENDERER_URL: RENDERER_ORIGIN,
       NODE_ENV: 'test',
     },
   });
@@ -51,7 +57,7 @@ export async function launchJarvisElectron(dataDir?: string): Promise<LaunchedJa
 }
 
 export async function completeOnboarding(window: Page): Promise<void> {
-  await window.goto(`${RENDERER_URL}/onboarding`);
+  await window.goto(rendererHref('/onboarding'));
   await window.getByTestId('onboarding').waitFor({ timeout: 30_000 });
   await window.getByTestId('onboarding-next').click();
   await window.getByTestId('onboarding-next').click();

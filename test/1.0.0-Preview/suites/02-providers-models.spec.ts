@@ -1,10 +1,8 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test('02-providers: create provider, add model, delete', async () => {
   const mock = await startMockOpenAIProvider();
@@ -16,7 +14,7 @@ test('02-providers: create provider, add model, delete', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/settings/providers`);
+    await window.goto(rendererHref('/settings/providers'));
     await window.getByTestId('provider-settings').waitFor({ timeout: 30_000 });
 
     await window.getByTestId('provider-add-open').click();

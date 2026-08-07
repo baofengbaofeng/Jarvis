@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron } from '../helpers/electron-app';
 import { startMockOpenAIProvider, fetchMockHealth } from '../helpers/mock-provider';
 
 test('helpers: launch + bridge + mock health', async () => {

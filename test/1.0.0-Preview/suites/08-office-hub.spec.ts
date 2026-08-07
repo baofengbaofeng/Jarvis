@@ -1,11 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 import { seedChatStack } from '../helpers/seed-chat-stack';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 const REPLY_TEXT = 'func-office-writing-08';
 
 /** Tab id → panel testid asserted after click (writing is also default on load). */
@@ -28,7 +26,7 @@ async function clickOfficeTab(window: Page, tab: string, panel: string, skipReas
   if (visible) return;
   if (skipReason) {
     // Lazy-import failures trip the error boundary — reload so later tabs stay clickable.
-    await window.goto(`${RENDERER_URL}/office`);
+    await window.goto(rendererHref('/office'));
     await window.getByTestId('office-page').waitFor({ timeout: 30_000 });
     test.info().annotations.push({ type: 'skip-tab', description: `${tab}: ${skipReason}` });
     return;
@@ -42,7 +40,7 @@ test('08-office P0: office hub tabs mount expected panels', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/office`);
+    await window.goto(rendererHref('/office'));
     await window.getByTestId('office-page').waitFor({ timeout: 30_000 });
     await expect(window.getByTestId('writing-view')).toBeVisible();
 
@@ -66,7 +64,7 @@ test('08-office P1: writing polish updates text via mock provider', async () => 
     await window.reload();
     await window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
 
-    await window.goto(`${RENDERER_URL}/office`);
+    await window.goto(rendererHref('/office'));
     await window.getByTestId('office-page').waitFor({ timeout: 30_000 });
     await window.getByTestId('writing-text').fill('rough draft for polish');
     await window.getByTestId('writing-polish').click();
@@ -91,7 +89,7 @@ test('08-office P1: writing live translate shows result region', async () => {
     await window.reload();
     await window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
 
-    await window.goto(`${RENDERER_URL}/office`);
+    await window.goto(rendererHref('/office'));
     await window.getByTestId('office-page').waitFor({ timeout: 30_000 });
     await window.getByTestId('writing-live').check();
     // translateWhileTyping only translates completed paragraphs (split on blank lines).

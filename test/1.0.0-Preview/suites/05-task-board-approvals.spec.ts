@@ -1,13 +1,11 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 import { seedChatStack } from '../helpers/seed-chat-stack';
 
 const BOARD_COLUMNS = ['queued', 'running', 'paused', 'completed', 'failed', 'cancelled'] as const;
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -18,7 +16,7 @@ test('05-board P0: task board columns render', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/board`);
+    await window.goto(rendererHref('/board'));
     await window.getByTestId('task-board').waitFor({ timeout: 30_000 });
     for (const status of BOARD_COLUMNS) {
       await expect(window.getByTestId(`col-${status}`)).toBeVisible();
@@ -53,7 +51,7 @@ test('05-board P0/P1: task.create shows card or control bar status', async () =>
     if (controlVisible) {
       await expect(window.getByTestId('task-status')).toBeVisible({ timeout: 15_000 });
     } else {
-      await window.goto(`${RENDERER_URL}/board`);
+      await window.goto(rendererHref('/board'));
       await window.getByTestId('task-board').waitFor({ timeout: 30_000 });
       await expect(window.getByTestId('task-card').filter({ hasText: taskId })).toBeVisible({ timeout: 30_000 });
     }

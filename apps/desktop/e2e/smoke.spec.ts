@@ -33,7 +33,7 @@ test('app boots and shows chat page when onboarding done', async ({ page }) => {
   // Deterministic regardless of persisted onboarding state: enter the
   // onboarding route directly (the "/" route redirects to "/onboarding" when
   // onboarding_done is falsy), walk the 3-step wizard, then finish.
-  await page.goto('/onboarding');
+  await page.goto('/#/onboarding');
   await page.waitForSelector('[data-testid="onboarding"]', { timeout: 15_000 });
   await page.getByTestId('onboarding-next').click();
   await page.getByTestId('onboarding-next').click();
@@ -44,7 +44,7 @@ test('app boots and shows chat page when onboarding done', async ({ page }) => {
 });
 
 test('settings page opens and language toggles', async ({ page }) => {
-  await page.goto('/settings/providers');
+  await page.goto('/#/settings/providers');
   await page.waitForSelector('[data-testid="provider-settings"]', { timeout: 15_000 });
   await page.getByTestId('language-switcher').selectOption('en');
   await expect(page.locator('[data-testid="provider-settings"] h2')).toHaveText('Provider Management');
