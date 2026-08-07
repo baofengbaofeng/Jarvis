@@ -157,6 +157,19 @@ export function createRuntimePoller(opts: RuntimePollerOptions) {
   };
 }
 
+export function defaultDaemonBinaryPath(
+  dirname = import.meta.dirname,
+  platform: NodeJS.Platform = process.platform,
+  packaged = false,
+  resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '',
+): string {
+  const name = platform === 'win32' ? 'jarvis-daemon.exe' : 'jarvis-daemon';
+  if (packaged && resourcesPath) {
+    return join(resourcesPath, 'daemon', name);
+  }
+  return join(dirname, '../../../resources/daemon', name);
+}
+
 export class DaemonSupervisor {
   private child: ChildProcess | null = null;
   private poller: ReturnType<typeof createHealthPoller> | null = null;
@@ -169,7 +182,7 @@ export class DaemonSupervisor {
   /** Shared with the spawned daemon via JARVIS_DAEMON_TOKEN (SEC-09). */
   private readonly authToken: string = resolveDaemonAuthToken();
 
-  constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
+  constructor(private binaryPath = defaultDaemonBinaryPath()) {}
 
   // C10: lets the main process hand the supervisor a live reader for the saved
   // settings.concurrency value, so every spawn/restart injects the current

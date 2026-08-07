@@ -80,3 +80,15 @@ describe('resolveDaemonAuthToken', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('defaultDaemonBinaryPath (BUILD-04)', () => {
+  it('appends .exe on win32', async () => {
+    const { defaultDaemonBinaryPath: pathFor } = await import('./DaemonSupervisor');
+    expect(pathFor('/app/out/main', 'win32')).toMatch(/jarvis-daemon\.exe$/);
+  });
+
+  it('uses process.resourcesPath when packaged', async () => {
+    const { defaultDaemonBinaryPath: pathFor } = await import('./DaemonSupervisor');
+    expect(pathFor('/x', 'linux', true, '/Resources')).toBe('/Resources/daemon/jarvis-daemon');
+  });
+});

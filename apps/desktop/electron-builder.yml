@@ -5,10 +5,14 @@ directories:
   buildResources: resources
 files:
   - out/**
-  - resources/**
   - package.json
 asar: true
 npmRebuild: true
+extraResources:
+  - from: resources/daemon
+    to: daemon
+    filter:
+      - '**/*'
 
 win:
   target:
