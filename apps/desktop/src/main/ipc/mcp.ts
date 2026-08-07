@@ -1,7 +1,15 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
-import { createMcpClient, registerMcpTools, type McpClient, type SpawnImpl, type ToolRegistry } from '@jarvis/core';
+import {
+  createMcpClient,
+  registerMcpTools,
+  createMcpToolFilter,
+  filterToolsForMcpBindings,
+  type McpClient,
+  type SpawnImpl,
+  type ToolRegistry,
+} from '@jarvis/core';
 
 export interface McpServerInput {
   name: string;
@@ -112,18 +120,53 @@ export async function testMcpServerById(
 
 export interface McpRegistrationDeps { spawnImpl?: SpawnImpl }
 
+/** CORE-20: server names bound to this agent via config_json.agentIds. */
+export function listBoundMcpServerNames(db: Database.Database, agentId: string): string[] {
+  const rows = db.prepare('SELECT name, config_json FROM mcp_servers').all() as Array<{ name: string; config_json: string }>;
+  const names: string[] = [];
+  for (const s of rows) {
+    const cfg = JSON.parse(s.config_json ?? '{}') as { agentIds?: string[] };
+    if (cfg.agentIds?.includes(agentId)) names.push(s.name);
+  }
+  return names;
+}
+
+/**
+ * CORE-20: build run-scoped MCP visibility from agent bindings (transport cache
+ * stays shared; authorization is per-run).
+ */
+export function mcpVisibilityForAgent(db: Database.Database, agentId: string, allToolNames: string[]): {
+  visibleTools: string[];
+  toolFilter: (name: string) => boolean;
+  boundServers: string[];
+} {
+  const boundServers = listBoundMcpServerNames(db, agentId);
+  return {
+    boundServers,
+    visibleTools: filterToolsForMcpBindings(allToolNames, boundServers),
+    toolFilter: createMcpToolFilter(boundServers),
+  };
+}
+
 // G6: spawn each MCP server bound to the agent (config_json.agentIds) and
 // register its tools into the engine registry under mcp:{server}:{tool}.
 // stdio is the only transport createMcpClient supports today; sse/http are
 // deferred. The client is cached per server id so subsequent task runs reuse
 // the same child process instead of leaking one per run; a config change after
 // first registration requires an app restart (documented in the task report).
+// CORE-20: cache is transport-only — per-agent visibility is applied at run
+// submit via mcpVisibilityForAgent / toolFilter, not by mutating the registry.
 export async function registerAgentMcpTools(db: Database.Database, toolRegistry: ToolRegistry, agentId: string, deps: McpRegistrationDeps = {}): Promise<void> {
   const rows = db.prepare('SELECT id, name, transport, config_json FROM mcp_servers').all() as Array<{ id: string; name: string; transport: string; config_json: string }>;
   for (const s of rows) {
     const cfg = JSON.parse(s.config_json ?? '{}') as { command?: string; args?: string[]; agentIds?: string[] };
     if (s.transport !== 'stdio' || !cfg.command || !cfg.agentIds?.includes(agentId)) continue;
-    if (mcpClientCache.has(s.id)) continue; // already spawned + registered
+    if (mcpClientCache.has(s.id)) {
+      // Already spawned — ensure tools are present (idempotent under CORE-07).
+      const cached = mcpClientCache.get(s.id)!;
+      await registerMcpTools(toolRegistry, cached.client, s.name);
+      continue;
+    }
     let client: McpClient | undefined;
     try {
       assertMcpCommand(cfg.command, cfg.args ?? []);

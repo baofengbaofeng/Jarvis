@@ -243,4 +243,44 @@ describe('AgentEngine', () => {
     expect(seen).toContainEqual(['echo']);
     expect(seen).toContainEqual(['write_file']);
   });
+
+  it('applies run-scoped toolFilter for visibility and execute (CORE-20)', async () => {
+    const reg = new ToolRegistry();
+    const executed: string[] = [];
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => {
+      executed.push('echo');
+      return { ok: true, output: 'echo-ok' };
+    });
+    reg.register({ name: 'mcp:fs:read', description: '', parameters: {} }, async () => {
+      executed.push('mcp:fs:read');
+      return { ok: true, output: 'secret' };
+    });
+    reg.register({ name: 'mcp:other:x', description: '', parameters: {} }, async () => {
+      executed.push('mcp:other:x');
+      return { ok: true, output: 'leaked' };
+    });
+    const seenTools: string[][] = [];
+    let step = 0;
+    const chat = async (req: { tools?: Array<{ name: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seenTools.push((req.tools ?? []).map(t => t.name).sort());
+      step++;
+      if (step === 1) {
+        // Model tries an unbound MCP tool — must be denied without executing.
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'mcp:other:x', arguments: {} }] });
+      } else {
+        opts.onChunk?.({ kind: 'delta', delta: 'done' });
+        opts.onChunk?.({ kind: 'done' });
+      }
+      return { text: step === 1 ? '' : 'done', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 3 });
+    const filter = (name: string) => !name.startsWith('mcp:') || name.startsWith('mcp:fs:');
+    await engine.run({
+      agent, messages: [{ role: 'user', content: 'go' }], cwd: '/', env: {}, apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1',
+      toolFilter: filter,
+    });
+    expect(seenTools[0]).toEqual(['echo', 'mcp:fs:read']);
+    expect(executed).not.toContain('mcp:other:x');
+  });
 });

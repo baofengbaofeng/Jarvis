@@ -36,6 +36,9 @@ export interface EngineRunInput {
   // CORE-19: per-run tool visibility (plan-only filter, etc.). Must not live on
   // the shared engine instance — concurrent tasks would race a mutable field.
   visibleTools?: string[];
+  // CORE-20: run-scoped authorization predicate (e.g. MCP agent bindings).
+  // Tools that fail the filter are hidden from the model and not executable.
+  toolFilter?: (name: string) => boolean;
   // CORE-22: cooperative pause — resolves when the run is not paused (or when
   // resumed). Awaited before each model step and each tool execution.
   waitIfPaused?: () => Promise<void>;
@@ -46,7 +49,7 @@ export class AgentEngine {
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
 
   async run(input: EngineRunInput): Promise<TaskResult> {
-    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy, visibleTools, waitIfPaused } = input;
+    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy, visibleTools, toolFilter, waitIfPaused } = input;
     const working: ModelMessage[] = [...messages];
     let toolCalls = 0;
     const usageParts: Usage[] = [];
@@ -57,10 +60,12 @@ export class AgentEngine {
       await waitIfPaused?.();
       if (signal?.aborted) throw new Error('aborted');
       const allTools = this.cfg.toolRegistry.list();
-      // CORE-19: filter from this run's input, not shared engine state.
-      const visible = visibleTools
-        ? allTools.filter(t => visibleTools.includes(t.name))
-        : allTools;
+      // CORE-19 / CORE-20: filter from this run's input, not shared engine state.
+      const visible = allTools.filter(t => {
+        if (visibleTools && !visibleTools.includes(t.name)) return false;
+        if (toolFilter && !toolFilter(t.name)) return false;
+        return true;
+      });
       const req: ChatRequest = {
         provider: { id: agent.id, name: agent.name, type: input.provider.type, baseUrl: input.provider.baseUrl, apiKeyRef: '', createdAt: '', updatedAt: '' },
         modelId: input.modelId,
@@ -113,6 +118,15 @@ export class AgentEngine {
         // the parse error back to the model as a tool result and skip execute.
         if (call.argumentsParseError) {
           const output = `[invalid arguments] ${call.argumentsParseError}`;
+          const result = { ok: false, output };
+          onTool?.(call, result);
+          working.push(toolResult(call, output));
+          continue;
+        }
+        // CORE-19 / CORE-20: enforce run-scoped visibility at execute time too
+        // (model may still emit a tool name that was filtered from the request).
+        if ((visibleTools && !visibleTools.includes(call.name)) || (toolFilter && !toolFilter(call.name))) {
+          const output = `[denied] ${call.name} not allowed for this run`;
           const result = { ok: false, output };
           onTool?.(call, result);
           working.push(toolResult(call, output));

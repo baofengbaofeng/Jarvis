@@ -27,6 +27,8 @@ export interface SubmitInput {
   policy?: SandboxPolicy;
   // CORE-19: per-run tool visibility forwarded to EngineRunInput.
   visibleTools?: string[];
+  // CORE-20: run-scoped MCP/agent tool authorization predicate.
+  toolFilter?: (name: string) => boolean;
 }
 
 export interface TaskOrchestratorCallbacks {
