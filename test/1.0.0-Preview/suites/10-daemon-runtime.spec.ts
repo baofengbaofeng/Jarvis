@@ -29,5 +29,6 @@ test('10-daemon P0: status page shows management and running state', async () =>
 });
 
 test('10-daemon P2: injection approvals require Multica harness', async () => {
-  test.skip(true, 'injection approvals / Multica — no harness in functional suite');
+  test.skip(!process.env.JARVIS_FUNC_DEEP, 'injection approvals / Multica require JARVIS_FUNC_DEEP');
+  throw new Error('Multica injection-approval harness not wired in functional suite');
 });

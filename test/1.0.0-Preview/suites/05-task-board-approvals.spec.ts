@@ -81,10 +81,7 @@ test('05-board P1: approval modal under mock path', async () => {
 
     const approval = window.getByTestId('approval-modal');
     const appeared = await approval.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false);
-    if (!appeared) {
-      test.skip(true, 'no approval:request under mock reply');
-      return;
-    }
+    expect(appeared).toBeTruthy();
     const deny = window.getByTestId('approval-deny');
     const approve = window.getByTestId('approval-approve');
     if (await deny.isVisible()) await deny.click();
@@ -98,5 +95,6 @@ test('05-board P1: approval modal under mock path', async () => {
 });
 
 test('05-board P2: Multica harness', () => {
-  test.skip(true, 'Multica harness not in 1.0.0-Preview suite');
+  test.skip(!process.env.JARVIS_FUNC_DEEP, 'Multica harness requires JARVIS_FUNC_DEEP');
+  throw new Error('Multica harness not wired in 1.0.0-Preview functional suite');
 });

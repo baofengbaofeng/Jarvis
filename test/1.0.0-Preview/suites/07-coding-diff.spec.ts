@@ -77,10 +77,10 @@ test('07-coding P1: diff hunk accept when task snapshot seeded', async () => {
       };
     }, { id: taskId, rel: 'src/a.ts' });
 
-    if (!diffProbe.ok || !diffProbe.changed) {
-      test.skip(true, `diff.read did not report changes (ok=${diffProbe.ok} changed=${diffProbe.changed} err=${diffProbe.error ?? ''})`);
-      return;
-    }
+    expect(
+      diffProbe.ok && diffProbe.changed,
+      `diff.read did not report changes (ok=${diffProbe.ok} changed=${diffProbe.changed} err=${diffProbe.error ?? ''})`,
+    ).toBeTruthy();
 
     await window.goto(`${RENDERER_URL}/coding`);
     const panel = window.getByTestId('coding-panel');
@@ -103,19 +103,13 @@ test('07-coding P1: diff hunk accept when task snapshot seeded', async () => {
       return false;
     }, taskId);
 
-    if (!storeSet) {
-      test.skip(true, 'cannot set activeTaskId via task-store import — no diff UI seed path');
-      return;
-    }
+    expect(storeSet).toBeTruthy();
 
     await panel.getByTestId('tree-file').filter({ hasText: 'a.ts' }).click();
 
     const accept = window.getByTestId('hunk-0-accept');
     const hasHunk = await accept.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true).catch(() => false);
-    if (!hasHunk) {
-      test.skip(true, 'diff panel mounted but hunk-0-accept not visible after IPC reported changes');
-      return;
-    }
+    expect(hasHunk).toBeTruthy();
 
     await accept.click();
     await window.getByTestId('diff-commit').click();

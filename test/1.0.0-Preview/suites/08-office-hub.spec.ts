@@ -99,10 +99,7 @@ test('08-office P1: writing live translate shows result region', async () => {
 
     const liveResult = window.getByTestId('writing-live-result');
     const appeared = await liveResult.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false);
-    if (!appeared) {
-      test.skip(true, 'writing-live-result did not appear — translate debounce or model binding unavailable');
-      return;
-    }
+    expect(appeared).toBeTruthy();
     await expect.poll(async () => liveResult.textContent(), { timeout: 60_000 }).toContain(REPLY_TEXT);
   } finally {
     await closeJarvisElectron(app);

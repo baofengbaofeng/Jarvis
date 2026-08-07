@@ -52,10 +52,7 @@ test('03-agents: create from template', async () => {
       return (await window.jarvis.invoke('agent-templates.list')) as Array<{ id: string }>;
     });
 
-    if (templates.length === 0) {
-      test.skip(true, 'agent-templates.list returned empty — no seed templates in fresh DB');
-      return;
-    }
+    expect(templates.length).toBeGreaterThan(0);
 
     const tplId = templates[0]!.id;
     await window.goto(`${RENDERER_URL}/agents/templates`);

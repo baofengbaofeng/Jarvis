@@ -108,22 +108,14 @@ test('06-settings P1: MCP test may skip if process fails', async () => {
   await window.getByTestId('mcp-settings').waitFor({ timeout: 30_000 });
 
   const serverRow = window.locator('[data-testid^="mcp-server-"]').first();
-  if ((await serverRow.count()) === 0) {
-    test.skip(true, 'no MCP server row from prior test');
-    return;
-  }
+  expect(await serverRow.count()).toBeGreaterThan(0);
 
   const testId = await serverRow.getAttribute('data-testid');
   const serverId = testId?.replace('mcp-server-', '');
-  if (!serverId) {
-    test.skip(true, 'could not resolve MCP server id');
-    return;
-  }
+  expect(serverId).toBeTruthy();
 
   await window.getByTestId(`mcp-test-${serverId}`).click();
   const result = window.getByTestId(`mcp-test-result-${serverId}`);
   const appeared = await result.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
-  if (!appeared) {
-    test.skip(true, 'mcp.test did not return a result within timeout');
-  }
+  expect(appeared).toBeTruthy();
 });

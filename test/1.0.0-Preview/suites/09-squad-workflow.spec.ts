@@ -90,15 +90,12 @@ test('09-squad P1: squad create submit does not crash with seeded agents', async
     const errored = await createError.isVisible();
     if (errored) {
       const msg = await createError.textContent();
-      test.skip(true, `squad engine could not complete start: ${msg ?? 'unknown'}`);
-      return;
+      throw new Error(`squad engine could not complete start: ${msg ?? 'unknown'}`);
     }
 
     const approval = window.getByTestId('approval-panel');
     const reachedReview = await approval.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false);
-    if (!reachedReview) {
-      test.skip(true, 'squad did not reach in_review — deep approve chain not exercised under mock');
-    }
+    expect(reachedReview).toBeTruthy();
   } finally {
     await closeJarvisElectron(app);
     removeDataDir(dataDir);
@@ -107,5 +104,6 @@ test('09-squad P1: squad create submit does not crash with seeded agents', async
 });
 
 test('09-squad P2: full S5 approve chain', () => {
-  test.skip(true, 'multi-agent S5 approve chain requires engine infra beyond mock provider');
+  test.skip(!process.env.JARVIS_FUNC_DEEP, 'multi-agent S5 approve chain requires JARVIS_FUNC_DEEP');
+  throw new Error('S5 approve chain harness not wired beyond mock provider');
 });
