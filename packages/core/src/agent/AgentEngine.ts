@@ -98,6 +98,15 @@ export class AgentEngine {
 
       for (const call of calls) {
         toolCalls++;
+        // CORE-03: truncated/invalid tool JSON must not execute as `{}`. Feed
+        // the parse error back to the model as a tool result and skip execute.
+        if (call.argumentsParseError) {
+          const output = `[invalid arguments] ${call.argumentsParseError}`;
+          const result = { ok: false, output };
+          onTool?.(call, result);
+          working.push(toolResult(call, output));
+          continue;
+        }
         if (this.cfg.approvalGate) {
           // Pass the run's own agent through so a shared engine (concurrent
           // tasks) scopes the gate to THIS task's agent, not a module-level

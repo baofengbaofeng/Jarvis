@@ -66,7 +66,10 @@ export class ModelRouter {
         onChunk: (c) => {
           if (c.kind === 'delta') text += c.delta;
           else if (c.kind === 'usage') usage = c.usage;
-          else if (c.kind === 'error') reject(new RetryableError(c.error));
+          // CORE-03: tool-argument parse failures arrive as soft error chunks
+          // alongside a tool_call marked with argumentsParseError. Forward them
+          // to the caller; do not abort the stream (provider failures still
+          // throw from adapter.chat and are classified below).
           onChunk?.(c);
         }
       }).then(() => { clearTimeout(timer); resolve({ text, usage }); })

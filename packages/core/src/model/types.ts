@@ -57,6 +57,8 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** CORE-03: set when streamed tool-argument JSON was truncated/invalid. */
+  argumentsParseError?: string;
 }
 
 export interface Usage {

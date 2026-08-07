@@ -127,6 +127,28 @@ describe('AgentEngine', () => {
     expect(seen[1][2]).toMatchObject({ role: 'tool', content: '[denied] echo', toolCallId: 'call_9' });
   });
 
+  it('does not execute a tool call with argumentsParseError and feeds the error to the model (CORE-03)', async () => {
+    const reg = new ToolRegistry();
+    let executed = 0;
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => { executed++; return { ok: true, output: 'ran' }; });
+    const seen: Array<Array<{ role: string; content: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'error', error: 'invalid tool arguments for echo: Unexpected end of JSON' });
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_bad', name: 'echo', arguments: {}, argumentsParseError: 'Unexpected end of JSON' }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(executed).toBe(0);
+    expect(seen[1][2]).toMatchObject({ role: 'tool', toolCallId: 'call_bad', content: '[invalid arguments] Unexpected end of JSON' });
+  });
+
   it('passes registered tools to the model router', async () => {
     const reg = new ToolRegistry();
     reg.register({ name: 'echo', description: 'echo', parameters: {} }, async () => ({ ok: true, output: 'x' }));

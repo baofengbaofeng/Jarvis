@@ -86,6 +86,31 @@ describe('openai adapter', () => {
     await adapter.chat(req, { apiKey: 'sk-test', onChunk: (c) => { if (c.kind === 'tool_call') calls.push(...c.toolCalls); } });
     expect(calls).toEqual([{ id: 'call_1', name: 'get_weather', arguments: { city: 'SF' } }]);
   });
+
+  it('emits error chunk and argumentsParseError for truncated tool JSON (CORE-03)', async () => {
+    const adapter = createAdapter('openai-compatible', { fetchImpl: mockFetch([
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_weather","arguments":"{\\"city\\":\\"SF"}}]}}]}',
+      'data: [DONE]'
+    ]) });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'openai-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true
+    };
+    const errors: string[] = [];
+    const calls: Array<{ id: string; name: string; arguments: Record<string, unknown>; argumentsParseError?: string }> = [];
+    await adapter.chat(req, {
+      apiKey: 'sk-test',
+      onChunk: (c) => {
+        if (c.kind === 'error') errors.push(c.error);
+        if (c.kind === 'tool_call') calls.push(...c.toolCalls);
+      }
+    });
+    expect(errors.length).toBe(1);
+    expect(errors[0]).toContain('invalid tool arguments for get_weather');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].argumentsParseError).toBeTruthy();
+    expect(calls[0].arguments).toEqual({});
+  });
 });
 
 describe('anthropic adapter', () => {
@@ -225,6 +250,38 @@ describe('anthropic adapter', () => {
     } });
     expect(text.join('')).toBe('Let me check');
     expect(calls).toEqual([{ id: 'toolu_1', name: 'get_weather', arguments: { city: 'SF' } }]);
+  });
+
+  it('emits error chunk and argumentsParseError for truncated input_json (CORE-03)', async () => {
+    const adapter = createAdapter('anthropic-compatible', { fetchImpl: mockFetch([
+      'event: content_block_start',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{}}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"city\\":"}}',
+      '',
+      'event: content_block_stop',
+      'data: {"type":"content_block_stop","index":0}',
+      '',
+      'event: message_stop',
+      'data: {"type":"message_stop"}'
+    ]) });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'anthropic-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true
+    };
+    const errors: string[] = [];
+    const calls: Array<{ argumentsParseError?: string; arguments: Record<string, unknown> }> = [];
+    await adapter.chat(req, {
+      apiKey: 'sk-ant-test',
+      onChunk: (c) => {
+        if (c.kind === 'error') errors.push(c.error);
+        if (c.kind === 'tool_call') calls.push(...c.toolCalls);
+      }
+    });
+    expect(errors.length).toBe(1);
+    expect(calls[0].argumentsParseError).toBeTruthy();
+    expect(calls[0].arguments).toEqual({});
   });
 
   it('emits a tool_use call whose content_block_stop never arrives', async () => {

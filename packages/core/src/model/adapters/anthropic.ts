@@ -2,6 +2,7 @@ import type { ChatRequest, ChatChunk, ModelMessage, ProviderAdapter } from '../t
 import type { SafeHttpClient } from '../../network/SafeHttpClient';
 import { parseSSE } from '../../util/sse';
 import { normalizeContent } from '../../office/content';
+import { emitToolCall } from '../parseToolArguments';
 
 interface AnthropicMessage { role: 'user' | 'assistant'; content: unknown }
 
@@ -54,8 +55,9 @@ export class AnthropicAdapter implements ProviderAdapter {
     // content_block_start and the arguments stream in as input_json_delta
     // fragments, keyed by block index.
     const toolBlocks = new Map<number, { id: string; name: string; json: string }>();
-    const emitToolCall = (acc: { id: string; name: string; json: string }) => {
-      ctx.onChunk({ kind: 'tool_call', toolCalls: [{ id: acc.id, name: acc.name, arguments: safeParseJson(acc.json) }] });
+    const emitParsedToolCall = (acc: { id: string; name: string; json: string }) => {
+      // CORE-03: truncated/invalid input_json must not collapse to `{}`.
+      emitToolCall(ctx.onChunk, acc.id, acc.name, acc.json);
     };
     for await (const data of parseSSE(res.body)) {
       const parsed = JSON.parse(data) as {
@@ -82,7 +84,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       if (parsed.type === 'content_block_stop') {
         const idx = parsed.index ?? 0;
         const acc = toolBlocks.get(idx);
-        if (acc) { toolBlocks.delete(idx); emitToolCall(acc); }
+        if (acc) { toolBlocks.delete(idx); emitParsedToolCall(acc); }
       }
       if (parsed.type === 'message_stop') break;
       if (parsed.type === 'message_delta' && parsed.usage?.output_tokens !== undefined) {
@@ -92,7 +94,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     }
     // A stream cut short after message_stop (or without the block's stop event)
     // must not swallow the call the model already fully described.
-    for (const acc of toolBlocks.values()) emitToolCall(acc);
+    for (const acc of toolBlocks.values()) emitParsedToolCall(acc);
     ctx.onChunk({ kind: 'done' });
   }
 }
@@ -143,6 +145,3 @@ function toolResultContent(content: ModelMessage['content']): unknown {
   return Array.isArray(normalized) && normalized.length > 0 ? normalized : '(no output)';
 }
 
-function safeParseJson(s: string): Record<string, unknown> {
-  try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
-}

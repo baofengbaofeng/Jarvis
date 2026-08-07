@@ -2,6 +2,7 @@ import type { ChatRequest, ChatChunk, ModelMessage, ProviderAdapter } from '../t
 import type { SafeHttpClient } from '../../network/SafeHttpClient';
 import { parseSSE } from '../../util/sse';
 import { normalizeContent } from '../../office/content';
+import { emitToolCall } from '../parseToolArguments';
 
 export interface AdapterDeps {
   fetchImpl?: typeof fetch;
@@ -63,7 +64,7 @@ export class OpenAIAdapter implements ProviderAdapter {
       }
     }
     for (const acc of toolCallAcc.values()) {
-      ctx.onChunk({ kind: 'tool_call', toolCalls: [{ id: acc.id, name: acc.name, arguments: safeParseJson(acc.args) }] });
+      emitToolCall(ctx.onChunk, acc.id, acc.name, acc.args);
     }
     ctx.onChunk({ kind: 'done' });
   }
@@ -89,6 +90,3 @@ function toOpenAIMessage(m: ModelMessage): Record<string, unknown> {
   return out;
 }
 
-function safeParseJson(s: string): Record<string, unknown> {
-  try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
-}
