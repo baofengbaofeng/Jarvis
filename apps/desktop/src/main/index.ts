@@ -14,9 +14,10 @@ import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
 import { openMainWindow } from './mainWindowLifecycle';
 import { DaemonSupervisor, defaultDaemonBinaryPath, defaultCoreEntryPath } from './daemon/DaemonSupervisor';
-import { SecureStorage } from './secrets/SecureStorage';
+import { createSecureStorage } from './secrets/createSecureStorage';
 import { SearchSecretMigration } from './search/SearchSecretMigration';
 import { pluginRunner } from './plugins/PluginRunnerHost';
+import { runBootstrapSafe } from './bootstrapSafety';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
@@ -48,7 +49,7 @@ export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
   const settings = createSettingsStore(db);
-  const secrets = new SecureStorage();
+  const secrets = createSecureStorage();
   const migrationResult = await new SearchSecretMigration(db, secrets).run();
   searchMigrationBlocked = !migrationResult.ok;
   // C10: the daemon is sized from the saved settings.concurrency value on every
@@ -145,7 +146,7 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
-    void bootstrap();
+    void runBootstrapSafe(bootstrap);
     handleOpenArgv(process.argv);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && windows && ipc) {
