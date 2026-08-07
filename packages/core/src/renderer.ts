@@ -48,7 +48,7 @@ export * from './audit/index';
 // WipeService guards against. Kept in sync with the main barrel's ./data/index.
 export * from './data/index';
 // C12 (M8 Task 6): config import/export transfer model is pure (no node:*), so
-// the renderer ConfigImportExportView can share CURRENT_SCHEMA + shapes with the
+// the renderer ConfigImportExportView can share CONFIG_SCHEMA_VERSION + shapes with the
 // main-process config IPC. Kept in sync with the main barrel's ./config/index.
 export * from './config/index';
 // C5 (M8 Task 7): shortcut map is pure (no node:*), so both the main-process

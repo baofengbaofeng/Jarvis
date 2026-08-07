@@ -59,7 +59,7 @@ All UI must ship zh-CN **and** en symmetrically. Locales live in `packages/i18n/
 ## Non-obvious constraints
 
 - **No hardcoded model ids** (Q4): provider/model ids are user-defined, never baked into code, config, or seed data. Provider templates intentionally carry an empty model list.
-- **API keys never land on disk in plaintext**: keychain via `SecureStorage`, config/export carries only `apiKeyRef`. Config export/import (C12) validates `schemaVersion ≤ CURRENT_SCHEMA` and supports `skip | overwrite | merge` strategies.
+- **API keys never land on disk in plaintext**: keychain via `SecureStorage`, config/export carries only `apiKeyRef`. Config export/import (C12) validates `schemaVersion` (`1.0.0-Preview`; legacy numeric ≤ 12 still accepted on import) and supports `skip | overwrite | merge` strategies.
 - **Local-only**: no telemetry, no cloud sync. The `settings.data_policy.local_only` toggle is declarative only.
 - **Pure logic goes in `packages/core`; main does wiring + persistence; renderer is views.** A new feature typically needs a core pure module + spec, a main IPC handler, a zustand store, a renderer component + spec, and i18n keys in both locales.
 - **Every milestone's Global Constraints** (in the M0 plan, `docs/superpowers/plans/2026-08-03-m0-skeleton.md`) apply to all work: performance targets (<3s cold start), path conventions, single-writer tables, and the 1.0.0-Preview exclusion list (no global shortcuts, auto-update, offline mode, local models, Monaco, etc.).

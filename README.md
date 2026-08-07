@@ -157,6 +157,18 @@ pnpm build
 cd apps/desktop && pnpm build
 ```
 
+### 5. 安装包（Preview）
+
+配置见 `apps/desktop/electron-builder.yml`。产物文件名（`dist/`）：
+
+| 平台 | 文件 |
+|------|------|
+| Windows x64 | `Jarvis_1.0.0-Preview_x86.msi` |
+| macOS Intel | `Jarvis_1.0.0-Preview_x64.dmg` |
+| macOS Apple Silicon | `Jarvis_1.0.0-Preview_arm64.dmg` |
+
+各安装包附带同名 `.sha256` 侧车文件；校验：`pnpm test:release-artifacts`（夹具）或 `node scripts/release/verify-artifacts.mjs dist`。
+
 ### 开发指南
 
 #### Monorepo 常用命令
@@ -267,7 +279,7 @@ Jarvis/
 - **本地优先**：无遥测、无云端账号同步；`local_only` 为声明性策略开关
 - **密钥安全**：API Key 仅存系统密钥链（SecureStorage），磁盘配置仅保留 `apiKeyRef`
 - **沙箱**：按 Agent 配置工具权限；敏感操作可走审批门（ApprovalGate）
-- **配置导出**：支持 `skip | overwrite | merge` 策略，校验 `schemaVersion`
+- **配置导出**：`schemaVersion` 为 `1.0.0-Preview`（兼容导入旧版数字 schema ≤ 12）；支持 `skip | overwrite | merge` 策略
 - **禁止硬编码模型 ID**：Provider 与模型均由用户自行配置
 
 ### 文档
@@ -441,6 +453,18 @@ pnpm build
 cd apps/desktop && pnpm build
 ```
 
+### 5. Installers (Preview)
+
+See `apps/desktop/electron-builder.yml`. Artifacts in `dist/`:
+
+| Platform | File |
+|----------|------|
+| Windows x64 | `Jarvis_1.0.0-Preview_x86.msi` |
+| macOS Intel | `Jarvis_1.0.0-Preview_x64.dmg` |
+| macOS Apple Silicon | `Jarvis_1.0.0-Preview_arm64.dmg` |
+
+Each ships with a `.sha256` sidecar. Verify fixtures: `pnpm test:release-artifacts`; verify `dist/`: `node scripts/release/verify-artifacts.mjs dist`.
+
 ### Development
 
 #### Monorepo commands (repo root)
@@ -549,7 +573,7 @@ Override the data directory with `JARVIS_DATA_DIR` (tests & CI).
 - **Local-first**: no telemetry, no cloud account sync; `local_only` is a declarative policy flag
 - **Key safety**: API keys in OS keychain (SecureStorage); on-disk config stores `apiKeyRef` only
 - **Sandbox**: per-agent tool permissions; sensitive actions via ApprovalGate
-- **Config export**: `skip | overwrite | merge` strategies; validates `schemaVersion`
+- **Config export**: `schemaVersion` is `1.0.0-Preview` (legacy numeric schema ≤ 12 still accepted on import); `skip | overwrite | merge` strategies
 - **No hardcoded model IDs**: providers and models are user-configured
 
 ### Documentation

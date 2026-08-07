@@ -1,6 +1,14 @@
 export { IpcChannel, IpcEvent } from './ipc-channels';
 
 export {
+  APP_VERSION,
+  CONFIG_SCHEMA_VERSION,
+  LEGACY_CONFIG_SCHEMA_VERSION,
+  INSTALLER_ARTIFACT_VERSION,
+  INSTALLER_ARTIFACTS,
+} from './version';
+
+export {
   ALLOWED_INVOKE,
   ALLOWED_EVENTS,
   assertAllowedInvoke,

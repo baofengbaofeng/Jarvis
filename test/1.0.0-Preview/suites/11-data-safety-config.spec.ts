@@ -79,7 +79,7 @@ test('11-data-safety P0: config export has no plaintext apiKey; merge import smo
   });
   const parsed = JSON.parse(exported) as Record<string, unknown>;
   assertNoPlaintextApiKey(parsed);
-  expect(parsed.schemaVersion).toBeTruthy();
+  expect(parsed.schemaVersion).toBe('1.0.0-Preview');
   const providers = parsed.providers as Array<{ apiKeyRef?: string }> | undefined;
   if (providers?.length) {
     expect(providers.some((p) => typeof p.apiKeyRef === 'string' && p.apiKeyRef.length > 0)).toBe(true);
@@ -89,7 +89,7 @@ test('11-data-safety P0: config export has no plaintext apiKey; merge import smo
   await window.getByTestId('config-transfer').waitFor({ timeout: 30_000 });
 
   const mergePayload = JSON.stringify({
-    schemaVersion: 12,
+    schemaVersion: '1.0.0-Preview',
     exportedAt: new Date().toISOString(),
     providers: [],
     models: [],

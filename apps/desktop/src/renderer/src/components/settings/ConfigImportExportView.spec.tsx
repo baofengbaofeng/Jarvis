@@ -2,14 +2,18 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { CONFIG_SCHEMA_VERSION } from '@jarvis/protocol';
 import { getResources } from '@jarvis/i18n';
 import { ConfigImportExportView } from './ConfigImportExportView';
 
+const exportJson = JSON.stringify({ schemaVersion: CONFIG_SCHEMA_VERSION });
+const importJson = JSON.stringify({ schemaVersion: CONFIG_SCHEMA_VERSION, providers: [], models: [], agents: [], settings: {} });
+
 const invoke = vi.fn(async (m: string) => {
-  if (m === 'config.export') return '{"schemaVersion":11}';
+  if (m === 'config.export') return exportJson;
   if (m === 'dialog.saveText') return { ok: true };
   if (m === 'dialog.pickPath') return [{ token: 'cap-config', name: 'jarvis-config.json', kind: 'file', sizeBytes: 1, expiresAt: 1 }];
-  if (m === 'config.readPickedFile') return '{"schemaVersion":11,"providers":[],"models":[],"agents":[],"settings":{}}';
+  if (m === 'config.readPickedFile') return importJson;
   if (m === 'config.import') return { ok: true, created: 1, updated: 0, skipped: 0 };
   return undefined;
 });
@@ -30,14 +34,14 @@ describe('ConfigImportExportView', () => {
     render(<ConfigImportExportView />);
     fireEvent.click(screen.getByTestId('export-json'));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('config.export', 'json'));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.saveText', { defaultName: 'jarvis-config.json', content: '{"schemaVersion":11}' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.saveText', { defaultName: 'jarvis-config.json', content: exportJson }));
   });
 
   it('exports YAML via config.export then dialog.saveText', async () => {
     render(<ConfigImportExportView />);
     fireEvent.click(screen.getByTestId('export-yaml'));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('config.export', 'yaml'));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.saveText', { defaultName: 'jarvis-config.yaml', content: '{"schemaVersion":11}' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.saveText', { defaultName: 'jarvis-config.yaml', content: exportJson }));
   });
 
   it('imports a file with the chosen strategy', async () => {
@@ -48,7 +52,7 @@ describe('ConfigImportExportView', () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('config.readPickedFile', { capability: 'cap-config' }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith(
       'config.import',
-      '{"schemaVersion":11,"providers":[],"models":[],"agents":[],"settings":{}}',
+      importJson,
       'merge',
     ));
     await waitFor(() => expect(screen.getByTestId('transfer-msg')).toBeTruthy());

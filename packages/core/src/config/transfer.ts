@@ -2,11 +2,18 @@
 // node:* deps — re-exported from BOTH core barrels (index.ts + renderer.ts) so
 // main and the renderer share the same shapes/validators.
 
-// Latest migration version (desktop db migrations latestVersion() = 12, added
-// by K6/M8 Task 10 for task_artifacts). Keep in sync with that: an export at 11
-// would be rejected by a future 12 importer, so an export must always carry the
-// CURRENT version.
-export const CURRENT_SCHEMA = 12;
+import {
+  CONFIG_SCHEMA_VERSION,
+  LEGACY_CONFIG_SCHEMA_VERSION,
+} from '@jarvis/protocol';
+
+export { CONFIG_SCHEMA_VERSION, LEGACY_CONFIG_SCHEMA_VERSION };
+
+/**
+ * @deprecated Prefer `CONFIG_SCHEMA_VERSION` (string semver). Numeric 12 remains
+ * valid on import for legacy exports only.
+ */
+export const CURRENT_SCHEMA = LEGACY_CONFIG_SCHEMA_VERSION;
 
 export interface ProviderExport {
   id: string;
@@ -38,7 +45,8 @@ export interface AgentExport {
 }
 
 export interface ExportPayload {
-  schemaVersion: number;
+  /** Product-aligned export schema (`1.0.0-Preview`). Legacy imports may use numeric ≤ 12. */
+  schemaVersion: string;
   exportedAt: string;
   providers: ProviderExport[];
   models: ModelExport[];
@@ -88,6 +96,20 @@ export interface ImportPlan {
   skip: string[];
 }
 
+export function isAcceptedConfigSchemaVersion(raw: unknown): boolean {
+  if (raw === CONFIG_SCHEMA_VERSION) return true;
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 1 && raw <= LEGACY_CONFIG_SCHEMA_VERSION) {
+    return true;
+  }
+  return false;
+}
+
+export function isFutureConfigSchemaVersion(raw: unknown): boolean {
+  if (typeof raw === 'string' && raw !== CONFIG_SCHEMA_VERSION) return true;
+  if (typeof raw === 'number' && raw > LEGACY_CONFIG_SCHEMA_VERSION) return true;
+  return false;
+}
+
 export function buildExport(
   providers: Array<{ id: string; name: string; type: string; base_url: string; api_key_ref?: string | null }>,
   models: ModelExport[],
@@ -95,7 +117,7 @@ export function buildExport(
   settings: Record<string, unknown>,
 ): ExportPayload {
   return {
-    schemaVersion: CURRENT_SCHEMA,
+    schemaVersion: CONFIG_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     providers: providers.map(p => ({
       id: p.id,
@@ -110,13 +132,17 @@ export function buildExport(
   };
 }
 
-export function validateSchema(p: ExportPayload): { ok: true } | { ok: false; error: string } {
+export function validateSchema(p: { schemaVersion?: unknown }): { ok: true } | { ok: false; error: string } {
   // Guard the boundary: a config file that parses to JSON `null` or an empty
   // YAML document yields a null payload, which must be a clean { ok:false }
   // instead of a TypeError escaping as an ipcMain rejection.
   if (typeof p !== 'object' || p === null) return { ok: false, error: 'missing schemaVersion' };
-  if (typeof p.schemaVersion !== 'number' || p.schemaVersion < 1) return { ok: false, error: 'missing schemaVersion' };
-  if (p.schemaVersion > CURRENT_SCHEMA) return { ok: false, error: `schema ${p.schemaVersion} > current ${CURRENT_SCHEMA}` };
+  const raw = (p as { schemaVersion?: unknown }).schemaVersion;
+  if (raw === undefined || raw === null) return { ok: false, error: 'missing schemaVersion' };
+  if (isFutureConfigSchemaVersion(raw)) {
+    return { ok: false, error: `schema ${String(raw)} > current ${CONFIG_SCHEMA_VERSION}` };
+  }
+  if (!isAcceptedConfigSchemaVersion(raw)) return { ok: false, error: 'missing schemaVersion' };
   return { ok: true };
 }
 
