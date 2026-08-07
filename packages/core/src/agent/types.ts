@@ -2,10 +2,15 @@ import type { ToolCall, Usage } from '../model/types';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
 import type { AgentConfig } from '@jarvis/protocol';
 
+/** Declares how ApprovalGate should treat the tool when not in allowAlways. */
+export type ToolSensitivity = 'safe' | 'ask' | 'deny';
+
 export interface ToolDef {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  /** CORE-11: declarative approval sensitivity (preferred over name hardcoding). */
+  sensitivity?: ToolSensitivity;
 }
 
 export interface ToolContext {

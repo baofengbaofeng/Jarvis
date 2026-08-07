@@ -104,7 +104,8 @@ export function createTaskEngineRuntime(
       }
       const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(req.agent.id, '') as Array<{ server_id: string; tool_name: string }>;
       const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
-      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] });
+      const sensitivity = toolRegistry.get(req.toolName)?.sensitivity;
+      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] }, { sensitivity });
       if (decision === 'allow') return true;
       if (decision === 'deny') {
         appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'denied_by_policy' } });

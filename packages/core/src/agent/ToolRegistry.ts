@@ -19,6 +19,7 @@ export class ToolRegistry {
 
   list(): ToolDef[] { return [...this.tools.values()].map(t => t.def); }
   has(name: string): boolean { return this.tools.has(name); }
+  get(name: string): ToolDef | undefined { return this.tools.get(name)?.def; }
 
   async execute(call: ToolCall, ctx: ToolContext): Promise<ToolResult> {
     // M8 final review: onExec is best-effort telemetry (the audit sink). A hook

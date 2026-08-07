@@ -29,7 +29,8 @@ export function createShellTool(registry: ToolRegistry, policy: SandboxPolicy, d
   });
 
   registry.register({
-    name: 'run_shell', description: 'Run a shell command within the workspace', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }
+    name: 'run_shell', description: 'Run a shell command within the workspace', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+    sensitivity: 'ask',
   }, async (args, ctx) => {
     const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
     const command = String(args.command);
