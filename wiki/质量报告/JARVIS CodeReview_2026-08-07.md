@@ -300,7 +300,7 @@ JARVIS 面向个人办公，把对话、REACT 任务、编程辅助、办公增�
 | TEST-05..09 | M/L | Go 未聚合、覆盖倒置、passWithNoTests 等 |
 | BUILD-07..10 | M/L | 无 lint、未签名、i18n 未入 CI、死依赖 |
 
-完整 AI_FIX 细节与文件列表见配套 backlog：`wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`。
+完整 AI_FIX 细节、Wave 顺序与验证命令见本报告 §5。配套 AI backlog 已在整改完成后删除。
 
 ---
 
@@ -425,8 +425,8 @@ Critical: CORE-01, CORE-02, DESK-01, DESK-02, DAEM-01, DAEM-02, TEST-01, BUILD-0
 
 High: CORE-03..09,11,12,14,17..21；DESK-03..13；DAEM-03..05,08,11,12,16；BUILD-02..06；TEST-02..04  
 
-Medium/Low: 见 §4.3 与 backlog。
+Medium/Low: 见 §4.3。
 
 ## 附录 B — 给自动化 Agent 的一句话
 
-> 打开 `wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`，按 Wave 取下一个 `status: open` 的 ID，严格按本报告 §5 执行 TDD 与验证，禁止阅读或复用任何历史「质量报告」中的旧 ID 作为结案依据；以本报告 ID 为唯一真源。
+> 按本报告 §5 Wave 顺序取下一个未完成 ID，严格执行 TDD 与验证；禁止阅读或复用任何历史「质量报告」中的旧 ID 作为结案依据；以本报告 ID 为唯一真源。
