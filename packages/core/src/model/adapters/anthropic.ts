@@ -1,15 +1,27 @@
 import type { ChatRequest, ChatChunk, ModelMessage, ProviderAdapter } from '../types';
+import type { SafeHttpClient } from '../../network/SafeHttpClient';
 import { parseSSE } from '../../util/sse';
 import { normalizeContent } from '../../office/content';
 
 interface AnthropicMessage { role: 'user' | 'assistant'; content: unknown }
 
+export interface AnthropicAdapterDeps {
+  fetchImpl?: typeof fetch;
+  /** CORE-18: SSRF-safe client preferred over bare fetch for production chat. */
+  http?: SafeHttpClient;
+}
+
+const CHAT_FETCH_LIMITS = {
+  timeoutMs: 120_000,
+  maxRedirects: 3,
+  maxResponseBytes: 50 * 1024 * 1024,
+};
+
 export class AnthropicAdapter implements ProviderAdapter {
   readonly type = 'anthropic-compatible' as const;
-  constructor(private deps: { fetchImpl?: typeof fetch } = {}) {}
+  constructor(private deps: AnthropicAdapterDeps = {}) {}
 
   async chat(req: ChatRequest, ctx: { apiKey: string; onChunk: (c: ChatChunk) => void; signal?: AbortSignal }): Promise<void> {
-    const fetchImpl = this.deps.fetchImpl ?? fetch;
     const url = `${req.provider.baseUrl.replace(/\/$/, '')}/v1/messages`;
     // System messages are always plain strings in practice; if one ever carries a
     // content array, join only its text parts (image blocks are not valid in the
@@ -27,12 +39,15 @@ export class AnthropicAdapter implements ProviderAdapter {
         tool_choice: req.toolChoice === 'none' ? { type: 'none' } : { type: 'auto' }
       } : {})
     };
-    const res = await fetchImpl(url, {
+    const init: RequestInit = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ctx.apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify(body),
-      signal: ctx.signal
-    });
+      signal: ctx.signal,
+    };
+    const res = this.deps.http
+      ? await this.deps.http.request(url, init, { ...CHAT_FETCH_LIMITS, signal: ctx.signal })
+      : await (this.deps.fetchImpl ?? fetch)(url, init);
     if (!res.ok) throw new Error(`anthropic http ${res.status}: ${await res.text()}`);
     let inputTokens = 0;
     // CORE-02: tool_use arrives as its own content block — the id/name land in

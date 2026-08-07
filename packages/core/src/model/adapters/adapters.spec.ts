@@ -244,3 +244,20 @@ describe('anthropic adapter', () => {
     expect(calls).toEqual([{ id: 'toolu_9', name: 'ls', arguments: {} }]);
   });
 });
+
+describe('adapter SafeHttpClient (CORE-18)', () => {
+  it('routes chat through http.request and surfaces SSRF denial', async () => {
+    const http = {
+      request: async () => {
+        throw new Error('URL_PRIVATE_ADDRESS');
+      },
+    };
+    const adapter = createAdapter('openai-compatible', { http });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'openai-compatible', baseUrl: 'https://169.254.169.254', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true,
+    };
+    await expect(adapter.chat(req, { apiKey: 'sk', onChunk: () => {} })).rejects.toThrow('URL_PRIVATE_ADDRESS');
+  });
+});
+

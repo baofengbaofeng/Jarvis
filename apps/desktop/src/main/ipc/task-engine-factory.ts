@@ -27,6 +27,8 @@ import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SettingsStore } from './settings';
 import { createCodeIndexAdapter } from './coding';
 import { appendAudit } from './task-messages';
+import { createDefaultSafeUrlPolicy } from '../security/SafeUrlPolicy';
+import type { SafeHttpClient } from '@jarvis/core';
 
 export interface TaskEngineDeps {
   chatFn?: EngineChatFn;
@@ -42,9 +44,9 @@ export interface TaskEngineRuntime {
   registerMemoryToolsFor: (agentId: string) => void;
 }
 
-export function createDefaultChatFn(): EngineChatFn {
+export function createDefaultChatFn(http: SafeHttpClient = createDefaultSafeUrlPolicy()): EngineChatFn {
   return async (req, opts) => {
-    const adapter = createAdapter(req.provider.type);
+    const adapter = createAdapter(req.provider.type, { http });
     let text = '';
     let usage: Usage | null = null;
     await adapter.chat(req, {

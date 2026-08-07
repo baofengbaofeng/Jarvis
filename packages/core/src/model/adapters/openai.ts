@@ -1,15 +1,25 @@
 import type { ChatRequest, ChatChunk, ModelMessage, ProviderAdapter } from '../types';
+import type { SafeHttpClient } from '../../network/SafeHttpClient';
 import { parseSSE } from '../../util/sse';
 import { normalizeContent } from '../../office/content';
 
-export interface AdapterDeps { fetchImpl?: typeof fetch }
+export interface AdapterDeps {
+  fetchImpl?: typeof fetch;
+  /** CORE-18: SSRF-safe client preferred over bare fetch for production chat. */
+  http?: SafeHttpClient;
+}
+
+const CHAT_FETCH_LIMITS = {
+  timeoutMs: 120_000,
+  maxRedirects: 3,
+  maxResponseBytes: 50 * 1024 * 1024,
+};
 
 export class OpenAIAdapter implements ProviderAdapter {
   readonly type = 'openai-compatible' as const;
   constructor(private deps: AdapterDeps = {}) {}
 
   async chat(req: ChatRequest, ctx: { apiKey: string; onChunk: (c: ChatChunk) => void; signal?: AbortSignal }): Promise<void> {
-    const fetchImpl = this.deps.fetchImpl ?? fetch;
     const url = `${req.provider.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
     const body = {
       model: req.modelId,
@@ -23,12 +33,15 @@ export class OpenAIAdapter implements ProviderAdapter {
         tool_choice: req.toolChoice === 'none' ? 'none' : 'auto'
       } : {})
     };
-    const res = await fetchImpl(url, {
+    const init: RequestInit = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ctx.apiKey}` },
       body: JSON.stringify(body),
-      signal: ctx.signal
-    });
+      signal: ctx.signal,
+    };
+    const res = this.deps.http
+      ? await this.deps.http.request(url, init, { ...CHAT_FETCH_LIMITS, signal: ctx.signal })
+      : await (this.deps.fetchImpl ?? fetch)(url, init);
     if (!res.ok) throw new Error(`openai http ${res.status}: ${await res.text()}`);
     const toolCallAcc = new Map<number, { id: string; name: string; args: string }>();
     for await (const data of parseSSE(res.body)) {
