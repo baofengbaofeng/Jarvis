@@ -127,6 +127,26 @@ describe('AgentEngine', () => {
     expect(seen[1][2]).toMatchObject({ role: 'tool', content: '[denied] echo', toolCallId: 'call_9' });
   });
 
+  it('feeds a throwing tool handler back to the model as ok:false without killing the run (CORE-06)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'boom', description: '', parameters: {} }, async () => { throw new Error('handler failed'); });
+    const seen: Array<Array<{ role: string; content: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_1', name: 'boom', arguments: {} }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'recovered', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    const result = await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(result.text).toBe('recovered');
+    expect(seen[1][2]).toMatchObject({ role: 'tool', toolCallId: 'call_1', content: 'handler failed' });
+  });
+
   it('does not execute a tool call with argumentsParseError and feeds the error to the model (CORE-03)', async () => {
     const reg = new ToolRegistry();
     let executed = 0;

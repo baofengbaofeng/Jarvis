@@ -15,6 +15,9 @@ describe('shell tool', () => {
   it('blocks disallowed command via sandbox', async () => {
     const reg = new ToolRegistry();
     createShellTool(reg, policy, { execImpl: async () => ({ stdout: '', stderr: '' }) });
-    await expect(reg.execute({ id: '1', name: 'run_shell', arguments: { command: 'rm -rf /' } }, { cwd: '/ws', env: {}, workspaceRoot: '/ws' })).rejects.toThrow('not allowed');
+    // CORE-06: sandbox denial is returned as ok:false so the model can recover.
+    const r = await reg.execute({ id: '1', name: 'run_shell', arguments: { command: 'rm -rf /' } }, { cwd: '/ws', env: {}, workspaceRoot: '/ws' });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain('not allowed');
   });
 });

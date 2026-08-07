@@ -15,11 +15,6 @@ describe('ToolRegistry', () => {
     expect(r.output).toBe('/tmp:hi');
   });
 
-  it('throws on unknown tool', async () => {
-    const reg = new ToolRegistry();
-    await expect(reg.execute({ id: 't2', name: 'nope', arguments: {} }, { cwd: '/', env: {} })).rejects.toThrow('unknown tool');
-  });
-
   // J5 (M8 Task 3): the onExec hook fires with result 'ok' after a successful
   // read_file-style execution.
   it('fires onExec with ok after a successful execution', async () => {
@@ -36,19 +31,22 @@ describe('ToolRegistry', () => {
     expect(typeof e.ts).toBe('number');
   });
 
-  it('fires onExec with error before re-throwing when the handler rejects', async () => {
+  it('returns ok:false when the handler rejects instead of throwing (CORE-06)', async () => {
     const onExec = vi.fn();
     const reg = new ToolRegistry({ onExec });
     reg.register({ name: 'boom', description: '', parameters: {} }, async () => { throw new Error('handler failed'); });
-    await expect(reg.execute({ id: 't4', name: 'boom', arguments: {} }, { cwd: '/', env: {} })).rejects.toThrow('handler failed');
+    const r = await reg.execute({ id: 't4', name: 'boom', arguments: {} }, { cwd: '/', env: {} });
+    expect(r).toEqual({ ok: false, output: 'handler failed' });
     expect(onExec).toHaveBeenCalledTimes(1);
     expect(onExec.mock.calls[0][0].result).toBe('error');
   });
 
-  it('fires onExec with error for an unknown tool before re-throwing', async () => {
+  it('returns ok:false for an unknown tool instead of throwing (CORE-06)', async () => {
     const onExec = vi.fn();
     const reg = new ToolRegistry({ onExec });
-    await expect(reg.execute({ id: 't5', name: 'nope', arguments: {} }, { cwd: '/', env: {} })).rejects.toThrow('unknown tool');
+    const r = await reg.execute({ id: 't5', name: 'nope', arguments: {} }, { cwd: '/', env: {} });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain('unknown tool');
     expect(onExec).toHaveBeenCalledTimes(1);
     expect(onExec.mock.calls[0][0].result).toBe('error');
   });

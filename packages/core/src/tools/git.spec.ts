@@ -29,9 +29,10 @@ describe('git tools', () => {
   });
 
   it('rejects a workspace outside the per-execution sandbox root', async () => {
-    await expect(
-      reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: outside, env: {}, workspaceRoot: ws })
-    ).rejects.toThrow('outside workspace');
+    // CORE-06: path denial is returned as ok:false so the model can recover.
+    const r = await reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: outside, env: {}, workspaceRoot: ws });
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain('outside workspace');
   });
 
   it('blocks mutating git tools in readonly sandbox (CORE-12)', async () => {
@@ -39,12 +40,12 @@ describe('git tools', () => {
     createGitTools(ro, { level: 'readonly', allowDomains: [], allowCommands: [] }, {
       execImpl: async () => ({ stdout: 'should-not-run', stderr: '' }),
     });
-    await expect(
-      ro.execute({ id: '1', name: 'git_add', arguments: { path: '.' } }, { cwd: ws, env: {}, workspaceRoot: ws })
-    ).rejects.toThrow('not allowed');
-    await expect(
-      ro.execute({ id: '2', name: 'git_commit', arguments: { message: 'x' } }, { cwd: ws, env: {}, workspaceRoot: ws })
-    ).rejects.toThrow('not allowed');
+    const add = await ro.execute({ id: '1', name: 'git_add', arguments: { path: '.' } }, { cwd: ws, env: {}, workspaceRoot: ws });
+    expect(add.ok).toBe(false);
+    expect(add.output).toContain('not allowed');
+    const commit = await ro.execute({ id: '2', name: 'git_commit', arguments: { message: 'x' } }, { cwd: ws, env: {}, workspaceRoot: ws });
+    expect(commit.ok).toBe(false);
+    expect(commit.output).toContain('not allowed');
     const status = await ro.execute(
       { id: '3', name: 'git_status', arguments: {} },
       { cwd: ws, env: {}, workspaceRoot: ws },

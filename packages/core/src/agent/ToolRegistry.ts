@@ -31,7 +31,8 @@ export class ToolRegistry {
     const tool = this.tools.get(call.name);
     if (!tool) {
       emit('error');
-      throw new Error(`unknown tool: ${call.name}`);
+      // CORE-06: unknown tools are model-recoverable failures, not task killers.
+      return { ok: false, output: `unknown tool: ${call.name}` };
     }
     try {
       const result = await tool.handler(call.arguments, ctx);
@@ -39,7 +40,10 @@ export class ToolRegistry {
       return result;
     } catch (err) {
       emit('error');
-      throw err;
+      // CORE-06: handler throws must return ok:false to the model so the REACT
+      // loop can continue, instead of aborting the whole task.
+      const output = err instanceof Error ? err.message : String(err);
+      return { ok: false, output };
     }
   }
 }
