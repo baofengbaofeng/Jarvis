@@ -33,4 +33,22 @@ describe('git tools', () => {
       reg.execute({ id: '1', name: 'git_status', arguments: {} }, { cwd: outside, env: {}, workspaceRoot: ws })
     ).rejects.toThrow('outside workspace');
   });
+
+  it('blocks mutating git tools in readonly sandbox (CORE-12)', async () => {
+    const ro = new ToolRegistry();
+    createGitTools(ro, { level: 'readonly', allowDomains: [], allowCommands: [] }, {
+      execImpl: async () => ({ stdout: 'should-not-run', stderr: '' }),
+    });
+    await expect(
+      ro.execute({ id: '1', name: 'git_add', arguments: { path: '.' } }, { cwd: ws, env: {}, workspaceRoot: ws })
+    ).rejects.toThrow('not allowed');
+    await expect(
+      ro.execute({ id: '2', name: 'git_commit', arguments: { message: 'x' } }, { cwd: ws, env: {}, workspaceRoot: ws })
+    ).rejects.toThrow('not allowed');
+    const status = await ro.execute(
+      { id: '3', name: 'git_status', arguments: {} },
+      { cwd: ws, env: {}, workspaceRoot: ws },
+    );
+    expect(status.output).toContain('should-not-run');
+  });
 });

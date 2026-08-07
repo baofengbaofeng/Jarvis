@@ -12,9 +12,9 @@ export interface SandboxPolicy {
 
 export class SandboxError extends Error {}
 
-const DEFAULT_COMMAND_WHITELIST = ['ls', 'cat', 'echo', 'pwd', 'mkdir', 'cp', 'mv', 'touch', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'uniq', 'git status', 'git diff', 'git log', 'git add', 'git commit'];
+const DEFAULT_COMMAND_WHITELIST = ['ls', 'cat', 'echo', 'pwd', 'mkdir', 'cp', 'mv', 'touch', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'uniq', 'git status', 'git diff', 'git log', 'git branch', 'git add', 'git commit'];
 
-const READONLY_COMMAND_WHITELIST = ['ls', 'cat', 'echo', 'pwd', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'uniq', 'git status', 'git diff', 'git log'];
+const READONLY_COMMAND_WHITELIST = ['ls', 'cat', 'echo', 'pwd', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'uniq', 'git status', 'git diff', 'git log', 'git branch'];
 
 // Shell metacharacters that would allow chaining or injection if the line were interpreted by a shell.
 const SHELL_METACHARACTERS = /[;&|`\n]/;

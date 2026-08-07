@@ -20,22 +20,31 @@ export function createGitTools(registry: ToolRegistry, policy: SandboxPolicy, de
 
   // The brief's def ignores its args/makeArgs (the parameter schema is static);
   // underscore-prefixed because the repo enforces noUnusedParameters.
-  const def = (name: string, description: string, _args: string[], _makeArgs: (a: Record<string, unknown>) => string[]) => ({
-    name, description, parameters: { type: 'object', properties: {} }
+  const def = (
+    name: string,
+    description: string,
+    sensitivity: 'safe' | 'ask',
+    _args: string[],
+    _makeArgs: (a: Record<string, unknown>) => string[],
+  ) => ({
+    name, description, parameters: { type: 'object', properties: {} }, sensitivity,
   });
 
-  const mk = (name: string, description: string, build: (a: Record<string, unknown>) => string[]) =>
-    registry.register(def(name, description, build({}), build), async (args, ctx) => {
+  const mk = (name: string, description: string, sensitivity: 'safe' | 'ask', build: (a: Record<string, unknown>) => string[]) =>
+    registry.register(def(name, description, sensitivity, build({}), build), async (args, ctx) => {
       const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
       sandbox.assertRead(ctx.cwd); // repo 须在 workspace 内
-      const { stdout, stderr } = await run('git', build(args), ctx.cwd);
+      const argv = build(args);
+      // CORE-12: enforce the same command allowlist as run_shell (readonly bans git write).
+      sandbox.assertCommand(['git', ...argv].join(' '));
+      const { stdout, stderr } = await run('git', argv, ctx.cwd);
       return { ok: !stderr, output: `${stdout}${stderr ? '\n' + stderr : ''}`.trim() };
     });
 
-  mk('git_status', 'git status', () => ['status', '--short']);
-  mk('git_diff', 'git diff', () => ['diff']);
-  mk('git_log', 'git log', () => ['log', '--oneline', '-10']);
-  mk('git_add', 'git add', (a) => ['add', String(a.path ?? '.')]);
-  mk('git_branch', 'git branch', () => ['branch', '--show-current']);
-  mk('git_commit', 'git commit', (a) => ['commit', '-m', String(a.message ?? '')]);
+  mk('git_status', 'git status', 'safe', () => ['status', '--short']);
+  mk('git_diff', 'git diff', 'safe', () => ['diff']);
+  mk('git_log', 'git log', 'safe', () => ['log', '--oneline', '-10']);
+  mk('git_add', 'git add', 'ask', (a) => ['add', String(a.path ?? '.')]);
+  mk('git_branch', 'git branch', 'safe', () => ['branch', '--show-current']);
+  mk('git_commit', 'git commit', 'ask', (a) => ['commit', '-m', String(a.message ?? '')]);
 }
