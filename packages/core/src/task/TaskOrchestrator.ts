@@ -25,6 +25,8 @@ export interface SubmitInput {
   // Per-task sandbox policy forwarded to tool contexts via EngineRunInput
   // (C6/J6: the permissions UI's saved per-agent policy is enforced here).
   policy?: SandboxPolicy;
+  // CORE-19: per-run tool visibility forwarded to EngineRunInput.
+  visibleTools?: string[];
 }
 
 export interface TaskOrchestratorCallbacks {

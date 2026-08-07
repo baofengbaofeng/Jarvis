@@ -6,6 +6,7 @@ import {
   createGuard,
   DelegateGuardError,
   registerDelegateTool,
+  planVisibleTools,
   type Squad,
   type SquadRouterDeps,
 } from '@jarvis/core';
@@ -50,7 +51,9 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
     const run = await resolveAgentRun(agentId, prompt);
     await registerAgentMcpTools(db, toolRegistry, agentId);
     registerMemoryToolsFor(agentId);
-    const result = await engine.run({ ...run, cwd: run.workspaceRoot });
+    // CORE-19: per-run visibility — never mutate shared engine state.
+    const visibleTools = planVisibleTools(toolRegistry.list().map(t => t.name), run.agent.planOnly);
+    const result = await engine.run({ ...run, cwd: run.workspaceRoot, visibleTools });
     return result.text;
   };
 
@@ -117,8 +120,10 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
       await registerAgentMcpTools(db, toolRegistry, squadCtx.leaderAgentId);
       registerMemoryToolsFor(squadCtx.leaderAgentId);
       const delegations: Array<{ to: string; subtask: string }> = [];
+      // CORE-19: per-run visibility on the leader run.
+      const visibleTools = planVisibleTools(toolRegistry.list().map(t => t.name), leader.agent.planOnly);
       const result = await engine.run({
-        ...leader, cwd: leader.workspaceRoot,
+        ...leader, cwd: leader.workspaceRoot, visibleTools,
         onTool: (call) => {
           if (call.name === 'delegate_agent') {
             delegations.push({ to: String(call.arguments.agent), subtask: String(call.arguments.subtask) });

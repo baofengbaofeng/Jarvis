@@ -205,4 +205,42 @@ describe('AgentEngine', () => {
     await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
     expect(captured!.tools?.map((t: { name: string }) => t.name)).toEqual(['echo']);
   });
+
+  it('keeps distinct visibleTools per concurrent run (CORE-19)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    reg.register({ name: 'write_file', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: string[][] = [];
+    let releaseA!: () => void;
+    let releaseB!: () => void;
+    const gateA = new Promise<void>((r) => { releaseA = r; });
+    const gateB = new Promise<void>((r) => { releaseB = r; });
+    let chats = 0;
+    const chat = async (req: { tools?: Array<{ name: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      const n = ++chats;
+      seen.push((req.tools ?? []).map(t => t.name).sort());
+      if (n === 1) await gateA;
+      else if (n === 2) await gateB;
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 1 });
+    const runA = engine.run({
+      agent, messages: [{ role: 'user', content: 'a' }], cwd: '/', env: {}, apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1',
+      visibleTools: ['echo'],
+    });
+    const runB = engine.run({
+      agent, messages: [{ role: 'user', content: 'b' }], cwd: '/', env: {}, apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1',
+      visibleTools: ['write_file'],
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(seen).toHaveLength(2);
+    releaseA();
+    releaseB();
+    await Promise.all([runA, runB]);
+    expect(seen).toContainEqual(['echo']);
+    expect(seen).toContainEqual(['write_file']);
+  });
 });

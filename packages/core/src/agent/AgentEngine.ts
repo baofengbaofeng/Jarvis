@@ -33,21 +33,17 @@ export interface EngineRunInput {
   // Per-task sandbox policy forwarded to tool contexts (C6/J6). Tools fall back
   // to their registration-time policy when absent.
   policy?: SandboxPolicy;
+  // CORE-19: per-run tool visibility (plan-only filter, etc.). Must not live on
+  // the shared engine instance — concurrent tasks would race a mutable field.
+  visibleTools?: string[];
 }
 
 export class AgentEngine {
   private maxSteps: number;
-  // E10 (plan mode): the tool-name subset this engine may expose to the model.
-  // Filters `ChatRequest.tools` below; the execution-side gate in the tasks
-  // approval closure still backs it up for tools the model calls anyway.
-  private visibleTools: string[] | null = null;
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
 
-  setVisibleTools(names: string[]): void { this.visibleTools = names; }
-  getVisibleTools(): string[] | null { return this.visibleTools; }
-
   async run(input: EngineRunInput): Promise<TaskResult> {
-    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy } = input;
+    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy, visibleTools } = input;
     const working: ModelMessage[] = [...messages];
     let toolCalls = 0;
     const usageParts: Usage[] = [];
@@ -55,8 +51,9 @@ export class AgentEngine {
 
     for (let step = 0; step < this.maxSteps; step++) {
       const allTools = this.cfg.toolRegistry.list();
-      const visible = this.visibleTools
-        ? allTools.filter(t => this.visibleTools!.includes(t.name))
+      // CORE-19: filter from this run's input, not shared engine state.
+      const visible = visibleTools
+        ? allTools.filter(t => visibleTools.includes(t.name))
         : allTools;
       const req: ChatRequest = {
         provider: { id: agent.id, name: agent.name, type: input.provider.type, baseUrl: input.provider.baseUrl, apiKeyRef: '', createdAt: '', updatedAt: '' },
