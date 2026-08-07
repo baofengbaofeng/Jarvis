@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { join, isAbsolute, normalize, sep } from 'node:path';
 import type { ToolDef } from '../agent/types';
+export type { ToolDef };
 
 export type PluginPermission = 'workspace:read' | 'workspace:write' | 'model:invoke';
 

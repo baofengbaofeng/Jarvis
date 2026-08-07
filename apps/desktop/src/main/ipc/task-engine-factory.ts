@@ -4,8 +4,8 @@ import type { BrowserWindow } from 'electron';
 import {
   AgentEngine,
   ToolRegistry,
+  ModelRouter,
   createAdapter,
-  createGuard,
   createApprovalGate,
   createFileTools,
   createShellTool,
@@ -19,7 +19,7 @@ import {
   hashEmbedding,
   type EngineChatFn,
   type SandboxPolicy,
-  type Usage,
+  type ProviderPolicy,
 } from '@jarvis/core';
 import { sqliteAuditSink } from '../audit/sqliteAuditSink';
 import { createMemoryAdapter } from './memory';
@@ -28,11 +28,15 @@ import { ApprovalCenter } from '../approval/ApprovalCenter';
 import type { SettingsStore } from './settings';
 import { createCodeIndexAdapter } from './coding';
 import { appendAudit } from './task-messages';
+import { createDefaultSafeUrlPolicy } from '../security/SafeUrlPolicy';
+import type { SafeHttpClient } from '@jarvis/core';
 
 export interface TaskEngineDeps {
   chatFn?: EngineChatFn;
   maxSteps?: number;
   settings?: SettingsStore;
+  /** CORE-04: optional shared ModelRouter (timeout/retry/fallback/circuit). */
+  router?: ModelRouter;
 }
 
 export interface TaskEngineRuntime {
@@ -43,21 +47,30 @@ export interface TaskEngineRuntime {
   registerMemoryToolsFor: (agentId: string) => void;
 }
 
-export function createDefaultChatFn(): EngineChatFn {
-  return async (req, opts) => {
-    const adapter = createAdapter(req.provider.type);
-    let text = '';
-    let usage: Usage | null = null;
-    await adapter.chat(req, {
-      apiKey: opts.apiKey,
-      signal: opts.signal,
-      onChunk: (c) => {
-        if (c.kind === 'delta') text += c.delta;
-        else if (c.kind === 'usage') usage = c.usage;
-        opts.onChunk?.(c);
-      }
+export interface DefaultChatFnOpts {
+  router?: ModelRouter;
+  policy?: ProviderPolicy;
+  fallbackModelIds?: string[];
+}
+
+/**
+ * CORE-04: task chat goes through ModelRouter (same retry/timeout/circuit path
+ * as interactive chat), not a bare adapter call that bypasses those policies.
+ */
+export function createDefaultChatFn(
+  http: SafeHttpClient = createDefaultSafeUrlPolicy(),
+  opts: DefaultChatFnOpts = {},
+): EngineChatFn {
+  const router = opts.router ?? new ModelRouter({
+    createAdapter: (type) => createAdapter(type, { http }),
+  });
+  return async (req, chatOpts) => {
+    return router.chat(req, {
+      apiKeyResolver: async () => chatOpts.apiKey,
+      onChunk: chatOpts.onChunk,
+      policy: opts.policy,
+      fallbackModelIds: opts.fallbackModelIds,
     });
-    return { text, usage };
   };
 }
 
@@ -92,7 +105,8 @@ export function createTaskEngineRuntime(
   });
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
-  const chatFn = deps.chatFn ?? createDefaultChatFn();
+  // CORE-04: default task chat uses ModelRouter (optionally the shared instance).
+  const chatFn = deps.chatFn ?? createDefaultChatFn(createDefaultSafeUrlPolicy(), { router: deps.router });
   const engine = new AgentEngine({
     modelRouter: { chat: chatFn },
     toolRegistry,
@@ -105,8 +119,14 @@ export function createTaskEngineRuntime(
       }
       const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(req.agent.id, '') as Array<{ server_id: string; tool_name: string }>;
       const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
-      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] });
-      if (decision === 'allow' && req.toolName !== 'git_commit') return true;
+      const sensitivity = toolRegistry.get(req.toolName)?.sensitivity;
+      const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] }, { sensitivity });
+      if (decision === 'allow') return true;
+      if (decision === 'deny') {
+        appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'denied_by_policy' } });
+        auditSink.write({ ts: new Date().toISOString(), kind: 'tool_call', actor: 'agent', action: req.toolName, target: String(req.args).slice(0, 200), result: 'denied' });
+        return false;
+      }
       const ok = await approval.request(req);
       appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok } });
       if (!ok) {

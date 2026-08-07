@@ -55,7 +55,7 @@ test('real shell: onboarding persists through SQLite + IPC', async ({}, testInfo
 
   const second = await launchJarvisElectron(dataDir);
   try {
-    await second.window.goto('http://127.0.0.1:5173/');
+    await second.window.goto('http://127.0.0.1:5173/#/');
     await second.window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
     await expect(second.window.getByTestId('onboarding')).toHaveCount(0);
   } finally {
@@ -103,7 +103,7 @@ test('real shell: daemon status page uses main IPC', async ({}, testInfo) => {
   const { app, window } = await launchJarvisElectron(dataDir);
   try {
     await completeOnboarding(window);
-    await window.goto('http://127.0.0.1:5173/settings/daemon');
+    await window.goto('http://127.0.0.1:5173/#/settings/daemon');
     await window.getByTestId('daemon-management').waitFor({ timeout: 30_000 });
     await expect(window.getByTestId('daemon-running')).toBeVisible();
     // Daemon binary may be absent in CI — either running or stopped is acceptable.

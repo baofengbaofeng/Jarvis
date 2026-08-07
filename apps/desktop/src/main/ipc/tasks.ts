@@ -12,7 +12,7 @@ import {
   resumeSession,
   captureArtifacts,
 } from '@jarvis/core';
-import { registerAgentMcpTools } from './mcp';
+import { registerAgentMcpTools, mcpVisibilityForAgent } from './mcp';
 import { createArtifactsIpc } from './artifacts';
 import type { SandboxPolicy } from '@jarvis/core';
 import { createAgentStore } from './agents';
@@ -39,6 +39,8 @@ export interface TaskHandlerDeps {
   maxSteps?: number;
   settings?: SettingsStore;
   usageTracker?: UsageTracker;
+  /** CORE-04: shared ModelRouter with the chat path. */
+  router?: import('@jarvis/core').ModelRouter;
 }
 
 export { appendAudit } from './task-messages';
@@ -150,7 +152,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       taskRuns.set(id, { agentId, modelId });
       await registerAgentMcpTools(db, toolRegistry, agentId);
       registerMemoryToolsFor(agentId);
-      engine.setVisibleTools(planVisibleTools(toolRegistry.list().map(t => t.name), agent.planOnly));
+      // CORE-19: per-run visibility on the submit payload — never mutate shared engine state.
+      // CORE-20: strip MCP tools not bound to this agent (shared registry may hold others).
+      const afterPlan = planVisibleTools(toolRegistry.list().map(t => t.name), agent.planOnly);
+      const { visibleTools, toolFilter } = mcpVisibilityForAgent(db, agentId, afterPlan);
       if (sessionId) {
         taskSessions.set(id, sessionId);
         await chatService.appendMessage(sessionId, 'user', prompt);
@@ -159,7 +164,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (agent.workspaceId) {
         await snapshotBeforeTask(agent.workspaceId, id, snapshotStore);
       }
-      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider, modelId, workspaceRoot, policy });
+      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider, modelId, workspaceRoot, policy, visibleTools, toolFilter });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),

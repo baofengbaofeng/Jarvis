@@ -7,6 +7,7 @@ import { TaskControlBar } from '../components/tasks/TaskControlBar';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { ModeIndicator } from '../components/runtime/ModeIndicator';
 import { useAgentStore } from '../stores/agent-store';
+import { useRuntimeStore } from '../stores/runtime-store';
 
 export function AppLayout() {
   const { t } = useTranslation('common');
@@ -14,6 +15,7 @@ export function AppLayout() {
   const { pathname } = useLocation();
   const [query, setQuery] = useState('');
   const { agents, current, refresh, setCurrent } = useAgentStore();
+  const runtimeMode = useRuntimeStore((s) => s.status?.mode ?? 'local');
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -100,7 +102,7 @@ export function AppLayout() {
             left={<AgentSwitcher />}
             right={(
               <div className="topbar-actions">
-                <ModeIndicator />
+                <ModeIndicator mode={runtimeMode} />
                 <TaskControlBar />
               </div>
             )}

@@ -1,21 +1,30 @@
-import type { ChatRequest, ChatChunk, ProviderAdapter } from '../types';
+import type { ChatRequest, ChatChunk, ModelMessage, ProviderAdapter } from '../types';
+import type { SafeHttpClient } from '../../network/SafeHttpClient';
 import { parseSSE } from '../../util/sse';
 import { normalizeContent } from '../../office/content';
+import { emitToolCall } from '../parseToolArguments';
 
-export interface AdapterDeps { fetchImpl?: typeof fetch }
+export interface AdapterDeps {
+  fetchImpl?: typeof fetch;
+  /** CORE-18: SSRF-safe client preferred over bare fetch for production chat. */
+  http?: SafeHttpClient;
+}
+
+const CHAT_FETCH_LIMITS = {
+  timeoutMs: 120_000,
+  maxRedirects: 3,
+  maxResponseBytes: 50 * 1024 * 1024,
+};
 
 export class OpenAIAdapter implements ProviderAdapter {
   readonly type = 'openai-compatible' as const;
   constructor(private deps: AdapterDeps = {}) {}
 
   async chat(req: ChatRequest, ctx: { apiKey: string; onChunk: (c: ChatChunk) => void; signal?: AbortSignal }): Promise<void> {
-    const fetchImpl = this.deps.fetchImpl ?? fetch;
     const url = `${req.provider.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
     const body = {
       model: req.modelId,
-      // L23: normalize content arrays to OpenAI's content-part shape. String
-      // content passes through unchanged, so existing requests are identical.
-      messages: req.messages.map(m => ({ ...m, content: normalizeContent(m.content, 'openai') })),
+      messages: req.messages.map(toOpenAIMessage),
       stream: true,
       stream_options: { include_usage: true },
       ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
@@ -25,12 +34,15 @@ export class OpenAIAdapter implements ProviderAdapter {
         tool_choice: req.toolChoice === 'none' ? 'none' : 'auto'
       } : {})
     };
-    const res = await fetchImpl(url, {
+    const init: RequestInit = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ctx.apiKey}` },
       body: JSON.stringify(body),
-      signal: ctx.signal
-    });
+      signal: ctx.signal,
+    };
+    const res = this.deps.http
+      ? await this.deps.http.request(url, init, { ...CHAT_FETCH_LIMITS, signal: ctx.signal })
+      : await (this.deps.fetchImpl ?? fetch)(url, init);
     if (!res.ok) throw new Error(`openai http ${res.status}: ${await res.text()}`);
     const toolCallAcc = new Map<number, { id: string; name: string; args: string }>();
     for await (const data of parseSSE(res.body)) {
@@ -52,12 +64,29 @@ export class OpenAIAdapter implements ProviderAdapter {
       }
     }
     for (const acc of toolCallAcc.values()) {
-      ctx.onChunk({ kind: 'tool_call', toolCalls: [{ id: acc.id, name: acc.name, arguments: safeParseJson(acc.args) }] });
+      emitToolCall(ctx.onChunk, acc.id, acc.name, acc.args);
     }
     ctx.onChunk({ kind: 'done' });
   }
 }
 
-function safeParseJson(s: string): Record<string, unknown> {
-  try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
+// L23: normalize content arrays to OpenAI's content-part shape; string content
+// passes through unchanged. CORE-01: an assistant turn's tool calls and a tool
+// result's originating call id are serialized under their wire names, since the
+// API rejects a `tool` message that carries no `tool_call_id`.
+function toOpenAIMessage(m: ModelMessage): Record<string, unknown> {
+  const out: Record<string, unknown> = { role: m.role, content: normalizeContent(m.content, 'openai') };
+  if (m.name) out.name = m.name;
+  if (m.role === 'tool') {
+    if (m.toolCallId) out.tool_call_id = m.toolCallId;
+    return out;
+  }
+  if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+    out.tool_calls = m.toolCalls.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments ?? {}) } }));
+    // A tool-only assistant turn has no text; OpenAI's own responses carry
+    // `content: null` there and some servers reject the empty string.
+    if (!out.content) out.content = null;
+  }
+  return out;
 }
+

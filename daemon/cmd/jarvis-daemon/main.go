@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -29,6 +31,15 @@ func main() {
 	q := runtime.NewQueue(perAgent, machine)
 	st := &runtimeState{q: q, serverURL: multicaURL}
 
+	// DAEM-11: one shared SQLite handle for the daemon process (busy_timeout set in db.Open).
+	var sharedDB *sql.DB
+	if d, err := db.Open(defaultDBPath()); err != nil {
+		log.Printf("warn: open db %s: %v", defaultDBPath(), err)
+	} else {
+		sharedDB = d
+		defer d.Close()
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -48,9 +59,12 @@ func main() {
 			ClientID:  func() string { return cl.RegisteredID() },
 			AgentID:   "jarvis",
 			Exec:      agentExec(&client.SubprocessAgentInvoker{}, st, pool, client.DefaultSkillFS(), cs, acp.Injection{}),
-			Recorder:  &sqliteRecorder{},
+			Recorder:  &sqliteRecorder{d: sharedDB},
+			Claims:    &sqliteClaimStore{d: sharedDB},
 			Conflicts: cs,
 		}
+		// DAEM-02: re-queue Multica tasks that survived a previous crash as queued/running.
+		go recoverMulticaClaims(ctx, handler, sharedDB)
 		go func() {
 			defer func() {
 				// I1: once the Serve loop exits, the client is no longer registered
@@ -90,11 +104,17 @@ func main() {
 		extras = append(extras, conflictAdapter{cs})
 	}
 	srv := httpapi.NewServerWithAuth("1.0.0-Preview", q, getenv("JARVIS_DAEMON_TOKEN", ""), extras...)
-	httpSrv := &http.Server{Addr: "127.0.0.1:" + port, Handler: srv.Handler()}
+	httpSrv := httpapi.NewHTTPServer("127.0.0.1:"+port, srv.Handler())
 	// SIGTERM/SIGINT cancels ctx, which stops the Multica Serve goroutine; the
 	// shutdown goroutine then drains the HTTP listener so the daemon terminates.
 	go func() {
 		<-ctx.Done()
+		// DAEM-03: drain in-flight jobs (so SendResult can finish) before closing HTTP.
+		drainCtx, drainCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := q.Drain(drainCtx); err != nil {
+			log.Printf("queue drain: %v", err)
+		}
+		drainCancel()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
@@ -233,21 +253,62 @@ func defaultDBPath() string {
 	return filepath.Join(home, ".jarvis", "jarvis.db")
 }
 
-type sqliteRecorder struct{}
+type sqliteRecorder struct{ d *sql.DB }
 
 // Record persists the L36 mapping for a Multica-claimed task. §13.3 makes the
 // M7+ Multica path daemon-written: ensure the local `tasks` row exists before
 // MapTaskIDs' UPDATE so the mapping is not lost on a nonexistent row (C1).
 func (s *sqliteRecorder) Record(ctx context.Context, local, multica string) error {
-	d, err := db.Open(defaultDBPath())
+	if s.d == nil {
+		return fmt.Errorf("sqlite recorder: no db handle")
+	}
+	if err := db.EnsureTaskRow(ctx, s.d, local, "jarvis", "{}"); err != nil {
+		return err
+	}
+	return db.MapTaskIDs(ctx, s.d, local, multica)
+}
+
+// sqliteClaimStore persists claims before Multica Ack (DAEM-02) on the shared handle (DAEM-11).
+type sqliteClaimStore struct{ d *sql.DB }
+
+func (s *sqliteClaimStore) PersistClaim(ctx context.Context, localID, multicaID, agentID string, payload []byte) error {
+	if s.d == nil {
+		return fmt.Errorf("claim store: no db handle")
+	}
+	return db.PersistClaim(ctx, s.d, localID, multicaID, agentID, string(payload))
+}
+
+func (s *sqliteClaimStore) AbandonClaim(ctx context.Context, localID string) error {
+	if s.d == nil {
+		return fmt.Errorf("claim store: no db handle")
+	}
+	return db.AbandonClaim(ctx, s.d, localID)
+}
+
+// recoverMulticaClaims re-submits durable queued/running Multica tasks after a
+// daemon restart (DAEM-02). Already-Ack'd claims must not be lost when the
+// in-memory queue is empty on boot.
+func recoverMulticaClaims(ctx context.Context, h *client.ClaimHandler, d *sql.DB) {
+	if d == nil {
+		return
+	}
+	claims, err := db.ListRecoverableClaims(ctx, d)
 	if err != nil {
-		return err
+		log.Printf("recover claims: list: %v", err)
+		return
 	}
-	defer d.Close()
-	if err := db.EnsureTaskRow(ctx, d, local, "jarvis", "{}"); err != nil {
-		return err
+	if len(claims) == 0 {
+		return
 	}
-	return db.MapTaskIDs(ctx, d, local, multica)
+	tasks := make([]client.ClaimedTask, 0, len(claims))
+	for _, c := range claims {
+		tasks = append(tasks, client.ClaimedTask{
+			TaskID:        c.LocalID,
+			MulticaTaskID: c.MulticaTaskID,
+			Payload:       []byte(c.PayloadJSON),
+		})
+	}
+	h.HandleClaimsRecovered(ctx, tasks)
 }
 
 func getenv(k, def string) string {

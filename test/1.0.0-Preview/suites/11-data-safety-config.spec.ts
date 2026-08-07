@@ -1,10 +1,8 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 function assertNoPlaintextApiKey(value: unknown, path = 'root'): void {
   if (value === null || typeof value !== 'object') return;
@@ -30,7 +28,7 @@ test.beforeAll(async () => {
   ({ app, window } = await launchJarvisElectron(dataDir));
   await completeOnboarding(window);
 
-  await window.goto(`${RENDERER_URL}/settings/providers`);
+  await window.goto(rendererHref('/settings/providers'));
   await window.getByTestId('provider-settings').waitFor({ timeout: 30_000 });
   await window.getByTestId('provider-add-open').click();
   await window.getByTestId('provider-name').fill('Safety Export Provider');
@@ -48,7 +46,7 @@ test.afterAll(async () => {
 });
 
 test('11-data-safety P0: backup and wipe tabs visible', async () => {
-  await window.goto(`${RENDERER_URL}/settings/data-safety`);
+  await window.goto(rendererHref('/settings/data-safety'));
   await window.getByTestId('data-safety-page').waitFor({ timeout: 30_000 });
   await expect(window.getByTestId('safety-tab-backup')).toBeVisible();
   await expect(window.getByTestId('safety-tab-wipe')).toBeVisible();
@@ -56,7 +54,7 @@ test('11-data-safety P0: backup and wipe tabs visible', async () => {
 });
 
 test('11-data-safety P0: backup-now creates entry in isolated dataDir', async () => {
-  await window.goto(`${RENDERER_URL}/settings/data-safety`);
+  await window.goto(rendererHref('/settings/data-safety'));
   await window.getByTestId('backup-pane').waitFor({ timeout: 30_000 });
   await window.getByTestId('backup-now').click();
 
@@ -85,7 +83,7 @@ test('11-data-safety P0: config export has no plaintext apiKey; merge import smo
     expect(providers.some((p) => typeof p.apiKeyRef === 'string' && p.apiKeyRef.length > 0)).toBe(true);
   }
 
-  await window.goto(`${RENDERER_URL}/settings/config`);
+  await window.goto(rendererHref('/settings/config'));
   await window.getByTestId('config-transfer').waitFor({ timeout: 30_000 });
 
   const mergePayload = JSON.stringify({
@@ -111,7 +109,7 @@ test('11-data-safety P0: config export has no plaintext apiKey; merge import smo
 });
 
 test('11-data-safety P0: wipe via UI confirmation in isolated dataDir', async () => {
-  await window.goto(`${RENDERER_URL}/settings/data-safety`);
+  await window.goto(rendererHref('/settings/data-safety'));
   await window.getByTestId('safety-tab-wipe').click();
   await window.getByTestId('wipe-pane').waitFor({ timeout: 30_000 });
 

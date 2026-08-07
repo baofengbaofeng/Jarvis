@@ -10,6 +10,7 @@ import {
   type ImportStrategy,
   type ProviderExport,
 } from '@jarvis/core';
+import { isAllowedSettingsKey, requiresSystemConfirm, validateSettingsValue } from './settings-schema';
 
 // Only persist settings whose value round-trips through JSON.stringify. Values
 // exported from the settings table already came from JSON.parse, so in practice
@@ -83,7 +84,9 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
       db.transaction(() => {
         const insP = db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)');
         for (const p of plan.create) {
-          if ('baseUrl' in p) insP.run(p.id, p.name, p.type, p.baseUrl, p.apiKeyRef ?? '', now, now);
+          // DESK-18: never trust imported apiKeyRef — keys live in SecureStorage;
+          // bind only the canonical empty/local ref for the new provider id.
+          if ('baseUrl' in p) insP.run(p.id, p.name, p.type, p.baseUrl, `provider:${p.id}:key`, now, now);
         }
         const updP = db.prepare('UPDATE providers SET name = ?, type = ?, base_url = ?, updated_at = ? WHERE id = ?');
         for (const p of plan.update) {
@@ -117,7 +120,20 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
 
         const insS = db.prepare('INSERT OR REPLACE INTO settings (key, value_json) VALUES (?,?)');
         for (const [k, v] of Object.entries(payload.settings ?? {})) {
-          const json = toJson(v);
+          if (!isAllowedSettingsKey(k)) {
+            skipped.push(`settings:${k}`);
+            continue;
+          }
+          if (requiresSystemConfirm(k, v)) {
+            skipped.push(`settings:${k}`);
+            continue;
+          }
+          const chk = validateSettingsValue(k, v);
+          if (!chk.ok) {
+            skipped.push(`settings:${k}`);
+            continue;
+          }
+          const json = toJson(chk.value);
           if (json !== null) insS.run(k, json);
         }
       })();

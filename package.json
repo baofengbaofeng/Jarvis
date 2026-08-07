@@ -9,7 +9,9 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "i18n:check": "node scripts/i18n-check.mjs",
-    "test:functional": "pnpm --dir test/1.0.0-Preview exec playwright test --pass-with-no-tests",
+    "test:go": "cd daemon && go vet ./... && go test -race ./...",
+    "lint": "pnpm --dir apps/desktop exec tsc -p tsconfig.json --noEmit && pnpm --dir packages/core exec tsc -p tsconfig.json --noEmit",
+    "test:functional": "pnpm --dir test/1.0.0-Preview exec playwright test",
     "test:release-artifacts": "node --test scripts/release/verify-artifacts.spec.mjs"
   },
   "devDependencies": {

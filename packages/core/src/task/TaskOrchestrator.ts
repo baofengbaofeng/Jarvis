@@ -25,6 +25,10 @@ export interface SubmitInput {
   // Per-task sandbox policy forwarded to tool contexts via EngineRunInput
   // (C6/J6: the permissions UI's saved per-agent policy is enforced here).
   policy?: SandboxPolicy;
+  // CORE-19: per-run tool visibility forwarded to EngineRunInput.
+  visibleTools?: string[];
+  // CORE-20: run-scoped MCP/agent tool authorization predicate.
+  toolFilter?: (name: string) => boolean;
 }
 
 export interface TaskOrchestratorCallbacks {
@@ -39,12 +43,20 @@ export interface TaskOrchestratorCallbacks {
 
 const DEFAULT_CONCURRENCY_PER_AGENT = 6;
 
+interface PauseGate {
+  paused: boolean;
+  waiters: Array<() => void>;
+}
+
 export class TaskOrchestrator {
   private queue: Array<{ input: SubmitInput; controller: AbortController }> = [];
   private active = new Map<string, number>();   // agentId -> running count
   private states = new Map<string, TaskState>();
   private controllers = new Map<string, AbortController>();
   private inputs = new Map<string, SubmitInput>(); // persistent input store for retry
+  // CORE-22: cooperative pause gates — engine.run awaits waitIfPaused between
+  // model/tool steps so pause actually stops further work (not just a label).
+  private pauseGates = new Map<string, PauseGate>();
 
   constructor(
     private engine: AgentEngine,
@@ -56,6 +68,7 @@ export class TaskOrchestrator {
   submit(input: SubmitInput): void {
     this.inputs.set(input.id, input);
     this.states.set(input.id, 'queued');
+    this.pauseGates.set(input.id, { paused: false, waiters: [] });
     this.queue.push({ input, controller: new AbortController() });
     this.controllers.set(input.id, this.queue[this.queue.length - 1].controller);
     this.cb.onStateChange?.(input.id, 'queued');
@@ -66,6 +79,8 @@ export class TaskOrchestrator {
     const controller = this.controllers.get(id);
     if (!controller) return;
     controller.abort();
+    // Wake any pause waiters so the engine can observe the abort and exit.
+    this.releasePause(id);
     const st = this.states.get(id);
     if (st === 'running' || st === 'paused') await this.store.updateState(id, transition(st, 'cancel'));
     this.states.set(id, 'cancelled');
@@ -75,6 +90,9 @@ export class TaskOrchestrator {
   async pause(id: string): Promise<void> {
     const st = this.states.get(id);
     if (st === 'running') {
+      const gate = this.pauseGates.get(id) ?? { paused: false, waiters: [] };
+      gate.paused = true;
+      this.pauseGates.set(id, gate);
       this.states.set(id, 'paused');
       await this.store.updateState(id, 'paused');
       this.cb.onStateChange?.(id, 'paused');
@@ -82,7 +100,26 @@ export class TaskOrchestrator {
   }
 
   resume(id: string): void {
-    if (this.states.get(id) === 'paused') { this.states.set(id, 'running'); this.cb.onStateChange?.(id, 'running'); }
+    if (this.states.get(id) === 'paused') {
+      this.states.set(id, 'running');
+      this.releasePause(id);
+      this.cb.onStateChange?.(id, 'running');
+    }
+  }
+
+  private releasePause(id: string): void {
+    const gate = this.pauseGates.get(id);
+    if (!gate) return;
+    // Clear paused + flush waiters (resume or cancel).
+    gate.paused = false;
+    const waiters = gate.waiters.splice(0, gate.waiters.length);
+    for (const w of waiters) w();
+  }
+
+  private waitIfPaused(id: string): Promise<void> {
+    const gate = this.pauseGates.get(id);
+    if (!gate || !gate.paused) return Promise.resolve();
+    return new Promise<void>((resolve) => { gate.waiters.push(resolve); });
   }
 
   async retry(id: string): Promise<void> {
@@ -92,6 +129,7 @@ export class TaskOrchestrator {
     if (!input) return;
     const controller = new AbortController();
     this.controllers.set(id, controller);
+    this.pauseGates.set(id, { paused: false, waiters: [] });
     this.queue.push({ input, controller });
     this.states.set(id, 'queued');
     this.cb.onStateChange?.(id, 'queued');
@@ -131,6 +169,7 @@ export class TaskOrchestrator {
         const result = await this.engine.run({
           ...input,
           signal: controller.signal,
+          waitIfPaused: () => this.waitIfPaused(input.id),
           onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); },
           onTool: (call, toolResult) => { this.cb.onTool?.(input.id, call, toolResult); },
         });
@@ -156,6 +195,7 @@ export class TaskOrchestrator {
         }
       }
     } finally {
+      this.pauseGates.delete(input.id);
       // Decrements even when we bailed out early on a queued-cancel race.
       this.active.set(input.agent.id, Math.max(0, (this.active.get(input.agent.id) ?? 0) - 1));
       void this.pump();

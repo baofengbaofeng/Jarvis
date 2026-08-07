@@ -2,10 +2,11 @@ import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { join } from 'node:path';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope, type ImportStrategy, type ShortcutBindings } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, ModelRouter, createAdapter, type TreeNode, type WipeScope, type ImportStrategy, type ShortcutBindings } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
+import { validateSettingsValue, requiresSystemConfirm } from './settings-schema';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
 import { createAgentTemplatesIpc } from './agent-templates';
@@ -326,12 +327,18 @@ export class IpcRouter {
     // M8 Task 2 (B9): ONE shared token-usage sink feeds the chat path, the task
     // path, and the usage.* IPC channels.
     const usageTracker = new UsageTracker(this.db);
-    const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), { usageTracker });
+    const getMainWindow = () => this.opts.getMainWindow?.() ?? null;
+    // CORE-04: ONE shared ModelRouter for chat + tasks so timeout/retry/
+    // fallback/circuit-breaker apply to both paths (tasks previously bypassed).
+    const modelRouter = new ModelRouter({
+      createAdapter: (type) => createAdapter(type, { http: safeUrlPolicy }),
+    });
+    const chat = registerChatHandlers(this.db, secrets, getMainWindow, { usageTracker, router: modelRouter });
     this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as Parameters<typeof chat.send>[1]));
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
-    const tasks = registerTaskHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), createAgentStore(this.db), { settings, usageTracker });
+    const tasks = registerTaskHandlers(this.db, secrets, getMainWindow, createAgentStore(this.db), { settings, usageTracker, router: modelRouter });
     this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string; sessionId?: string }));
     this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
     this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));
@@ -386,9 +393,11 @@ export class IpcRouter {
     // L18: `app.relaunch` does not exist on the preload surface — the renderer's
     // BackupPane invokes it after a restore, so expose it here (relaunch then quit).
     this.register('app.relaunch', () => { app.relaunch(); app.quit(); return { ok: true }; });
-    // L20 (M8 Task 5): sensitive-data wipe. The WipeService deletes the
-    // DEFAULT_WIPE_TABLES rows, then the Keychain API keys and the single-active
-    // workspace root when the scope asks for them. deleteAllApiKeys enumerates
+    // L20 (M8 Task 5) / DESK-13: sensitive-data wipe. The WipeService deletes
+    // the DEFAULT_WIPE_TABLES rows, then the Keychain API keys. Workspace
+    // removal uses a real-time getWorkspaceRoot (not a path captured at
+    // registerAll) and is fenced to ~/.jarvis/workspaces so live project roots
+    // bound as agent workspaces are never rmSync'd. deleteAllApiKeys enumerates
     // every persisted api_key_ref (providers + the settings image.api_key_ref)
     // and best-effort deletes each — a missing keychain item must not abort the
     // wipe (SecureStorage.delete throws when the item is absent).
@@ -404,18 +413,35 @@ export class IpcRouter {
         }
         return n;
       },
-    }, getWorkspace() ?? undefined);
+    }, {
+      getWorkspaceRoot: () => getWorkspace() ?? undefined,
+      workspaceFence: join(jarvisDataDir(), 'workspaces'),
+    });
     const wipeIpc = createWipeIpc(wipeSvc);
     this.register('wipe.run', (_e, scope, phrase) => wipeIpc.run(_e, scope as WipeScope, phrase as string));
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract
     // is enforced inside registerSquadIpc, so no ipcMain rejection leaks.
-    registerSquadIpc((ch, h) => this.register(ch, h), { db: this.db, getWindow: () => BrowserWindow.getFocusedWindow(), runner: tasks.squad });
+    registerSquadIpc((ch, h) => this.register(ch, h), { db: this.db, getWindow: () => this.opts.getMainWindow?.() ?? null, runner: tasks.squad });
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
-    this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
+    this.register(IpcChannel.settingsSet, (_e, key, value) => {
+      const k = key as string;
+      if (requiresSystemConfirm(k, value)) {
+        return { ok: false as const, error: 'SETTINGS_SYSTEM_CONFIRM_REQUIRED' };
+      }
+      const chk = validateSettingsValue(k, value);
+      if (!chk.ok) return { ok: false as const, error: chk.error };
+      settings.set(k, chk.value);
+      return { ok: true as const };
+    });
     this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });
-    this.register('proxy.set', (_e, cfg: unknown) => { settings.set('proxy_json', cfg); return { ok: true }; });
+    this.register('proxy.set', (_e, cfg: unknown) => {
+      const chk = validateSettingsValue('proxy_json', cfg);
+      if (!chk.ok) return { ok: false as const, error: chk.error };
+      settings.set('proxy_json', chk.value);
+      return { ok: true };
+    });
     // C12 (M8 Task 6): config import/export. Export serializes the providers/
     // models/agents/settings tables (apiKeyRef only, never plaintext keys);
     // import applies a skip/overwrite/merge strategy over the same tables.
@@ -539,7 +565,7 @@ export class IpcRouter {
     // K5 (M6 Task 10): forward squad/agent bus messages to the renderer as
     // 'squad:event' so the squad timeline (TimelineView) streams live. Same
     // disposeFns lifecycle as the persist subscription.
-    this.disposeFns.push(createSquadEventPush(getMessageBus(), () => BrowserWindow.getFocusedWindow()));
+    this.disposeFns.push(createSquadEventPush(getMessageBus(), () => this.opts.getMainWindow?.() ?? null));
   }
 
   listen(): void {

@@ -536,7 +536,7 @@ describe('IpcRouter config channels (C12)', () => {
       ],
       models: [],
       agents: [{ id: 'a1', name: 'A1', slug: 'a-1', modelId: 'missing-model' }],
-      settings: { concurrency: { perAgent: 5 } },
+      settings: { 'concurrency.per_agent': 5 },
     });
     const res = await importCfg({}, payload, 'merge') as { ok: boolean; created: number; updated: number; skipped: number };
     expect(res.ok).toBe(true);
@@ -547,10 +547,12 @@ describe('IpcRouter config channels (C12)', () => {
     const p1 = db.prepare('SELECT * FROM providers WHERE id = ?').get('p1') as { base_url: string; api_key_ref: string };
     expect(p1.base_url).toBe('https://new.example');
     expect(p1.api_key_ref).toBe('keychain:p1'); // empty apiKeyRef did not clobber
-    const p2 = db.prepare('SELECT * FROM providers WHERE id = ?').get('p2') as { name: string };
+    const p2 = db.prepare('SELECT * FROM providers WHERE id = ?').get('p2') as { name: string; api_key_ref: string };
     expect(p2.name).toBe('P2');
+    // DESK-18: imported apiKeyRef is ignored; bind canonical local ref only.
+    expect(p2.api_key_ref).toBe('provider:p2:key');
     expect((db.prepare('SELECT COUNT(*) c FROM agents').get() as { c: number }).c).toBe(0);
-    expect(db.prepare('SELECT value_json FROM settings WHERE key = ?').get('concurrency')).toEqual({ value_json: '{"perAgent":5}' });
+    expect(db.prepare('SELECT value_json FROM settings WHERE key = ?').get('concurrency.per_agent')).toEqual({ value_json: '5' });
   });
 
   it('config.import rejects a null/empty payload cleanly (no ipcMain rejection)', async () => {

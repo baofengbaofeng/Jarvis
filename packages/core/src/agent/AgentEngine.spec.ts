@@ -64,6 +64,133 @@ describe('AgentEngine', () => {
     expect(result.toolCalls).toBe(maxSteps);
   });
 
+  it('records the tool-call assistant turn and the result id even when the model sent no text', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async (args) => ({ ok: true, output: `out:${String(args.text)}` }));
+    const seen: Array<Array<{ role: string; content: unknown; toolCalls?: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCalls?: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_1', name: 'echo', arguments: { text: 'a' } }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 3 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(seen[1]).toEqual([
+      { role: 'user', content: 'go' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'echo', arguments: { text: 'a' } }] },
+      { role: 'tool', content: 'out:a', toolCallId: 'call_1', name: 'echo' }
+    ]);
+  });
+
+  it('gives an id-less tool call a synthetic id shared by the call and its result', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: Array<Array<{ role: string; toolCalls?: Array<{ id: string }>; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; toolCalls?: Array<{ id: string }>; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '', name: 'echo', arguments: {} }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    const assistantId = seen[1][1].toolCalls![0].id;
+    expect(assistantId).toBeTruthy();
+    expect(seen[1][2].toolCallId).toBe(assistantId);
+  });
+
+  it('links a denied tool call to its result so the transcript stays well-formed', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: Array<Array<{ role: string; content: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_9', name: 'echo', arguments: {} }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2, approvalGate: async () => false });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(seen[1][2]).toMatchObject({ role: 'tool', content: '[denied] echo', toolCallId: 'call_9' });
+  });
+
+  it('accumulates usage across REACT steps instead of overwriting (CORE-05)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    let step = 0;
+    const chat = async (_req: unknown, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      step++;
+      if (step === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 't1', name: 'echo', arguments: {} }] });
+        opts.onChunk?.({ kind: 'usage', usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } };
+      }
+      opts.onChunk?.({ kind: 'delta', delta: 'done' });
+      opts.onChunk?.({ kind: 'usage', usage: { promptTokens: 20, completionTokens: 5, totalTokens: 25 } });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'done', usage: { promptTokens: 20, completionTokens: 5, totalTokens: 25 } };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 3 });
+    const result = await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(result.usage).toEqual({ promptTokens: 30, completionTokens: 7, totalTokens: 37 });
+  });
+
+  it('feeds a throwing tool handler back to the model as ok:false without killing the run (CORE-06)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'boom', description: '', parameters: {} }, async () => { throw new Error('handler failed'); });
+    const seen: Array<Array<{ role: string; content: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_1', name: 'boom', arguments: {} }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'recovered', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    const result = await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(result.text).toBe('recovered');
+    expect(seen[1][2]).toMatchObject({ role: 'tool', toolCallId: 'call_1', content: 'handler failed' });
+  });
+
+  it('does not execute a tool call with argumentsParseError and feeds the error to the model (CORE-03)', async () => {
+    const reg = new ToolRegistry();
+    let executed = 0;
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => { executed++; return { ok: true, output: 'ran' }; });
+    const seen: Array<Array<{ role: string; content: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'error', error: 'invalid tool arguments for echo: Unexpected end of JSON' });
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_bad', name: 'echo', arguments: {}, argumentsParseError: 'Unexpected end of JSON' }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(executed).toBe(0);
+    expect(seen[1][2]).toMatchObject({ role: 'tool', toolCallId: 'call_bad', content: '[invalid arguments] Unexpected end of JSON' });
+  });
+
   it('passes registered tools to the model router', async () => {
     const reg = new ToolRegistry();
     reg.register({ name: 'echo', description: 'echo', parameters: {} }, async () => ({ ok: true, output: 'x' }));
@@ -76,6 +203,84 @@ describe('AgentEngine', () => {
     };
     const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 1 });
     await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
-    expect(captured?.tools?.map(t => t.name)).toEqual(['echo']);
+    expect(captured!.tools?.map((t: { name: string }) => t.name)).toEqual(['echo']);
+  });
+
+  it('keeps distinct visibleTools per concurrent run (CORE-19)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    reg.register({ name: 'write_file', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: string[][] = [];
+    let releaseA!: () => void;
+    let releaseB!: () => void;
+    const gateA = new Promise<void>((r) => { releaseA = r; });
+    const gateB = new Promise<void>((r) => { releaseB = r; });
+    let chats = 0;
+    const chat = async (req: { tools?: Array<{ name: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      const n = ++chats;
+      seen.push((req.tools ?? []).map(t => t.name).sort());
+      if (n === 1) await gateA;
+      else if (n === 2) await gateB;
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 1 });
+    const runA = engine.run({
+      agent, messages: [{ role: 'user', content: 'a' }], cwd: '/', env: {}, apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1',
+      visibleTools: ['echo'],
+    });
+    const runB = engine.run({
+      agent, messages: [{ role: 'user', content: 'b' }], cwd: '/', env: {}, apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1',
+      visibleTools: ['write_file'],
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(seen).toHaveLength(2);
+    releaseA();
+    releaseB();
+    await Promise.all([runA, runB]);
+    expect(seen).toContainEqual(['echo']);
+    expect(seen).toContainEqual(['write_file']);
+  });
+
+  it('applies run-scoped toolFilter for visibility and execute (CORE-20)', async () => {
+    const reg = new ToolRegistry();
+    const executed: string[] = [];
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => {
+      executed.push('echo');
+      return { ok: true, output: 'echo-ok' };
+    });
+    reg.register({ name: 'mcp:fs:read', description: '', parameters: {} }, async () => {
+      executed.push('mcp:fs:read');
+      return { ok: true, output: 'secret' };
+    });
+    reg.register({ name: 'mcp:other:x', description: '', parameters: {} }, async () => {
+      executed.push('mcp:other:x');
+      return { ok: true, output: 'leaked' };
+    });
+    const seenTools: string[][] = [];
+    let step = 0;
+    const chat = async (req: { tools?: Array<{ name: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seenTools.push((req.tools ?? []).map(t => t.name).sort());
+      step++;
+      if (step === 1) {
+        // Model tries an unbound MCP tool — must be denied without executing.
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'mcp:other:x', arguments: {} }] });
+      } else {
+        opts.onChunk?.({ kind: 'delta', delta: 'done' });
+        opts.onChunk?.({ kind: 'done' });
+      }
+      return { text: step === 1 ? '' : 'done', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 3 });
+    const filter = (name: string) => !name.startsWith('mcp:') || name.startsWith('mcp:fs:');
+    await engine.run({
+      agent, messages: [{ role: 'user', content: 'go' }], cwd: '/', env: {}, apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1',
+      toolFilter: filter,
+    });
+    expect(seenTools[0]).toEqual(['echo', 'mcp:fs:read']);
+    expect(executed).not.toContain('mcp:other:x');
   });
 });

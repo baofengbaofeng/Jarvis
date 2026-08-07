@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, PageHeader, Panel, Select, StatusBadge, Textarea } from '@jarvis/ui';
+import { Button, Input, PageHeader, Panel, Select, StatusBadge } from '@jarvis/ui';
 import type { AgentConfig } from '@jarvis/protocol';
 import { TimelineView } from '../components/squad/TimelineView';
 import { CallGraphView } from '../components/squad/CallGraphView';

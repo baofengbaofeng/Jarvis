@@ -11,6 +11,7 @@ export default defineConfig({
   globalSetup: './global-setup.ts',
   fullyParallel: false,
   workers: 1,
+  forbidOnly: true,
   projects: [
     {
       name: 'electron-functional',

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -249,4 +250,158 @@ func TestValidSkillNameRejectsTraversal(t *testing.T) {
 			t.Fatalf("expected %q to be accepted, got %v", name, err)
 		}
 	}
+}
+
+
+// --- DAEM-02 ---
+
+type orderedAPI struct {
+	recordingAPI
+	ackErr   error
+	timeline *[]string
+}
+
+func (o *orderedAPI) Ack(ctx context.Context, clientID, taskID string, ok bool) error {
+	if o.timeline != nil {
+		*o.timeline = append(*o.timeline, "ack")
+	}
+	if o.ackErr != nil {
+		return o.ackErr
+	}
+	return o.recordingAPI.Ack(ctx, clientID, taskID, ok)
+}
+
+type orderedPersister struct {
+	timeline  *[]string
+	persisted []string
+	abandoned []string
+	err       error
+}
+
+func (p *orderedPersister) PersistClaim(_ context.Context, localID, _, _ string, _ []byte) error {
+	if p.timeline != nil {
+		*p.timeline = append(*p.timeline, "persist")
+	}
+	p.persisted = append(p.persisted, localID)
+	return p.err
+}
+
+func (p *orderedPersister) AbandonClaim(_ context.Context, localID string) error {
+	if p.timeline != nil {
+		*p.timeline = append(*p.timeline, "abandon")
+	}
+	p.abandoned = append(p.abandoned, localID)
+	return nil
+}
+
+func TestHandleClaimsPersistsBeforeAck(t *testing.T) {
+	var timeline []string
+	api := &orderedAPI{
+		recordingAPI: recordingAPI{tasks: []ClaimedTask{{
+			TaskID: "t1", MulticaTaskID: "mt1",
+			Payload: []byte(`{"taskId":"t1","instruction":"go"}`),
+		}}},
+		timeline: &timeline,
+	}
+	persister := &orderedPersister{timeline: &timeline}
+	q := runtime.NewQueue(1, 2)
+	h := &ClaimHandler{
+		API: api, Queue: q, ClientID: func() string { return "c1" },
+		Claims: persister,
+		Exec: func(context.Context, *acp.TaskPayload, func(runtime.StreamChunk)) (TaskResult, error) {
+			return TaskResult{Status: "completed", FinishedAt: time.Now().Unix()}, nil
+		},
+	}
+	if err := h.HandleClaims(context.Background(), api.tasks); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(2 * time.Second)
+	for api.resultCount() < 1 {
+		select {
+		case <-deadline:
+			t.Fatal("no result")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if len(timeline) < 2 || timeline[0] != "persist" || timeline[1] != "ack" {
+		t.Fatalf("expected persist then ack, got %v", timeline)
+	}
+}
+
+func TestHandleClaimsAckErrorDropsJob(t *testing.T) {
+	api := &orderedAPI{
+		recordingAPI: recordingAPI{tasks: []ClaimedTask{{
+			TaskID: "t-drop", MulticaTaskID: "mt-drop",
+			Payload: []byte(`{"taskId":"t-drop","instruction":"go"}`),
+		}}},
+		ackErr: errors.New("ack failed"),
+	}
+	persister := &orderedPersister{}
+	var execCount int
+	q := runtime.NewQueue(1, 2)
+	h := &ClaimHandler{
+		API: api, Queue: q, ClientID: func() string { return "c1" },
+		Claims: persister,
+		Exec: func(context.Context, *acp.TaskPayload, func(runtime.StreamChunk)) (TaskResult, error) {
+			execCount++
+			return TaskResult{Status: "completed", FinishedAt: time.Now().Unix()}, nil
+		},
+	}
+	if err := h.HandleClaims(context.Background(), api.tasks); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(80 * time.Millisecond)
+	if execCount != 0 {
+		t.Fatalf("exec must not run after ack failure, got %d", execCount)
+	}
+	if len(persister.abandoned) != 1 || persister.abandoned[0] != "t-drop" {
+		t.Fatalf("expected abandon of t-drop, got %v", persister.abandoned)
+	}
+	if q.Status().Queued+q.Status().ActiveTasks != 0 {
+		t.Fatalf("queue must be empty after ack drop, status=%+v", q.Status())
+	}
+}
+
+func TestRunOneSendResultIgnoresCanceledParentCtx(t *testing.T) {
+	api := &recordingAPI{}
+	var sendCtxErr error
+	var sendCalled bool
+	h := &ClaimHandler{
+		API: &sendCaptureAPI{recordingAPI: api, onSend: func(ctx context.Context) {
+			sendCalled = true
+			sendCtxErr = ctx.Err() // must be nil at call time (separate from parent)
+		}},
+		Queue: runtime.NewQueue(1, 1),
+		ClientID: func() string { return "c1" },
+		Exec: func(context.Context, *acp.TaskPayload, func(runtime.StreamChunk)) (TaskResult, error) {
+			return TaskResult{Status: "completed", Result: "ok", FinishedAt: time.Now().Unix()}, nil
+		},
+	}
+	parent, cancel := context.WithCancel(context.Background())
+	cancel() // parent already canceled (shutdown)
+	payload := &acp.TaskPayload{TaskID: "t-shutdown", Instruction: "x"}
+	if err := h.runOne(parent, payload, "t-shutdown", "mt"); err != nil {
+		t.Fatalf("runOne should not fail when parent ctx canceled: %v", err)
+	}
+	if !sendCalled {
+		t.Fatal("SendResult not called")
+	}
+	if sendCtxErr != nil {
+		t.Fatalf("SendResult ctx must not be canceled at call time, got %v", sendCtxErr)
+	}
+	if api.resultCount() != 1 {
+		t.Fatalf("expected result sent, got %d", api.resultCount())
+	}
+}
+
+type sendCaptureAPI struct {
+	*recordingAPI
+	onSend func(context.Context)
+}
+
+func (s *sendCaptureAPI) SendResult(ctx context.Context, id, taskID string, r TaskResult) error {
+	if s.onSend != nil {
+		s.onSend(ctx)
+	}
+	return s.recordingAPI.SendResult(ctx, id, taskID, r)
 }

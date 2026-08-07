@@ -80,3 +80,79 @@ describe('resolveDaemonAuthToken', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('defaultDaemonBinaryPath (BUILD-04)', () => {
+  it('appends .exe on win32', async () => {
+    const { defaultDaemonBinaryPath: pathFor } = await import('./DaemonSupervisor');
+    expect(pathFor('/app/out/main', 'win32')).toMatch(/jarvis-daemon\.exe$/);
+  });
+
+  it('uses process.resourcesPath when packaged', async () => {
+    const { defaultDaemonBinaryPath: pathFor } = await import('./DaemonSupervisor');
+    expect(pathFor('/x', 'linux', true, '/Resources')).toBe('/Resources/daemon/jarvis-daemon');
+  });
+});
+
+describe('defaultCoreEntryPath / buildDaemonEnv (DAEM-01)', () => {
+  it('resolves an absolute headless.mjs path in dev', async () => {
+    const { defaultCoreEntryPath } = await import('./DaemonSupervisor');
+    const p = defaultCoreEntryPath('/app/out/main', false, '');
+    expect(p.startsWith('/')).toBe(true);
+    expect(p.endsWith('packages/core/dist/headless.mjs') || p.endsWith('core/headless.mjs')).toBe(true);
+  });
+
+  it('uses process.resourcesPath when packaged', async () => {
+    const { defaultCoreEntryPath } = await import('./DaemonSupervisor');
+    expect(defaultCoreEntryPath('/x', true, '/Resources')).toBe('/Resources/core/headless.mjs');
+  });
+
+  it('injects absolute JARVIS_CORE_ENTRY into daemon env', async () => {
+    const { buildDaemonEnv } = await import('./DaemonSupervisor');
+    const env = buildDaemonEnv({ PATH: '/usr/bin' }, 17890, {}, 'tok', '/abs/packages/core/dist/headless.mjs');
+    expect(env.JARVIS_CORE_ENTRY).toBe('/abs/packages/core/dist/headless.mjs');
+  });
+});
+
+describe('createHealthPoller (DESK-17)', () => {
+  it('calls onReady only once across repeated healthy ticks', async () => {
+    const onReady = vi.fn();
+    const onUnhealthy = vi.fn();
+    let n = 0;
+    const p = createHealthPoller({
+      port: 17890,
+      intervalMs: 20,
+      fetchImpl: async () => ({ ok: true }),
+    });
+    await p.start(onReady, onUnhealthy);
+    await new Promise((r) => setTimeout(r, 60));
+    p.stop();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onUnhealthy).not.toHaveBeenCalled();
+    n++;
+    void n;
+  });
+
+  it('calls onUnhealthy when health flips from ok to fail', async () => {
+    const onReady = vi.fn();
+    const onUnhealthy = vi.fn();
+    let ok = true;
+    const p = createHealthPoller({
+      port: 17890,
+      intervalMs: 15,
+      fetchImpl: async () => ({ ok }),
+    });
+    await p.start(onReady, onUnhealthy);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    ok = false;
+    await new Promise((r) => setTimeout(r, 50));
+    p.stop();
+    expect(onUnhealthy).toHaveBeenCalled();
+  });
+});
+
+describe('daemonSpawnStdio (DESK-17)', () => {
+  it('ignores stdio to avoid pipe-buffer deadlock', async () => {
+    const { daemonSpawnOptions } = await import('./DaemonSupervisor');
+    expect(daemonSpawnOptions().stdio).toBe('ignore');
+  });
+});

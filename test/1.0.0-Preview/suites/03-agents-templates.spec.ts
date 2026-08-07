@@ -1,9 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -26,11 +24,11 @@ test('03-agents: create via IPC appears in list and switcher', async () => {
     }, agentName);
     expect(agentId).toBeTruthy();
 
-    await window.goto(`${RENDERER_URL}/agents`);
+    await window.goto(rendererHref('/agents'));
     await window.getByTestId('agent-list').waitFor({ timeout: 30_000 });
     await expect(window.getByTestId('agent-list').locator('li').filter({ hasText: agentName })).toBeVisible();
 
-    await window.goto(`${RENDERER_URL}/`);
+    await window.goto(rendererHref('/'));
     await window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
     await window.getByTestId('agent-switcher').waitFor();
     await expect(window.getByTestId('agent-func-test-agent')).toBeVisible({ timeout: 15_000 });
@@ -52,13 +50,10 @@ test('03-agents: create from template', async () => {
       return (await window.jarvis.invoke('agent-templates.list')) as Array<{ id: string }>;
     });
 
-    if (templates.length === 0) {
-      test.skip(true, 'agent-templates.list returned empty — no seed templates in fresh DB');
-      return;
-    }
+    expect(templates.length).toBeGreaterThan(0);
 
     const tplId = templates[0]!.id;
-    await window.goto(`${RENDERER_URL}/agents/templates`);
+    await window.goto(rendererHref('/agents/templates'));
     await window.getByTestId('template-view').waitFor({ timeout: 30_000 });
     await expect(window.getByTestId('template-card').first()).toBeVisible();
 
@@ -68,7 +63,7 @@ test('03-agents: create from template', async () => {
     await window.getByTestId('agent-list').waitFor({ timeout: 30_000 });
     await expect(window.getByTestId('agent-list').locator('li').filter({ hasText: templateAgentName })).toBeVisible();
 
-    await window.goto(`${RENDERER_URL}/`);
+    await window.goto(rendererHref('/'));
     await window.getByTestId('agent-switcher').waitFor();
     await expect(window.getByTestId('agent-template-agent')).toBeVisible({ timeout: 15_000 });
   } finally {

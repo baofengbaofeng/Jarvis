@@ -54,3 +54,19 @@ func TestStatus(t *testing.T) {
 		t.Fatalf("expected concurrency=20, got %v", body["concurrency"])
 	}
 }
+
+func TestNewHTTPServerSetsTimeouts(t *testing.T) {
+	srv := NewHTTPServer("127.0.0.1:0", NewServer("1.0.0-Preview", runtime.NewQueue(1, 1)).Handler())
+	if srv.ReadHeaderTimeout <= 0 {
+		t.Fatal("ReadHeaderTimeout must be set")
+	}
+	if srv.ReadTimeout <= 0 {
+		t.Fatal("ReadTimeout must be set")
+	}
+	if srv.WriteTimeout <= 0 {
+		t.Fatal("WriteTimeout must be set")
+	}
+	if srv.IdleTimeout <= 0 {
+		t.Fatal("IdleTimeout must be set")
+	}
+}

@@ -30,14 +30,19 @@ export function buildDaemonEnv(
   port: number,
   concurrency: ConcurrencyConfig,
   token: string,
+  coreEntry?: string,
 ): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...base,
     JARVIS_DAEMON_PORT: String(port),
     JARVIS_CONCURRENCY_PER_AGENT: String(concurrency.perAgent ?? DEFAULT_CONCURRENCY_PER_AGENT),
     JARVIS_CONCURRENCY_MACHINE: String(concurrency.machine ?? DEFAULT_CONCURRENCY_MACHINE),
     JARVIS_DAEMON_TOKEN: token,
   };
+  if (coreEntry) {
+    env.JARVIS_CORE_ENTRY = coreEntry;
+  }
+  return env;
 }
 
 export function daemonAuthHeaders(token: string): Record<string, string> {
@@ -65,21 +70,43 @@ export function createHealthPoller(opts: HealthPollerOptions) {
   const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url));
   let timer: NodeJS.Timeout | null = null;
   let stopped = false;
+  let readyNotified = false;
+  let wasHealthy = false;
   return {
-    async start(onReady: () => void): Promise<void> {
+    // DESK-17: onReady fires once; onUnhealthy fires when health flips false after ready.
+    async start(onReady: () => void, onUnhealthy?: () => void): Promise<void> {
       const url = `http://127.0.0.1:${opts.port}/health`;
       const tick = async () => {
         if (stopped) return;
         try {
           const res = await fetchImpl(url);
-          if (res.ok) { onReady(); }
-        } catch { /* not ready yet */ }
+          if (res.ok) {
+            wasHealthy = true;
+            if (!readyNotified) {
+              readyNotified = true;
+              onReady();
+            }
+          } else if (wasHealthy) {
+            wasHealthy = false;
+            onUnhealthy?.();
+          }
+        } catch {
+          if (wasHealthy) {
+            wasHealthy = false;
+            onUnhealthy?.();
+          }
+        }
       };
       await tick();
       timer = setInterval(() => void tick(), opts.intervalMs);
     },
     stop(): void { stopped = true; if (timer) clearInterval(timer); }
   };
+}
+
+/** DESK-17: ignore stdio so a chatty daemon cannot fill unread pipes and deadlock. */
+export function daemonSpawnOptions(): { stdio: 'ignore' } {
+  return { stdio: 'ignore' };
 }
 
 // M7 Task 9 (L39 数据面): runtime status + L38 conflicts, cached by the
@@ -157,6 +184,32 @@ export function createRuntimePoller(opts: RuntimePollerOptions) {
   };
 }
 
+export function defaultDaemonBinaryPath(
+  dirname = import.meta.dirname,
+  platform: NodeJS.Platform = process.platform,
+  packaged = false,
+  resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '',
+): string {
+  const name = platform === 'win32' ? 'jarvis-daemon.exe' : 'jarvis-daemon';
+  if (packaged && resourcesPath) {
+    return join(resourcesPath, 'daemon', name);
+  }
+  return join(dirname, '../../../resources/daemon', name);
+}
+
+/** Absolute path to packages/core/dist/headless.mjs (DAEM-01). */
+export function defaultCoreEntryPath(
+  dirname = import.meta.dirname,
+  packaged = false,
+  resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '',
+): string {
+  if (packaged && resourcesPath) {
+    return join(resourcesPath, 'core', 'headless.mjs');
+  }
+  // apps/desktop/src/main/daemon -> repo root packages/core/dist/headless.mjs
+  return join(dirname, '../../../../../packages/core/dist/headless.mjs');
+}
+
 export class DaemonSupervisor {
   private child: ChildProcess | null = null;
   private poller: ReturnType<typeof createHealthPoller> | null = null;
@@ -168,8 +221,14 @@ export class DaemonSupervisor {
   private conflictsCache: ConflictItem[] = [];
   /** Shared with the spawned daemon via JARVIS_DAEMON_TOKEN (SEC-09). */
   private readonly authToken: string = resolveDaemonAuthToken();
+  private readonly coreEntryPath: string;
 
-  constructor(private binaryPath = join(import.meta.dirname, '../../../resources/daemon/jarvis-daemon')) {}
+  constructor(
+    private binaryPath = defaultDaemonBinaryPath(),
+    coreEntryPath = defaultCoreEntryPath(),
+  ) {
+    this.coreEntryPath = coreEntryPath;
+  }
 
   // C10: lets the main process hand the supervisor a live reader for the saved
   // settings.concurrency value, so every spawn/restart injects the current
@@ -178,14 +237,41 @@ export class DaemonSupervisor {
     this.concurrencyProvider = fn;
   }
 
+  private generation = 0;
+
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
+    const gen = ++this.generation;
     this.child = spawn(this.binaryPath, [], {
-      env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}, this.authToken),
+      ...daemonSpawnOptions(),
+      env: buildDaemonEnv(
+        process.env,
+        this.port,
+        this.concurrencyProvider?.() ?? {},
+        this.authToken,
+        this.coreEntryPath,
+      ),
     });
-    this.child.on('error', () => { this.healthy = false; this.resetRuntimeCache(); this.child = null; });
+    const child = this.child;
+    // DESK-17: ignore handlers from a previous generation after restart().
+    child.on('error', () => {
+      if (gen !== this.generation) return;
+      this.healthy = false;
+      this.resetRuntimeCache();
+      if (this.child === child) this.child = null;
+    });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
-    void this.poller.start(() => { this.healthy = true; onReady?.(); });
+    void this.poller.start(
+      () => {
+        if (gen !== this.generation) return;
+        this.healthy = true;
+        onReady?.();
+      },
+      () => {
+        if (gen !== this.generation) return;
+        this.healthy = false;
+      },
+    );
     // M7 Task 9: cache L39 runtime status + L38 conflicts at 3s. The cache stays
     // at the local-mode default until the daemon answers, so a supervisor that
     // never starts still reports local mode via getRuntimeStatus().
@@ -197,7 +283,13 @@ export class DaemonSupervisor {
       onConflicts: (items) => { this.conflictsCache = items; },
     });
     void this.runtimePoller.start();
-    this.child.on('exit', () => { this.healthy = false; this.resetRuntimeCache(); onExit?.(); });
+    child.on('exit', () => {
+      if (gen !== this.generation) return;
+      this.healthy = false;
+      this.resetRuntimeCache();
+      if (this.child === child) this.child = null;
+      onExit?.();
+    });
   }
 
   async status(): Promise<DaemonStatus> {
@@ -222,13 +314,20 @@ export class DaemonSupervisor {
     this.conflictsCache = [];
   }
 
-  restart(): void { this.stop(); this.start(); }
+  restart(): void {
+    this.stop();
+    this.start();
+  }
   stop(): void {
+    this.generation += 1; // DESK-17: invalidate in-flight exit/error/health from the old child
+    this.healthy = false;
     this.poller?.stop();
     this.poller = null;
     this.runtimePoller?.stop();
     this.runtimePoller = null;
-    this.child?.kill();
+    this.resetRuntimeCache();
+    const child = this.child;
     this.child = null;
+    child?.kill();
   }
 }

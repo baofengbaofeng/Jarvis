@@ -265,6 +265,11 @@ type NodeRunner struct {
 }
 
 func (r *NodeRunner) Run(ctx context.Context, spec RunSpec) (RunResult, error) {
+	entry, err := r.resolveCoreEntry()
+	if err != nil {
+		return RunResult{}, err
+	}
+
 	dir, err := os.MkdirTemp("", "jarvis-agent-*")
 	if err != nil {
 		return RunResult{}, err
@@ -280,7 +285,7 @@ func (r *NodeRunner) Run(ctx context.Context, spec RunSpec) (RunResult, error) {
 		return RunResult{}, err
 	}
 
-	cmd := exec.CommandContext(ctx, r.node(), r.coreEntry(), "--spec", specPath)
+	cmd := exec.CommandContext(ctx, r.node(), entry, "--spec", specPath)
 	cmd.Env = append(os.Environ(), r.ExtraEnv...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -353,14 +358,27 @@ func (r *NodeRunner) node() string {
 	return "node"
 }
 
-func (r *NodeRunner) coreEntry() string {
-	if r.CoreEntry != "" {
-		return r.CoreEntry
+// resolveCoreEntry returns an absolute path to packages/core/dist/headless.mjs
+// (DAEM-01). Relative fallbacks are rejected so Multica never silently runs
+// against a cwd-dependent missing file.
+func (r *NodeRunner) resolveCoreEntry() (string, error) {
+	entry := r.CoreEntry
+	if entry == "" {
+		entry = os.Getenv("JARVIS_CORE_ENTRY")
 	}
-	if v := os.Getenv("JARVIS_CORE_ENTRY"); v != "" {
-		return v
+	if entry == "" {
+		return "", fmt.Errorf("JARVIS_CORE_ENTRY is required (absolute path to packages/core/dist/headless.mjs)")
 	}
-	return "packages/core/dist/headless.mjs"
+	if !filepath.IsAbs(entry) {
+		return "", fmt.Errorf("JARVIS_CORE_ENTRY must be an absolute path, got %q", entry)
+	}
+	if _, err := os.Stat(entry); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("JARVIS_CORE_ENTRY not found: %s", entry)
+		}
+		return "", fmt.Errorf("JARVIS_CORE_ENTRY: %w", err)
+	}
+	return entry, nil
 }
 
 func NewRunCmd(deps RunDeps, out io.Writer) *cobra.Command {

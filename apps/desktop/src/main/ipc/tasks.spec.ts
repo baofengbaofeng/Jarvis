@@ -19,10 +19,37 @@ const fakeEvent = {} as Electron.IpcMainInvokeEvent;
 
 describe('task handlers', () => {
   let db: Database.Database;
-  const getWindow = () => null;
+  // DESK-01: mutating tools ask by default; null windows auto-deny. Tests that
+  // exercise tools need a window that auto-approves so sandbox/policy paths run.
+  let approvalResolve: ((id: string, ok: boolean) => void) | null = null;
   const secrets = { set: async () => {}, get: async () => 'sk-test', delete: async () => {} } as unknown as SecureStorage;
 
-  beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
+  function makeGetWindow(onSend?: (ch: string, p: unknown) => void) {
+    return () => ({
+      webContents: {
+        send: (ch: string, p: unknown) => {
+          onSend?.(ch, p);
+          if (ch === 'approval:request' && approvalResolve) {
+            const id = (p as { id: string }).id;
+            queueMicrotask(() => approvalResolve!(id, true));
+          }
+        }
+      }
+    }) as unknown as BrowserWindow;
+  }
+  const getWindow = makeGetWindow();
+
+  function openTasks(deps?: TaskHandlerDeps, getWin: () => BrowserWindow | null = getWindow) {
+    const tasks = registerTaskHandlers(db, secrets, getWin, createAgentStore(db), deps);
+    approvalResolve = (id, ok) => tasks.approvalCenter.resolve(id, ok);
+    return tasks;
+  }
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    applyMigrations(db);
+    approvalResolve = null;
+  });
 
   function seedAgent(): string {
     const now = new Date().toISOString();
@@ -45,7 +72,7 @@ describe('task handlers', () => {
       return { text: 'Hello', usage: null };
     };
     const deps: TaskHandlerDeps = { chatFn };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), deps);
+    const tasks = openTasks(deps);
 
     const chatService = createChatService(createChatDbAdapter(db));
     const session = await chatService.createSession('Test');
@@ -84,7 +111,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: '| H |\n|---|\n| 9 |\n\n```mermaid\ngraph LR; A-->B\n```', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const agentId = seedAgent();
     const { id } = await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => {
@@ -110,7 +137,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text, usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const agentId = seedAgent();
     const first = await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => {
@@ -144,7 +171,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: 'ok', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => expect(systemContent).toContain('<memory>'));
     expect(systemContent).toContain('lang: zh');
@@ -153,8 +180,7 @@ describe('task handlers', () => {
 
   // M6 Task 7 (F11): the memorize/recall tools registered in the task path
   // persist to the main-owned agent_memory table and read back the same value.
-  // memorize auto-allows (no command arg, not plan-blocked), so the tool runs
-  // without interactive approval.
+  // DESK-01: memorize asks by default; openTasks auto-approves for this path.
   it('memorize/recall tools persist and read back agent memory through a task (F11)', async () => {
     const agentId = seedAgent();
     let step = 0;
@@ -173,7 +199,7 @@ describe('task handlers', () => {
       }
       return { text: '', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => expect(recallOutput).toContain('pref: short answers'));
     // The memorize persisted to the agent_memory table via the adapter.
@@ -182,7 +208,7 @@ describe('task handlers', () => {
   });
 
   it('throws when the agent has no model binding and writes nothing to the session', async () => {
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db));
+    const tasks = openTasks();
     const chatService = createChatService(createChatDbAdapter(db));
     const session = await chatService.createSession('Test');
     const agentStore = createAgentStore(db);
@@ -201,20 +227,26 @@ describe('task handlers', () => {
     settings.set(`permissions.${agentId}`, { level: 'readonly', allowCommands: [], allowDomains: [] });
 
     // The model emits one write_file call; the readonly policy must make the
-    // file tool's sandbox reject the write and fail the task.
+    // file tool's sandbox reject the write. CORE-06: the denial is returned as
+    // ok:false to the model so the task completes (it does not kill the run).
     let step = 0;
-    const fn: EngineChatFn = async (_req, opts) => {
+    let toolOutput = '';
+    const fn: EngineChatFn = async (req, opts) => {
       step++;
       if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'write_file', arguments: { path: 'x.txt', content: 'hi' } }] });
-      else opts.onChunk?.({ kind: 'done' });
+      else {
+        const last = [...req.messages].reverse().find(m => m.role === 'tool');
+        toolOutput = typeof last?.content === 'string' ? last.content : '';
+        opts.onChunk?.({ kind: 'done' });
+      }
       return { text: '', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn, settings });
+    const tasks = openTasks({ chatFn: fn, settings });
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => {
-      const row = db.prepare('SELECT status, result_json FROM tasks').all() as Array<{ status: string; result_json: string }>;
-      expect(row[0].status).toBe('failed');
-      expect(JSON.parse(row[0].result_json).text).toContain('readonly sandbox');
+      const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
+      expect(row[0].status).toBe('completed');
+      expect(toolOutput).toContain('readonly sandbox');
     });
   });
 
@@ -234,7 +266,7 @@ describe('task handlers', () => {
         else opts.onChunk?.({ kind: 'done' });
         return { text: 'done', usage: null };
       };
-      const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn, settings });
+      const tasks = openTasks({ chatFn: fn, settings });
       await tasks.create(fakeEvent, { agentId, prompt: 'go' });
       await vi.waitFor(() => {
         const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
@@ -259,7 +291,7 @@ describe('task handlers', () => {
         opts.onChunk?.({ kind: 'done' });
         return { text: 'ok', usage: null };
       };
-      const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+      const tasks = openTasks({ chatFn: fn });
       const agentId = seedAgent();
       db.prepare('UPDATE agents SET workspace_id = ? WHERE id = ?').run(ws, agentId);
       const { id } = await tasks.create(fakeEvent, { agentId, prompt: 'read @notes.txt and @nope.ts plus foo@bar.com please' });
@@ -290,7 +322,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: 'Hello', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const chatService = createChatService(createChatDbAdapter(db));
     const session = await chatService.createSession('Test');
     const agentId = seedAgent();
@@ -338,7 +370,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: '', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-mem', leaderAgentId: leaderId, memberAgentIds: [m1, m2], status: 'in_progress' });
     try {
@@ -370,7 +402,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: 'member result text', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-ok', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
     try {
@@ -403,7 +435,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: 'member result text', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-edge', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
     try {
@@ -435,7 +467,7 @@ describe('task handlers', () => {
       }
       throw new Error('member crashed');
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-fail', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
     try {
@@ -452,7 +484,7 @@ describe('task handlers', () => {
   it('applies the member context_passing strategy in buildContext', async () => {
     const m1 = seedAgent();
     db.prepare('UPDATE agents SET context_passing = ? WHERE id = ?').run('conclusion', m1);
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db));
+    const tasks = openTasks();
     const runner = tasks.squad;
     // conclusion drops everything except 结论/总结 lines.
     const ctx = await runner.buildContext(m1, '背景...\n结论:方案 A\n细节...\n总结:可行');
@@ -496,7 +528,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: 'member result', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-l13', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
     try {
@@ -541,7 +573,7 @@ describe('task handlers', () => {
       opts.onChunk?.({ kind: 'done' });
       return { text: 'member result', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn });
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-memattr', leaderAgentId: leaderId, memberAgentIds: [m1], status: 'in_progress' });
     try {
@@ -564,37 +596,37 @@ describe('task handlers', () => {
   it('streams task log lines to squad:event while a squad run is active (K5)', async () => {
     const leaderId = seedAgent();
     const sent: Array<{ channel: string; payload: unknown }> = [];
-    const getWindow = () => ({ webContents: { send: (ch: string, p: unknown) => sent.push({ channel: ch, payload: p }) } }) as unknown as BrowserWindow;
+    const win = makeGetWindow((ch, p) => sent.push({ channel: ch, payload: p }));
     const fn: EngineChatFn = async (_req, opts) => {
       opts.onChunk?.({ kind: 'delta', delta: 'hello line' });
       opts.onChunk?.({ kind: 'done' });
       return { text: 'ok', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn }, win);
     const runner = tasks.squad;
     runner.prepare({ id: 'sq-log', leaderAgentId: leaderId, memberAgentIds: [], status: 'in_progress' });
     try {
       await tasks.create(fakeEvent, { agentId: leaderId, prompt: 'go' });
+      await vi.waitFor(() => {
+        const events = sent.filter(e => e.channel === 'squad:event' && (e.payload as { kind: string }).kind === 'log');
+        expect(events.length).toBeGreaterThan(0);
+        expect((events[0].payload as { detail: string }).detail).toBe('hello line');
+      });
     } finally {
       runner.teardown();
     }
-    await vi.waitFor(() => {
-      const events = sent.filter(e => e.channel === 'squad:event' && (e.payload as { kind: string }).kind === 'log');
-      expect(events.length).toBeGreaterThan(0);
-      expect((events[0].payload as { detail: string }).detail).toBe('hello line');
-    });
   });
 
   it('keeps task logs off the squad timeline when no squad run is active', async () => {
     const leaderId = seedAgent();
     const sent: Array<{ channel: string; payload: unknown }> = [];
-    const getWindow = () => ({ webContents: { send: (ch: string, p: unknown) => sent.push({ channel: ch, payload: p }) } }) as unknown as BrowserWindow;
+    const win = makeGetWindow((ch, p) => sent.push({ channel: ch, payload: p }));
     const fn: EngineChatFn = async (_req, opts) => {
       opts.onChunk?.({ kind: 'delta', delta: 'hello line' });
       opts.onChunk?.({ kind: 'done' });
       return { text: 'ok', usage: null };
     };
-    const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
+    const tasks = openTasks({ chatFn: fn }, win);
     await tasks.create(fakeEvent, { agentId: leaderId, prompt: 'go' });
     await vi.waitFor(() => {
       expect(sent.some(e => e.channel === 'task:log')).toBe(true);
@@ -654,12 +686,19 @@ describe('approval gate wiring (M3 Task 7)', () => {
 
   it('writes an mcp_grants row when an mcp tool call is approved', async () => {
     const { approvals, getWindow } = captureApprovals();
+    let step = 0;
     const fn: EngineChatFn = async (_req, opts) => {
-      opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'mcp:fs:read', arguments: { path: '/' } }] });
+      step++;
+      if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'mcp:fs:read', arguments: { path: '/' } }] });
+      else opts.onChunk?.({ kind: 'done' });
       return { text: '', usage: null };
     };
     const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
     const agentId = seedAgent();
+    // CORE-20: unbound MCP tools are filtered before approval — bind by name.
+    // Use non-stdio transport so create() does not spawn a real child process.
+    db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
+      .run(randomUUID(), 'fs', 'sse', JSON.stringify({ agentIds: [agentId] }), new Date().toISOString());
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => expect(approvals.length).toBe(1));
     expect(approvals[0].toolName).toBe('mcp:fs:read');
@@ -685,12 +724,12 @@ describe('approval gate wiring (M3 Task 7)', () => {
     const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
     const agentId = seedAgent();
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
-    // The tool is unregistered in this test, so execution throws and the task
-    // fails — but it must fail WITHOUT any approval:request (the grant short-
-    // circuits the gate straight to execution).
+    // The tool is unregistered in this test. CORE-06: unknown tools return
+    // ok:false to the model (task completes) — but it must do so WITHOUT any
+    // approval:request (the grant short-circuits the gate straight to execution).
     await vi.waitFor(() => {
       const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
-      expect(row[0].status).toBe('failed');
+      expect(row[0].status).toBe('completed');
     });
     expect(approvals.length).toBe(0);
   });

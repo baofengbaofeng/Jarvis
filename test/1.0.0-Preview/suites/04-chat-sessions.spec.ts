@@ -1,7 +1,6 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron } from '../helpers/electron-app';
 import { startMockOpenAIProvider, type MockProviderHandle } from '../helpers/mock-provider';
 import { seedChatStack } from '../helpers/seed-chat-stack';
 

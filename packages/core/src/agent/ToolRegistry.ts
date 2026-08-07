@@ -1,6 +1,17 @@
 import type { ToolDef, ToolContext, ToolResult, ToolCall } from './types';
+import { DelegateGuardError } from '../squad/Delegate';
 
 type ToolHandler = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
+
+/** Errors that must abort the engine run (not converted to ok:false). */
+export class FatalToolError extends Error {
+  readonly fatal = true as const;
+}
+
+function isFatalToolError(err: unknown): boolean {
+  if (err instanceof FatalToolError || err instanceof DelegateGuardError) return true;
+  return Boolean(err && typeof err === 'object' && (err as { fatal?: boolean }).fatal === true);
+}
 
 // J5 (M8 Task 3): execution-audit hook. Fired once per execute() attempt — with
 // result 'ok' when the handler resolves, 'error' when it rejects or the tool is
@@ -14,11 +25,21 @@ export class ToolRegistry {
   constructor(private opts: ToolRegistryOpts = {}) {}
 
   register(def: ToolDef, handler: ToolHandler): void {
+    // CORE-07: refuse silent overwrite — plugins must not shadow builtins.
+    if (this.tools.has(def.name)) {
+      throw new Error(`tool already registered: ${def.name}`);
+    }
     this.tools.set(def.name, { def, handler });
+  }
+
+  /** CORE-07: remove a tool by name; returns true if it was present. */
+  unregister(name: string): boolean {
+    return this.tools.delete(name);
   }
 
   list(): ToolDef[] { return [...this.tools.values()].map(t => t.def); }
   has(name: string): boolean { return this.tools.has(name); }
+  get(name: string): ToolDef | undefined { return this.tools.get(name)?.def; }
 
   async execute(call: ToolCall, ctx: ToolContext): Promise<ToolResult> {
     // M8 final review: onExec is best-effort telemetry (the audit sink). A hook
@@ -30,7 +51,8 @@ export class ToolRegistry {
     const tool = this.tools.get(call.name);
     if (!tool) {
       emit('error');
-      throw new Error(`unknown tool: ${call.name}`);
+      // CORE-06: unknown tools are model-recoverable failures, not task killers.
+      return { ok: false, output: `unknown tool: ${call.name}` };
     }
     try {
       const result = await tool.handler(call.arguments, ctx);
@@ -38,7 +60,11 @@ export class ToolRegistry {
       return result;
     } catch (err) {
       emit('error');
-      throw err;
+      // Squad control-flow (member-leaf guard, failed delegation) must abort the
+      // run; other handler throws stay model-recoverable (CORE-06).
+      if (isFatalToolError(err)) throw err;
+      const output = err instanceof Error ? err.message : String(err);
+      return { ok: false, output };
     }
   }
 }

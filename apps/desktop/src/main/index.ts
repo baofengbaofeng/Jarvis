@@ -13,18 +13,26 @@ import { IdeBridge, parseFileArg, openInExternalIde, resolveFileInWorkspace } fr
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
 import { openMainWindow } from './mainWindowLifecycle';
-import { DaemonSupervisor } from './daemon/DaemonSupervisor';
-import type { IpcRouter } from './ipc/IpcRouter';
-import { SecureStorage } from './secrets/SecureStorage';
+import { DaemonSupervisor, defaultDaemonBinaryPath, defaultCoreEntryPath } from './daemon/DaemonSupervisor';
+import { createSecureStorage } from './secrets/createSecureStorage';
 import { SearchSecretMigration } from './search/SearchSecretMigration';
 import { pluginRunner } from './plugins/PluginRunnerHost';
+import { runBootstrapSafe } from './bootstrapSafety';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
-const daemon = new DaemonSupervisor();
+const daemon = new DaemonSupervisor(
+  defaultDaemonBinaryPath(
+    import.meta.dirname,
+    process.platform,
+    app.isPackaged,
+    process.resourcesPath,
+  ),
+  defaultCoreEntryPath(import.meta.dirname, app.isPackaged, process.resourcesPath),
+);
 
-// M4 Task 9 (E12): the localhost IDE bridge. Started at app ready and closed on
-// will-quit. It binds 127.0.0.1 with no auth — acceptable for a local tool that
+// M4 Task 9 (E12) / DESK-05: localhost IDE bridge with Bearer + Host checks.
+// Started at app ready and closed on will-quit.
 // only serves paths inside the user's own workspace (resolveFile is contained by
 // resolveFileInWorkspace below), but it is NOT a remote-safe endpoint.
 let ideBridge: IdeBridge | null = null;
@@ -41,7 +49,7 @@ export async function bootstrap(): Promise<void> {
   const db = openDatabase();
   runMigrations(db);
   const settings = createSettingsStore(db);
-  const secrets = new SecureStorage();
+  const secrets = createSecureStorage();
   const migrationResult = await new SearchSecretMigration(db, secrets).run();
   searchMigrationBlocked = !migrationResult.ok;
   // C10: the daemon is sized from the saved settings.concurrency value on every
@@ -138,7 +146,7 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
-    void bootstrap();
+    void runBootstrapSafe(bootstrap);
     handleOpenArgv(process.argv);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && windows && ipc) {

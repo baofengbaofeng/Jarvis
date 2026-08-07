@@ -5,7 +5,17 @@ import { Sandbox, type SandboxPolicy } from '../sandbox/Sandbox';
 
 const exec = promisify(execFile);
 
-export interface ShellDeps { execImpl?: (cmd: string, opts: { cwd: string; env: Record<string, string>; timeout?: number }) => Promise<{ stdout: string; stderr: string }> }
+export interface ShellExecOpts {
+  cwd: string;
+  env: Record<string, string>;
+  timeout?: number;
+  /** CORE-14: cancel in-flight shell when the task/run aborts. */
+  signal?: AbortSignal;
+}
+
+export interface ShellDeps {
+  execImpl?: (cmd: string, opts: ShellExecOpts) => Promise<{ stdout: string; stderr: string }>;
+}
 
 export function createShellTool(registry: ToolRegistry, policy: SandboxPolicy, deps: ShellDeps = {}, ignorePatterns?: string[]): void {
   // Execute via a spawn-array (no shell): the command is tokenized into argv and
@@ -24,17 +34,47 @@ export function createShellTool(registry: ToolRegistry, policy: SandboxPolicy, d
       const env: Record<string, string> = {};
       for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
       Object.assign(env, opts.env);
-      return await exec(argv[0], argv.slice(1), { cwd: opts.cwd, env, timeout: opts.timeout ?? 30_000 });
-    } catch (e) { const err = e as { stdout?: string; stderr?: string }; return { stdout: err.stdout ?? '', stderr: err.stderr ?? String(e) }; }
+      return await exec(argv[0], argv.slice(1), {
+        cwd: opts.cwd,
+        env,
+        timeout: opts.timeout ?? 30_000,
+        signal: opts.signal,
+      });
+    } catch (e) {
+      // CORE-14: surface abort distinctly so ToolRegistry can return ok:false.
+      if (isAbortError(e) || opts.signal?.aborted) throw abortError(e);
+      const err = e as { stdout?: string; stderr?: string };
+      return { stdout: err.stdout ?? '', stderr: err.stderr ?? String(e) };
+    }
   });
 
   registry.register({
-    name: 'run_shell', description: 'Run a shell command within the workspace', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }
+    name: 'run_shell', description: 'Run a shell command within the workspace', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+    sensitivity: 'ask',
   }, async (args, ctx) => {
     const sandbox = new Sandbox(ctx.workspaceRoot ?? ctx.cwd, ctx.policy ?? policy, ignorePatterns);
     const command = String(args.command);
     sandbox.assertCommand(command);
-    const { stdout, stderr } = await run(command, { cwd: ctx.cwd, env: ctx.env });
-    return { ok: !stderr, output: `${stdout}${stderr ? '\n[stderr]\n' + stderr : ''}`.trim() };
+    if (ctx.signal?.aborted) throw abortError();
+    try {
+      const { stdout, stderr } = await run(command, { cwd: ctx.cwd, env: ctx.env, signal: ctx.signal });
+      return { ok: !stderr, output: `${stdout}${stderr ? '\n[stderr]\n' + stderr : ''}`.trim() };
+    } catch (e) {
+      if (isAbortError(e) || ctx.signal?.aborted) throw abortError(e);
+      throw e;
+    }
   });
+}
+
+function isAbortError(e: unknown): boolean {
+  return !!e && typeof e === 'object' && (
+    (e as { name?: string }).name === 'AbortError'
+    || (e as { code?: string }).code === 'ABORT_ERR'
+  );
+}
+
+function abortError(cause?: unknown): Error {
+  const err = new Error(cause instanceof Error ? cause.message : 'aborted');
+  err.name = 'AbortError';
+  return err;
 }

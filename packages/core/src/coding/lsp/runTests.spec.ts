@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerRunTestsTool } from './runTests';
 import { ToolRegistry } from '../../agent/ToolRegistry';
-import { SandboxError, type SandboxPolicy } from '../../sandbox/Sandbox';
+import type { SandboxPolicy } from '../../sandbox/Sandbox';
 
 // Verifies the two M4 Task 5 controller fixes on the run_tests tool:
 //  (1) no-shell spawn-array execution (execFile, no `shell`), so `$()`, `>`,
@@ -32,8 +32,10 @@ describe('run_tests tool', () => {
   it('rejects metacharacter chaining at assertCommand', async () => {
     const reg = new ToolRegistry();
     registerRunTestsTool(reg, testPolicy, { execImpl: async () => ({ stdout: '', stderr: '', code: 0 }) });
-    await expect(reg.execute({ id: '1', name: 'run_tests', arguments: { command: 'npm test; rm -rf /' } }, agentCtx))
-      .rejects.toThrow(SandboxError);
+    // CORE-06: sandbox denial is returned as ok:false so the model can recover.
+    const r = await reg.execute({ id: '1', name: 'run_tests', arguments: { command: 'npm test; rm -rf /' } }, agentCtx);
+    expect(r.ok).toBe(false);
+    expect(r.output).toMatch(/not allowed|SandboxError|metacharacter/i);
   });
 
   it('reports ok:false for a non-zero exit even when output is stdout-only (no stderr)', async () => {

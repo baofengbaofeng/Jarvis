@@ -1,9 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -32,7 +30,7 @@ test('01-shell: onboarding persists on relaunch', async () => {
 
   const second = await launchJarvisElectron(dataDir);
   try {
-    await second.window.goto(`${RENDERER_URL}/`);
+    await second.window.goto(rendererHref('/'));
     await second.window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
     await expect(second.window.getByTestId('onboarding')).toHaveCount(0);
   } finally {
@@ -46,7 +44,7 @@ test('01-shell: language switcher on providers settings', async () => {
   const { app, window } = await launchJarvisElectron(dataDir);
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/settings/providers`);
+    await window.goto(rendererHref('/settings/providers'));
     await window.getByTestId('provider-settings').waitFor({ timeout: 30_000 });
     await window.getByTestId('settings-layout').getByTestId('language-switcher').selectOption('en');
     await expect(window.locator('[data-testid="provider-settings"] h2')).toHaveText('Provider Management');

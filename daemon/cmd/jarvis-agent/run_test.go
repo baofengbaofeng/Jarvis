@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -458,3 +459,42 @@ type memPoolFS struct{}
 func (m *memPoolFS) MkdirAll(string, os.FileMode) error { return nil }
 func (m *memPoolFS) RemoveAll(string) error             { return nil }
 func (m *memPoolFS) Stat(string) (os.FileInfo, error)   { return nil, nil }
+
+// DAEM-01: NodeRunner must fail-loud when JARVIS_CORE_ENTRY is unset/empty and
+// CoreEntry is not provided — never silently fall back to a relative path that
+// only works from a developer cwd.
+func TestNodeRunnerRequiresAbsoluteCoreEntry(t *testing.T) {
+	t.Setenv("JARVIS_CORE_ENTRY", "")
+	r := &NodeRunner{}
+	_, err := r.Run(context.Background(), RunSpec{Workspace: "/tmp"})
+	if err == nil {
+		t.Fatal("expected fail-loud when JARVIS_CORE_ENTRY is missing")
+	}
+	if !strings.Contains(err.Error(), "JARVIS_CORE_ENTRY") {
+		t.Fatalf("error should mention JARVIS_CORE_ENTRY, got: %v", err)
+	}
+}
+
+func TestNodeRunnerRejectsRelativeCoreEntry(t *testing.T) {
+	t.Setenv("JARVIS_CORE_ENTRY", "packages/core/dist/headless.mjs")
+	r := &NodeRunner{}
+	_, err := r.Run(context.Background(), RunSpec{Workspace: "/tmp"})
+	if err == nil {
+		t.Fatal("expected fail-loud for relative JARVIS_CORE_ENTRY")
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("error should require absolute path, got: %v", err)
+	}
+}
+
+func TestNodeRunnerRejectsMissingCoreEntryFile(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "no-such-headless.mjs")
+	r := &NodeRunner{CoreEntry: missing}
+	_, err := r.Run(context.Background(), RunSpec{Workspace: "/tmp"})
+	if err == nil {
+		t.Fatal("expected fail-loud when core entry file does not exist")
+	}
+	if !strings.Contains(err.Error(), "not found") && !strings.Contains(err.Error(), "no such") && !strings.Contains(err.Error(), "JARVIS_CORE_ENTRY") {
+		t.Fatalf("error should mention missing file, got: %v", err)
+	}
+}

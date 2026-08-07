@@ -30,4 +30,35 @@ describe('McpClient', () => {
     expect(r).toContain('ok');
     client.close();
   });
+
+  it('times out a hung request (CORE-08)', async () => {
+    class SilentProc {
+      stdout = new PassThrough();
+      stdin = { write: () => {}, end: () => {} };
+      kill = () => {};
+    }
+    const client = createMcpClient('', [], 'fs', {
+      spawnImpl: () => new SilentProc() as unknown as import('node:child_process').ChildProcess,
+      requestTimeoutMs: 30,
+    });
+    await expect(client.initialize()).rejects.toThrow(/timeout/i);
+    client.close();
+  });
+
+  it('rejects pending requests on close (CORE-08)', async () => {
+    class SilentProc {
+      stdout = new PassThrough();
+      stdin = { write: () => {}, end: () => {} };
+      kill = () => {};
+    }
+    const client = createMcpClient('', [], 'fs', {
+      spawnImpl: () => new SilentProc() as unknown as import('node:child_process').ChildProcess,
+      requestTimeoutMs: 60_000,
+    });
+    const pending = client.initialize();
+    // Let the request be registered, then close before any response.
+    await new Promise(r => setTimeout(r, 0));
+    client.close();
+    await expect(pending).rejects.toThrow(/closed|abort|cancel/i);
+  });
 });

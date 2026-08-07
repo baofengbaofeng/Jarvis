@@ -60,7 +60,7 @@ describe('App', () => {
   afterEach(() => { cleanup(); });
 
   beforeEach(() => {
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', '/#/');
   });
 
   it('redirects to onboarding when onboarding is not done', () => {
@@ -86,13 +86,13 @@ describe('App', () => {
     useSettings.setState({ onboardingDone: true });
     useSquadStore.setState({ review: { id: 'sq-1', summary: 'plan', members: [] } });
     // On the home route the root F15 panel is shown.
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', '/#/');
     render(<App />);
     expect(screen.getByTestId('approval-panel')).toBeTruthy();
     cleanup();
     // On /squad the root panel is suppressed (the page renders its own); the
     // squad view loads the empty current-squad state from the mocked bridge.
-    window.history.replaceState({}, '', '/squad');
+    window.history.replaceState({}, '', '/#/squad');
     render(<App />);
     expect(screen.queryByTestId('approval-panel')).toBeNull();
     expect(screen.getByTestId('squad-view')).toBeTruthy();
@@ -104,7 +104,7 @@ describe('App', () => {
   // bridge is untouched.
   it('renders the canvas page on /canvas', () => {
     useSettings.setState({ onboardingDone: true });
-    window.history.replaceState({}, '', '/canvas');
+    window.history.replaceState({}, '', '/#/canvas');
     render(<App />);
     expect(screen.getByTestId('canvas-page')).toBeTruthy();
     expect(screen.getByTestId('canvas-view')).toBeTruthy();
@@ -115,11 +115,11 @@ describe('App', () => {
   // M8 final review: the six M8 UI deliverables were orphaned (no route, no nav).
   // Each new route must render its page from the real App tree.
   const M8_SETTINGS_ROUTES: Array<[string, string]> = [
-    ['/settings/data-safety', 'data-safety-page'],
-    ['/settings/config', 'config-transfer'],
-    ['/settings/shortcuts', 'shortcuts-view'],
-    ['/settings/usage', 'usage-loading'],
-    ['/settings/audit', 'audit-log'],
+    ['/#/settings/data-safety', 'data-safety-page'],
+    ['/#/settings/config', 'config-transfer'],
+    ['/#/settings/shortcuts', 'shortcuts-view'],
+    ['/#/settings/usage', 'usage-loading'],
+    ['/#/settings/audit', 'audit-log'],
   ];
   it.each(M8_SETTINGS_ROUTES)('renders the M8 settings page at %s', (route, testid) => {
     useSettings.setState({ onboardingDone: true });
@@ -131,7 +131,7 @@ describe('App', () => {
 
   it('renders the agent template page on /agents/templates', () => {
     useSettings.setState({ onboardingDone: true });
-    window.history.replaceState({}, '', '/agents/templates');
+    window.history.replaceState({}, '', '/#/agents/templates');
     render(<App />);
     expect(screen.getByTestId('template-view')).toBeTruthy();
   });
@@ -141,7 +141,7 @@ describe('App', () => {
   it('dispatches the global task.cancel shortcut (Esc) to the task IPC', async () => {
     useSettings.setState({ onboardingDone: true });
     useTaskStore.setState({ activeTaskId: 't1' });
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', '/#/');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('chat-page')).toBeTruthy());
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -154,7 +154,7 @@ describe('App', () => {
   // chat page is the active route.
   it('focus.input (Cmd+L) focuses the chat textarea on the chat page', async () => {
     useSettings.setState({ onboardingDone: true });
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', '/#/');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
     fireEvent.keyDown(window, { key: 'l', metaKey: true });

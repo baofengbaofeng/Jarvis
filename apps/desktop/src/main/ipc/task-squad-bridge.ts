@@ -5,12 +5,14 @@ import {
   buildPassedContext,
   createGuard,
   DelegateGuardError,
+  FatalToolError,
   registerDelegateTool,
+  planVisibleTools,
   type Squad,
   type SquadRouterDeps,
 } from '@jarvis/core';
 import type { AgentEngine } from '@jarvis/core';
-import { registerAgentMcpTools } from './mcp';
+import { registerAgentMcpTools, mcpVisibilityForAgent } from './mcp';
 import { getMessageBus } from './squad';
 import type { createAgentStore } from './agents';
 
@@ -50,7 +52,10 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
     const run = await resolveAgentRun(agentId, prompt);
     await registerAgentMcpTools(db, toolRegistry, agentId);
     registerMemoryToolsFor(agentId);
-    const result = await engine.run({ ...run, cwd: run.workspaceRoot });
+    // CORE-19 / CORE-20: per-run visibility + MCP binding filter.
+    const afterPlan = planVisibleTools(toolRegistry.list().map(t => t.name), run.agent.planOnly);
+    const { visibleTools, toolFilter } = mcpVisibilityForAgent(db, agentId, afterPlan);
+    const result = await engine.run({ ...run, cwd: run.workspaceRoot, visibleTools, toolFilter });
     return result.text;
   };
 
@@ -84,9 +89,13 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
       recordCallEdge(from, to, taskId, ctx.taskId, true);
       return text;
     } catch (e) {
-      bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: e instanceof Error ? e.message : String(e) } });
+      const msg = e instanceof Error ? e.message : String(e);
+      bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: msg } });
       recordCallEdge(from, to, taskId, ctx.taskId, false);
-      throw e;
+      // L14 + CORE-06: surface through ToolRegistry as a fatal error so the
+      // leader run rejects instead of continuing with ok:false.
+      if (e instanceof FatalToolError || e instanceof DelegateGuardError) throw e;
+      throw new FatalToolError(msg);
     } finally {
       ctx.memberActive = false;
     }
@@ -117,8 +126,11 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
       await registerAgentMcpTools(db, toolRegistry, squadCtx.leaderAgentId);
       registerMemoryToolsFor(squadCtx.leaderAgentId);
       const delegations: Array<{ to: string; subtask: string }> = [];
+      // CORE-19 / CORE-20: per-run visibility + MCP binding filter on the leader run.
+      const afterPlan = planVisibleTools(toolRegistry.list().map(t => t.name), leader.agent.planOnly);
+      const { visibleTools, toolFilter } = mcpVisibilityForAgent(db, squadCtx.leaderAgentId, afterPlan);
       const result = await engine.run({
-        ...leader, cwd: leader.workspaceRoot,
+        ...leader, cwd: leader.workspaceRoot, visibleTools, toolFilter,
         onTool: (call) => {
           if (call.name === 'delegate_agent') {
             delegations.push({ to: String(call.arguments.agent), subtask: String(call.arguments.subtask) });

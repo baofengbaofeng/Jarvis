@@ -10,6 +10,29 @@ export interface ModelMessage {
   // (the entire M1 path and all existing adapters.spec fixtures) untouched.
   content: string | MessageContent;
   name?: string;
+  // CORE-01: the tool calls an assistant turn requested. Both wire protocols
+  // need the calls themselves (not just their text) in the transcript, because
+  // the tool results of the next turn reference them by id.
+  toolCalls?: ToolCall[];
+  // CORE-01: on a `tool` message, the id of the assistant tool call this result
+  // answers. OpenAI rejects a tool message without `tool_call_id`; Anthropic has
+  // no tool role at all and needs the id to build a `tool_result` block.
+  toolCallId?: string;
+}
+
+// Narrowed views of ModelMessage for the two round-trip turns. ModelMessage
+// itself stays a single lenient interface so the many callers that build history
+// with a widened `role` (ChatService, ContextManager, agent/context) keep
+// compiling; producers of tool turns should type their pushes as these instead,
+// which makes the id non-optional where it actually matters.
+export interface AssistantToolCallMessage extends ModelMessage {
+  role: 'assistant';
+  toolCalls: ToolCall[];
+}
+
+export interface ToolResultMessage extends ModelMessage {
+  role: 'tool';
+  toolCallId: string;
 }
 
 export interface ChatToolDef {
@@ -34,6 +57,8 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** CORE-03: set when streamed tool-argument JSON was truncated/invalid. */
+  argumentsParseError?: string;
 }
 
 export interface Usage {

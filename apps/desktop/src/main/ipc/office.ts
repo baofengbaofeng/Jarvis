@@ -29,25 +29,19 @@ export interface WebViewLike {
 // stay out of the module graph until a webview channel actually runs. The
 // dynamic import below is only reached from the Electron main process.
 let cachedWebViewHost: WebViewLike | null = null;
-let webViewHostDeps: { assertAllowedUrl?: (url: string) => Promise<void> } = {};
+let webViewHostDeps: { assertAllowedUrl: (url: string) => Promise<void> } | null = null;
 async function getWebViewHost(): Promise<WebViewLike> {
   if (cachedWebViewHost) return cachedWebViewHost;
+  if (!webViewHostDeps) throw new Error('WEBVIEW_POLICY_REQUIRED');
   const { WebViewHost } = await import('../webview/WebViewHost');
   cachedWebViewHost = new WebViewHost(webViewHostDeps);
   return cachedWebViewHost;
 }
 
-// SheetJS (xlsx) and JSZip are CommonJS packages. Under Node's ESM/CJS interop,
+// exceljs and JSZip are CommonJS packages. Under Node's ESM/CJS interop,
 // dynamic `await import()` exposes the `module.exports` object as the `default`
-// property, and the named exports (readFile/loadAsync) are NOT reliably hoisted
-// onto the ESM namespace — `mod.readFile` can be `undefined` at runtime even
-// though the package's .d.ts declares it as a named export. Resolving
-// `mod.default ?? mod` uses the real export in both interop environments (Node
-// CJS interop, where `default` carries the functions, and bundler/vite module
-// runners, where the namespace itself may carry them). The type cast is only
-// structural: the namespace type already declares the members we call. Exported
-// so the office.spec interop regression test exercises the exact resolution the
-// extractors use.
+// property. Resolving `mod.default ?? mod` uses the real export in both interop
+// environments. Exported so office.spec exercises the same resolution.
 export function resolveCjsDefault<T>(mod: T): T {
   return (mod as T & { default?: T }).default ?? mod;
 }
@@ -218,6 +212,8 @@ async function resolveImageApiKey(settings: SettingsStore | undefined, secrets: 
 }
 
 export function registerOfficeIpc(router: { register(ch: string, h: (...a: unknown[]) => unknown): void }, modelRouter: { chat(req: unknown): AsyncIterable<{ deltaText?: string }> }, deps: { getWebViewHost?: () => Promise<WebViewLike>; settings?: SettingsStore; secrets?: Pick<SecureStorage, 'get'>; imageFetch?: typeof fetch; resolvePath?: ResolvePath; assertAllowedUrl?: (url: string) => Promise<void> } = {}) {
+  // DESK-10: real host construction fails closed without assertAllowedUrl
+  // (see getWebViewHost). Tests may inject getWebViewHost and omit policy.
   if (deps.assertAllowedUrl) webViewHostDeps = { assertAllowedUrl: deps.assertAllowedUrl };
   const resolvePath = deps.resolvePath;
   const requirePath = (token: string, owner: number, operation: PathOperation): string => {
@@ -358,14 +354,20 @@ export function registerOfficeIpc(router: { register(ch: string, h: (...a: unkno
         pdf: async () => (await extractPdf(path)).pageTexts.join('\n'),
         docx: async () => (await import('mammoth')).extractRawText({ path }).then(r => r.value),
         xlsx: async () => {
-          // sheet_to_csv renders each sheet's cell grid as comma-separated rows —
-          // the simplest faithful text surface for a spreadsheet (formulae come
-          // through as their cached values, matching what a human sees). The
-          // ESM/CJS interop bug: `mod.readFile` is undefined on the namespace, so
-          // resolve the CJS `default` (see resolveCjsDefault).
-          const XLSX = resolveCjsDefault(await import('xlsx'));
-          const wb = XLSX.readFile(path);
-          return wb.SheetNames.map(sn => XLSX.utils.sheet_to_csv(wb.Sheets[sn])).filter(Boolean).join('\n');
+          // BUILD-06: exceljs replaces vulnerable SheetJS (xlsx@0.18.5).
+          const ExcelJS = resolveCjsDefault(await import('exceljs'));
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.readFile(path);
+          const sheets: string[] = [];
+          wb.eachSheet((sheet: { eachRow: (cb: (row: { values: unknown }) => void) => void }) => {
+            const rows: string[] = [];
+            sheet.eachRow((row) => {
+              const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+              rows.push(values.map((v) => String(v ?? '')).join(','));
+            });
+            if (rows.length) sheets.push(rows.join('\n'));
+          });
+          return sheets.join('\n');
         },
         pptx: async () => {
           // Same interop resolution as xlsx: `mod.loadAsync` is undefined on the

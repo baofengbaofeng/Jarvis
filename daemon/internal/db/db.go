@@ -21,6 +21,12 @@ func Open(path string) (*sql.DB, error) {
 		_ = d.Close()
 		return nil, err
 	}
+	// DAEM-11: wait on SQLITE_BUSY instead of failing immediately when Electron
+	// main holds a write lock on the shared jarvis.db.
+	if _, err := d.Exec(`PRAGMA busy_timeout=5000;`); err != nil {
+		_ = d.Close()
+		return nil, err
+	}
 	if err := ensureSchema(d); err != nil {
 		_ = d.Close()
 		return nil, err
@@ -157,6 +163,69 @@ func EnsureTaskRow(ctx context.Context, d *sql.DB, id, agentID, payloadJSON stri
 		return fmt.Errorf("ensure task row %s: %w", id, err)
 	}
 	return nil
+}
+
+// PersistClaim writes a Multica claim before Ack (DAEM-02): ensure row + map ids
+// and keep status queued so a crash before Ack can AbandonClaim / recover.
+func PersistClaim(ctx context.Context, d *sql.DB, localID, multicaID, agentID, payloadJSON string) error {
+	if err := EnsureTaskRow(ctx, d, localID, agentID, payloadJSON); err != nil {
+		return err
+	}
+	// Refresh payload/status for an existing row that was abandoned or retried.
+	_, err := d.ExecContext(ctx, `
+		UPDATE tasks SET agent_id = ?, status = 'queued', payload_json = ?,
+			started_at = NULL, completed_at = NULL
+		WHERE id = ?`, agentID, payloadJSON, localID)
+	if err != nil {
+		return fmt.Errorf("persist claim %s: %w", localID, err)
+	}
+	if multicaID != "" {
+		if err := MapTaskIDs(ctx, d, localID, multicaID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AbandonClaim removes a claim that was persisted but never successfully Ack'd
+// (DAEM-02), so restart recovery does not resurrect it.
+func AbandonClaim(ctx context.Context, d *sql.DB, localID string) error {
+	_, err := d.ExecContext(ctx, `DELETE FROM tasks WHERE id = ? AND status IN ('queued','running')`, localID)
+	if err != nil {
+		return fmt.Errorf("abandon claim %s: %w", localID, err)
+	}
+	return nil
+}
+
+// RecoverableClaim is a queued/running Multica task eligible for restart recovery.
+type RecoverableClaim struct {
+	LocalID       string
+	MulticaTaskID string
+	AgentID       string
+	PayloadJSON   string
+	Status        string
+}
+
+// ListRecoverableClaims returns queued/running Multica-linked tasks (DAEM-02).
+func ListRecoverableClaims(ctx context.Context, d *sql.DB) ([]RecoverableClaim, error) {
+	rows, err := d.QueryContext(ctx, `
+		SELECT id, COALESCE(multica_task_id, ''), agent_id, payload_json, status
+		FROM tasks
+		WHERE status IN ('queued', 'running') AND multica_task_id IS NOT NULL AND multica_task_id != ''
+		ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RecoverableClaim{}
+	for rows.Next() {
+		var c RecoverableClaim
+		if err := rows.Scan(&c.LocalID, &c.MulticaTaskID, &c.AgentID, &c.PayloadJSON, &c.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 
 // MapTaskIDs links a local task to its Multica task id (L36). A nonzero

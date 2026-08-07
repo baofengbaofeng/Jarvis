@@ -4,7 +4,11 @@ import { BrowserWindow, session } from 'electron';
 // lifecycle (open → extract → close) can be unit-tested with a fake window; the
 // real BrowserWindow conforms to it.
 export interface WebViewWindow {
-  webContents: { executeJavaScript(js: string): Promise<unknown> };
+  webContents: {
+    executeJavaScript(js: string): Promise<unknown>;
+    on?(event: string, listener: (...args: never[]) => void): void;
+    setWindowOpenHandler?(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void;
+  };
   loadURL(url: string): Promise<void>;
   close(): void;
   on(event: 'closed', cb: () => void): void;
@@ -15,7 +19,8 @@ export interface WebViewHostDeps {
   // Electron main process. Defaults to a real BrowserWindow on a throwaway
   // in-memory partition.
   createWindow?: (partition: string) => WebViewWindow;
-  assertAllowedUrl?: (url: string) => Promise<void>;
+  /** DESK-10: required — fail closed when policy is missing. */
+  assertAllowedUrl: (url: string) => Promise<void>;
 }
 
 // I8 会话隔离: every open() uses a fresh in-memory partition
@@ -33,9 +38,11 @@ export class WebViewHost {
   private static seq = 0;
   private win: WebViewWindow | null = null;
   private readonly createWindow: (partition: string) => WebViewWindow;
-  private readonly assertAllowedUrl?: (url: string) => Promise<void>;
+  private readonly assertAllowedUrl: (url: string) => Promise<void>;
 
-  constructor(deps: WebViewHostDeps = {}) {
+  constructor(deps: WebViewHostDeps) {
+    if (!deps.assertAllowedUrl) throw new Error('WEBVIEW_POLICY_REQUIRED');
+    this.assertAllowedUrl = deps.assertAllowedUrl;
     this.createWindow = deps.createWindow ?? ((partition: string) => {
       // Creating the session first with cache disabled ensures the partition the
       // window is routed to (webPreferences.partition) is the no-cache session.
@@ -46,11 +53,29 @@ export class WebViewHost {
         webPreferences: { partition, sandbox: true }
       });
     });
-    this.assertAllowedUrl = deps.assertAllowedUrl;
+  }
+
+  private installNavigationGuards(win: WebViewWindow): void {
+    const denyNav = (event: { preventDefault: () => void }, url: string) => {
+      event.preventDefault();
+      void this.assertAllowedUrl(url).then(
+        () => { void win.loadURL(url); },
+        () => { /* blocked */ },
+      );
+    };
+    win.webContents.on?.('will-navigate', denyNav as never);
+    win.webContents.on?.('will-redirect', denyNav as never);
+    win.webContents.setWindowOpenHandler?.(({ url }) => {
+      void this.assertAllowedUrl(url).then(
+        () => { void win.loadURL(url); },
+        () => { /* blocked */ },
+      );
+      return { action: 'deny' };
+    });
   }
 
   async open(url: string): Promise<void> {
-    if (this.assertAllowedUrl) await this.assertAllowedUrl(url);
+    await this.assertAllowedUrl(url);
     // Close any window already up (office.webview.open leaves one open) so a
     // second open can't orphan it. The 'closed' handler is guarded so a stale
     // window's close event (fired later) can't null the reference to the CURRENT
@@ -59,6 +84,7 @@ export class WebViewHost {
     const partition = `webview-${++WebViewHost.seq}`;
     const win = this.createWindow(partition);
     this.win = win;
+    this.installNavigationGuards(win);
     win.on('closed', () => { if (this.win === win) this.win = null; });
     await win.loadURL(url);
   }

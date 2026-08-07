@@ -33,17 +33,31 @@ describe('resolveFileInWorkspace (E12 containment)', () => {
   });
 });
 
-describe('IdeBridge HTTP', () => {
-  it('serves /open and /diff', async () => {
+describe('IdeBridge HTTP (DESK-05)', () => {
+  it('rejects unauthenticated requests', async () => {
     const bridge = new IdeBridge({
+      token: 'secret-token',
+      resolveFile: () => '/ws/a.ts',
+      resolveTaskDiff: () => ({ path: 'a.ts', diff: '' }),
+    });
+    const port = await bridge.start();
+    const res = await fetch(`http://127.0.0.1:${port}/diff?task=t1`);
+    expect(res.status).toBe(401);
+    await bridge.close();
+  });
+
+  it('serves /open and /diff with bearer token', async () => {
+    const bridge = new IdeBridge({
+      token: 'secret-token',
       resolveFile: (f) => f === 'src/a.ts' ? `/ws/${f}` : null,
       resolveTaskDiff: (t) => t === 't1' ? { path: 'src/a.ts', diff: '@@ -1 +1 @@\n-const x = 1;\n+const x = 2;\n' } : null
     });
     const port = await bridge.start();
     const base = `http://127.0.0.1:${port}`;
-    const openRes = await fetch(`${base}/open?file=src%2Fa.ts`).then(r => r.json());
+    const headers = { Authorization: 'Bearer secret-token' };
+    const openRes = await fetch(`${base}/open?file=src%2Fa.ts`, { headers }).then(r => r.json());
     expect(openRes).toEqual({ ok: true, path: '/ws/src/a.ts' });
-    const diffRes = await fetch(`${base}/diff?task=t1`).then(r => r.json());
+    const diffRes = await fetch(`${base}/diff?task=t1`, { headers }).then(r => r.json());
     expect(diffRes.path).toBe('src/a.ts');
     await bridge.close();
   });

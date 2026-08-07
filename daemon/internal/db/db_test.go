@@ -198,3 +198,87 @@ func TestMulticaTaskIDByLocalNullColumn(t *testing.T) {
 		t.Fatalf("expected empty multica id for NULL column, got %q", got)
 	}
 }
+
+func TestPersistClaimBeforeAckShape(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if err := PersistClaim(context.Background(), d, "c1", "mt-c1", "jarvis", `{"taskId":"c1"}`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := MulticaTaskIDByLocal(context.Background(), d, "c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "mt-c1" {
+		t.Fatalf("mapping missing: %q", got)
+	}
+	var status string
+	if err := d.QueryRow(`SELECT status FROM tasks WHERE id = 'c1'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "queued" {
+		t.Fatalf("want queued, got %s", status)
+	}
+}
+
+func TestAbandonClaimRemovesQueued(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if err := PersistClaim(context.Background(), d, "c2", "mt-c2", "jarvis", `{}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := AbandonClaim(context.Background(), d, "c2"); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM tasks WHERE id = 'c2'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("abandoned row still present")
+	}
+}
+
+func TestListRecoverableClaims(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if err := PersistClaim(context.Background(), d, "r1", "mt-r1", "jarvis", `{"a":1}`); err != nil {
+		t.Fatal(err)
+	}
+	list, err := ListRecoverableClaims(context.Background(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].LocalID != "r1" || list[0].MulticaTaskID != "mt-r1" {
+		t.Fatalf("unexpected: %+v", list)
+	}
+}
+
+func TestOpenSetsBusyTimeout(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/jarvis.db"
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	var ms int
+	if err := d.QueryRow(`PRAGMA busy_timeout`).Scan(&ms); err != nil {
+		t.Fatal(err)
+	}
+	if ms < 1000 {
+		t.Fatalf("busy_timeout too low: %d", ms)
+	}
+}
+
+func TestOpenSingleConnection(t *testing.T) {
+	d, err := Open(t.TempDir() + "/one.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	// SetMaxOpenConns(1) is the single-handle contract; Stats().MaxOpenConnections reflects it.
+	if got := d.Stats().MaxOpenConnections; got != 1 {
+		t.Fatalf("MaxOpenConnections=%d want 1", got)
+	}
+}

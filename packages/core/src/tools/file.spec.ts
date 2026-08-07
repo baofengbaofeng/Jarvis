@@ -45,7 +45,9 @@ describe('file tools', () => {
   });
 
   it('rejects write outside workspace', async () => {
-    await expect(reg.execute({ id: '3', name: 'write_file', arguments: { path: '/etc/passwd', content: 'x' } }, ctx))
-      .rejects.toThrow('outside workspace');
+    // CORE-06: path denial is returned as ok:false so the model can recover.
+    const r = await reg.execute({ id: '3', name: 'write_file', arguments: { path: '/etc/passwd', content: 'x' } }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain('outside workspace');
   });
 });

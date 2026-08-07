@@ -5,10 +5,18 @@ directories:
   buildResources: resources
 files:
   - out/**
-  - resources/**
   - package.json
 asar: true
 npmRebuild: true
+extraResources:
+  - from: resources/daemon
+    to: daemon
+    filter:
+      - '**/*'
+  - from: ../../packages/core/dist
+    to: core
+    filter:
+      - headless.mjs
 
 win:
   target:

@@ -1,13 +1,11 @@
 import { test, expect } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 import { startMockOpenAIProvider } from '../helpers/mock-provider';
 import { seedChatStack } from '../helpers/seed-chat-stack';
 
 const BOARD_COLUMNS = ['queued', 'running', 'paused', 'completed', 'failed', 'cancelled'] as const;
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -18,7 +16,7 @@ test('05-board P0: task board columns render', async () => {
 
   try {
     await completeOnboarding(window);
-    await window.goto(`${RENDERER_URL}/board`);
+    await window.goto(rendererHref('/board'));
     await window.getByTestId('task-board').waitFor({ timeout: 30_000 });
     for (const status of BOARD_COLUMNS) {
       await expect(window.getByTestId(`col-${status}`)).toBeVisible();
@@ -53,7 +51,7 @@ test('05-board P0/P1: task.create shows card or control bar status', async () =>
     if (controlVisible) {
       await expect(window.getByTestId('task-status')).toBeVisible({ timeout: 15_000 });
     } else {
-      await window.goto(`${RENDERER_URL}/board`);
+      await window.goto(rendererHref('/board'));
       await window.getByTestId('task-board').waitFor({ timeout: 30_000 });
       await expect(window.getByTestId('task-card').filter({ hasText: taskId })).toBeVisible({ timeout: 30_000 });
     }
@@ -81,10 +79,7 @@ test('05-board P1: approval modal under mock path', async () => {
 
     const approval = window.getByTestId('approval-modal');
     const appeared = await approval.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false);
-    if (!appeared) {
-      test.skip(true, 'no approval:request under mock reply');
-      return;
-    }
+    expect(appeared).toBeTruthy();
     const deny = window.getByTestId('approval-deny');
     const approve = window.getByTestId('approval-approve');
     if (await deny.isVisible()) await deny.click();
@@ -98,5 +93,6 @@ test('05-board P1: approval modal under mock path', async () => {
 });
 
 test('05-board P2: Multica harness', () => {
-  test.skip(true, 'Multica harness not in 1.0.0-Preview suite');
+  test.skip(!process.env.JARVIS_FUNC_DEEP, 'Multica harness requires JARVIS_FUNC_DEEP');
+  throw new Error('Multica harness not wired in 1.0.0-Preview functional suite');
 });

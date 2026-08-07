@@ -1,9 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import {
-  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron,
-} from '../helpers/electron-app';
+  launchJarvisElectron, completeOnboarding, removeDataDir, createIsolatedDataDir, closeJarvisElectron, rendererHref } from '../helpers/electron-app';
 
-const RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://127.0.0.1:5173';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -34,7 +32,7 @@ test.afterAll(async () => {
 
 test('06-settings P0: MCP add server row', async () => {
   const mcpName = 'Func MCP Echo';
-  await window.goto(`${RENDERER_URL}/settings/mcp`);
+  await window.goto(rendererHref('/settings/mcp'));
   await window.getByTestId('mcp-settings').waitFor({ timeout: 30_000 });
 
   await window.getByTestId('mcp-name').fill(mcpName);
@@ -45,13 +43,13 @@ test('06-settings P0: MCP add server row', async () => {
 });
 
 test('06-settings P0: skills settings visible', async () => {
-  await window.goto(`${RENDERER_URL}/settings/skills`);
+  await window.goto(rendererHref('/settings/skills'));
   await expect(window.getByTestId('skills-settings')).toBeVisible({ timeout: 30_000 });
   await expect(window.getByTestId('skills-import')).toBeVisible();
 });
 
 test('06-settings P0: permissions save persists', async () => {
-  await window.goto(`${RENDERER_URL}/settings/permissions`);
+  await window.goto(rendererHref('/settings/permissions'));
   await window.getByTestId('permissions-settings').waitFor({ timeout: 30_000 });
 
   await window.getByTestId('perm-agent').selectOption(agentId);
@@ -70,7 +68,7 @@ test('06-settings P0: permissions save persists', async () => {
 });
 
 test('06-settings P0: env vars save persists', async () => {
-  await window.goto(`${RENDERER_URL}/settings/env`);
+  await window.goto(rendererHref('/settings/env'));
   await window.getByTestId('env-settings').waitFor({ timeout: 30_000 });
 
   await window.getByTestId('env-agent').selectOption(agentId);
@@ -85,7 +83,7 @@ test('06-settings P0: env vars save persists', async () => {
 });
 
 test('06-settings P0: concurrency save persists after restart', async () => {
-  await window.goto(`${RENDERER_URL}/settings/concurrency`);
+  await window.goto(rendererHref('/settings/concurrency'));
   await window.getByTestId('concurrency-settings').waitFor({ timeout: 30_000 });
 
   await window.getByTestId('concurrency-peragent').fill('4');
@@ -104,26 +102,18 @@ test('06-settings P0: concurrency save persists after restart', async () => {
 });
 
 test('06-settings P1: MCP test may skip if process fails', async () => {
-  await window.goto(`${RENDERER_URL}/settings/mcp`);
+  await window.goto(rendererHref('/settings/mcp'));
   await window.getByTestId('mcp-settings').waitFor({ timeout: 30_000 });
 
   const serverRow = window.locator('[data-testid^="mcp-server-"]').first();
-  if ((await serverRow.count()) === 0) {
-    test.skip(true, 'no MCP server row from prior test');
-    return;
-  }
+  expect(await serverRow.count()).toBeGreaterThan(0);
 
   const testId = await serverRow.getAttribute('data-testid');
   const serverId = testId?.replace('mcp-server-', '');
-  if (!serverId) {
-    test.skip(true, 'could not resolve MCP server id');
-    return;
-  }
+  expect(serverId).toBeTruthy();
 
   await window.getByTestId(`mcp-test-${serverId}`).click();
   const result = window.getByTestId(`mcp-test-result-${serverId}`);
   const appeared = await result.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
-  if (!appeared) {
-    test.skip(true, 'mcp.test did not return a result within timeout');
-  }
+  expect(appeared).toBeTruthy();
 });

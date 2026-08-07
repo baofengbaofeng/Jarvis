@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './components/theme/ThemeProvider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useSettings } from './stores/settings-store';
@@ -114,9 +114,9 @@ export default function App() {
         <ApprovalModal />
         <SelectionMenu />
         <ToastHost />
-        <BrowserRouter>
+        <HashRouter>
           <AppRoutes />
-        </BrowserRouter>
+        </HashRouter>
       </ErrorBoundary>
     </ThemeProvider>
   );

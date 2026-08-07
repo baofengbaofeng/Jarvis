@@ -3,9 +3,8 @@ import { join } from 'node:path';
 import { jarvisDataDir } from '../db/connection';
 import { SecureStorage } from './SecureStorage';
 
-/** Platform-aware secret store: Keychain on macOS, Electron safeStorage elsewhere. */
+/** Electron safeStorage-backed secrets on every platform (DESK-04: no keychain argv). */
 export function createSecureStorage(): SecureStorage {
-  if (process.platform === 'darwin') return new SecureStorage();
   if (safeStorage.isEncryptionAvailable()) {
     return new SecureStorage({
       platform: process.platform,

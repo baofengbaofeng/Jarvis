@@ -2,17 +2,26 @@ import { createStdioTransport, type McpTransport, type SpawnImpl } from './trans
 
 export interface MCPTool { name: string; description: string; inputSchema: Record<string, unknown> }
 
-export interface McpClientDeps { spawnImpl?: SpawnImpl }
+export interface McpClientDeps {
+  spawnImpl?: SpawnImpl;
+  /** CORE-08: per-request timeout in ms (default 30s). */
+  requestTimeoutMs?: number;
+}
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export class McpClient {
   private transport: McpTransport | null = null;
   private nextId = 1;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer?: ReturnType<typeof setTimeout> }>();
+  private closed = false;
+  private readonly requestTimeoutMs: number;
 
   constructor(private deps: McpClientDeps = {}, private serverName = 'mcp') {
     // Transport is created lazily (on first request or via attach()) so we
     // never spawn an empty command; production callers should use
     // createMcpClient() which supplies the real command/args through attach().
+    this.requestTimeoutMs = deps.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   // Wire up response routing. Called by attach() and by ensureTransport()
@@ -22,7 +31,7 @@ export class McpClient {
       const id = msg.id as number;
       const p = this.pending.get(id);
       if (!p) return;
-      this.pending.delete(id);
+      this.clearPending(id);
       if (msg.error) p.reject(new Error(JSON.stringify(msg.error)));
       else p.resolve(msg.result);
     });
@@ -42,12 +51,39 @@ export class McpClient {
     this.wire();
   }
 
+  private clearPending(id: number): void {
+    const p = this.pending.get(id);
+    if (!p) return;
+    if (p.timer) clearTimeout(p.timer);
+    this.pending.delete(id);
+  }
+
+  /** CORE-08: reject every in-flight request (close / child exit). */
+  rejectAllPending(reason: string): void {
+    const err = new Error(reason);
+    for (const [id, p] of this.pending) {
+      if (p.timer) clearTimeout(p.timer);
+      p.reject(err);
+      this.pending.delete(id);
+    }
+  }
+
   private request(method: string, params: unknown): Promise<unknown> {
+    if (this.closed) return Promise.reject(new Error(`McpClient(${this.serverName}): closed`));
     this.ensureTransport();
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      this.transport!.send({ jsonrpc: '2.0', id, method, params });
+      const timer = setTimeout(() => {
+        this.clearPending(id);
+        reject(new Error(`McpClient(${this.serverName}): request timeout after ${this.requestTimeoutMs}ms (${method})`));
+      }, this.requestTimeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
+      try {
+        this.transport!.send({ jsonrpc: '2.0', id, method, params });
+      } catch (e) {
+        this.clearPending(id);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
     });
   }
 
@@ -68,12 +104,20 @@ export class McpClient {
   }
 
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    // CORE-08: never leave callers hanging when the transport is torn down.
+    this.rejectAllPending(`McpClient(${this.serverName}): closed`);
     if (this.transport) this.transport.close();
   }
 }
 
-export function createMcpClient(command: string, args: string[], serverName: string, deps: { spawnImpl?: SpawnImpl } = {}): McpClient {
+export function createMcpClient(command: string, args: string[], serverName: string, deps: McpClientDeps = {}): McpClient {
   const client = new McpClient(deps, serverName);
-  client.attach(createStdioTransport(command, args, deps.spawnImpl));
+  // CORE-09: child error/exit must not crash main; CORE-08: reject pending on exit.
+  client.attach(createStdioTransport(command, args, deps.spawnImpl, {
+    onError: (err) => { client.rejectAllPending(`McpClient(${serverName}): ${err.message}`); },
+    onClose: () => { client.rejectAllPending(`McpClient(${serverName}): child exited`); },
+  }));
   return client;
 }

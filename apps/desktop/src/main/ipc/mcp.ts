@@ -1,6 +1,15 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { createMcpClient, registerMcpTools, type McpClient, type SpawnImpl, type ToolRegistry } from '@jarvis/core';
+import { basename, isAbsolute } from 'node:path';
+import {
+  createMcpClient,
+  registerMcpTools,
+  createMcpToolFilter,
+  filterToolsForMcpBindings,
+  type McpClient,
+  type SpawnImpl,
+  type ToolRegistry,
+} from '@jarvis/core';
 
 export interface McpServerInput {
   name: string;
@@ -10,6 +19,25 @@ export interface McpServerInput {
   configJson?: string;
   // G6: agents this server is bound to; persisted into config_json.agentIds.
   agentIds?: string[];
+}
+
+/** Basename allowlist for MCP stdio launchers (DESK-12). Absolute paths also OK. */
+const MCP_COMMAND_ALLOWLIST = new Set([
+  'npx', 'npm', 'node', 'nodejs', 'uvx', 'uv', 'python', 'python3', 'bun', 'deno', 'docker',
+]);
+
+const MCP_UNSAFE = /[;&|`$<>\n\r]/;
+
+export function assertMcpCommand(command: string, args: string[] = []): void {
+  const cmd = command.trim();
+  if (!cmd) throw new Error('MCP_COMMAND_REQUIRED');
+  if (MCP_UNSAFE.test(cmd) || args.some(a => MCP_UNSAFE.test(a))) {
+    throw new Error('MCP_COMMAND_UNSAFE');
+  }
+  const base = basename(cmd);
+  if (!MCP_COMMAND_ALLOWLIST.has(base) && !isAbsolute(cmd)) {
+    throw new Error('MCP_COMMAND_NOT_ALLOWED');
+  }
 }
 
 // MCP client cache: createStdioTransport spawns the OS process eagerly at
@@ -40,6 +68,7 @@ export function createMcpStore(db: Database.Database) {
       }));
     },
     create(input: McpServerInput) {
+      if (input.transport === 'stdio') assertMcpCommand(input.command ?? '', input.args ?? []);
       const id = randomUUID();
       db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
         .run(id, input.name, input.transport, JSON.stringify({ command: input.command, args: input.args, config: input.configJson, agentIds: input.agentIds ?? [] }), new Date().toISOString());
@@ -60,6 +89,11 @@ export type McpTestResult = { ok: boolean; tools: string[]; error?: string };
 // discovered tool names (or an error) without persisting anything.
 export async function testMcpServer(input: McpServerInput, deps: { spawnImpl?: SpawnImpl } = {}): Promise<McpTestResult> {
   if (input.transport !== 'stdio') return { ok: false, tools: [], error: `transport ${input.transport} not supported for test` };
+  try {
+    assertMcpCommand(input.command ?? '', input.args ?? []);
+  } catch (e) {
+    return { ok: false, tools: [], error: e instanceof Error ? e.message : String(e) };
+  }
   const client = createMcpClient(input.command ?? '', input.args ?? [], input.name, deps);
   try {
     await client.initialize();
@@ -86,20 +120,56 @@ export async function testMcpServerById(
 
 export interface McpRegistrationDeps { spawnImpl?: SpawnImpl }
 
+/** CORE-20: server names bound to this agent via config_json.agentIds. */
+export function listBoundMcpServerNames(db: Database.Database, agentId: string): string[] {
+  const rows = db.prepare('SELECT name, config_json FROM mcp_servers').all() as Array<{ name: string; config_json: string }>;
+  const names: string[] = [];
+  for (const s of rows) {
+    const cfg = JSON.parse(s.config_json ?? '{}') as { agentIds?: string[] };
+    if (cfg.agentIds?.includes(agentId)) names.push(s.name);
+  }
+  return names;
+}
+
+/**
+ * CORE-20: build run-scoped MCP visibility from agent bindings (transport cache
+ * stays shared; authorization is per-run).
+ */
+export function mcpVisibilityForAgent(db: Database.Database, agentId: string, allToolNames: string[]): {
+  visibleTools: string[];
+  toolFilter: (name: string) => boolean;
+  boundServers: string[];
+} {
+  const boundServers = listBoundMcpServerNames(db, agentId);
+  return {
+    boundServers,
+    visibleTools: filterToolsForMcpBindings(allToolNames, boundServers),
+    toolFilter: createMcpToolFilter(boundServers),
+  };
+}
+
 // G6: spawn each MCP server bound to the agent (config_json.agentIds) and
 // register its tools into the engine registry under mcp:{server}:{tool}.
 // stdio is the only transport createMcpClient supports today; sse/http are
 // deferred. The client is cached per server id so subsequent task runs reuse
 // the same child process instead of leaking one per run; a config change after
 // first registration requires an app restart (documented in the task report).
+// CORE-20: cache is transport-only — per-agent visibility is applied at run
+// submit via mcpVisibilityForAgent / toolFilter, not by mutating the registry.
 export async function registerAgentMcpTools(db: Database.Database, toolRegistry: ToolRegistry, agentId: string, deps: McpRegistrationDeps = {}): Promise<void> {
   const rows = db.prepare('SELECT id, name, transport, config_json FROM mcp_servers').all() as Array<{ id: string; name: string; transport: string; config_json: string }>;
   for (const s of rows) {
     const cfg = JSON.parse(s.config_json ?? '{}') as { command?: string; args?: string[]; agentIds?: string[] };
     if (s.transport !== 'stdio' || !cfg.command || !cfg.agentIds?.includes(agentId)) continue;
-    if (mcpClientCache.has(s.id)) continue; // already spawned + registered
+    if (mcpClientCache.has(s.id)) {
+      // Already spawned — ensure tools are present (idempotent under CORE-07).
+      const cached = mcpClientCache.get(s.id)!;
+      await registerMcpTools(toolRegistry, cached.client, s.name);
+      continue;
+    }
     let client: McpClient | undefined;
     try {
+      assertMcpCommand(cfg.command, cfg.args ?? []);
       client = createMcpClient(cfg.command, cfg.args ?? [], s.name, deps);
       await client.initialize();
       await registerMcpTools(toolRegistry, client, s.name);
