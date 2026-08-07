@@ -1,5 +1,5 @@
 import type { AgentConfig } from '@jarvis/protocol';
-import type { ChatChunk, ChatRequest, Usage } from '../model/types';
+import type { AssistantToolCallMessage, ChatChunk, ChatRequest, ModelMessage, ToolResultMessage, Usage } from '../model/types';
 import type { ToolRegistry } from './ToolRegistry';
 import type { ApprovalRequest, TaskResult, ToolCall, ToolResult } from './types';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
@@ -37,9 +37,8 @@ export interface EngineRunInput {
 export class AgentEngine {
   private maxSteps: number;
   // E10 (plan mode): the tool-name subset this engine may expose to the model.
-  // ChatRequest has no `tools` field yet — it lands with the real-provider
-  // REACT rework — so this set is stored for that wiring; today the plan-only
-  // enforcement is the execution-side gate in the tasks approval closure.
+  // Filters `ChatRequest.tools` below; the execution-side gate in the tasks
+  // approval closure still backs it up for tools the model calls anyway.
   private visibleTools: string[] | null = null;
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
 
@@ -48,7 +47,7 @@ export class AgentEngine {
 
   async run(input: EngineRunInput): Promise<TaskResult> {
     const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy } = input;
-    let working: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }> = [...messages];
+    const working: ModelMessage[] = [...messages];
     let toolCalls = 0;
     let totalUsage: Usage | null = null;
     let finalText = '';
@@ -61,7 +60,9 @@ export class AgentEngine {
       const req: ChatRequest = {
         provider: { id: agent.id, name: agent.name, type: input.provider.type, baseUrl: input.provider.baseUrl, apiKeyRef: '', createdAt: '', updatedAt: '' },
         modelId: input.modelId,
-        messages: working,
+        // Snapshot: the loop keeps appending to `working` after this request
+        // resolves, and an adapter must serialize the transcript it was given.
+        messages: [...working],
         stream: true,
         maxTokens: this.cfg.maxTokens,
         ...(visible.length > 0 ? { tools: visible, toolChoice: 'auto' as const } : {})
@@ -77,15 +78,25 @@ export class AgentEngine {
           if (c.kind === 'usage') totalUsage = c.usage;
         }
       });
-      if (text) {
-        finalText += text;
-        working.push({ role: 'assistant', content: text });
-      }
+      if (text) finalText += text;
       if (usage) totalUsage = usage;
 
-      if (callCalls.length === 0) break;
+      if (callCalls.length === 0) {
+        if (text) working.push({ role: 'assistant', content: text });
+        break;
+      }
 
-      for (const call of callCalls) {
+      // Some OpenAI-compatible servers stream a tool call without an id. The
+      // round trip is only valid when the assistant call and its result share
+      // one non-empty id, so synthesize one before it is referenced twice.
+      const calls = callCalls.map((c, i) => (c.id ? c : { ...c, id: `call_${step}_${i}` }));
+      // CORE-01: record the assistant turn WITH its tool calls even when the
+      // model emitted no text — otherwise the tool results pushed below dangle
+      // and both providers reject the next request.
+      const assistantTurn: AssistantToolCallMessage = { role: 'assistant', content: text, toolCalls: calls };
+      working.push(assistantTurn);
+
+      for (const call of calls) {
         toolCalls++;
         if (this.cfg.approvalGate) {
           // Pass the run's own agent through so a shared engine (concurrent
@@ -93,7 +104,7 @@ export class AgentEngine {
           // "current agent" that races across submissions. (M4 review finding 1)
           const ok = await this.cfg.approvalGate({ toolName: call.name, args: call.arguments, prompt: `run ${call.name}`, agent: input.agent });
           if (!ok) {
-            working.push({ role: 'tool', content: `[denied] ${call.name}` });
+            working.push(toolResult(call, `[denied] ${call.name}`));
             continue;
           }
         }
@@ -103,10 +114,14 @@ export class AgentEngine {
         // otherwise mis-attributes writes to a different agent).
         const result = await this.cfg.toolRegistry.execute(call, { cwd, env, signal, workspaceRoot, policy, agent: input.agent });
         onTool?.(call, result);
-        working.push({ role: 'tool', content: result.output });
+        working.push(toolResult(call, result.output));
       }
     }
 
     return { text: finalText, toolCalls, usage: totalUsage };
   }
+}
+
+function toolResult(call: ToolCall, output: string): ToolResultMessage {
+  return { role: 'tool', content: output, toolCallId: call.id, name: call.name };
 }

@@ -64,6 +64,69 @@ describe('AgentEngine', () => {
     expect(result.toolCalls).toBe(maxSteps);
   });
 
+  it('records the tool-call assistant turn and the result id even when the model sent no text', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async (args) => ({ ok: true, output: `out:${String(args.text)}` }));
+    const seen: Array<Array<{ role: string; content: unknown; toolCalls?: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCalls?: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_1', name: 'echo', arguments: { text: 'a' } }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 3 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(seen[1]).toEqual([
+      { role: 'user', content: 'go' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'echo', arguments: { text: 'a' } }] },
+      { role: 'tool', content: 'out:a', toolCallId: 'call_1', name: 'echo' }
+    ]);
+  });
+
+  it('gives an id-less tool call a synthetic id shared by the call and its result', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: Array<Array<{ role: string; toolCalls?: Array<{ id: string }>; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; toolCalls?: Array<{ id: string }>; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '', name: 'echo', arguments: {} }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    const assistantId = seen[1][1].toolCalls![0].id;
+    expect(assistantId).toBeTruthy();
+    expect(seen[1][2].toolCallId).toBe(assistantId);
+  });
+
+  it('links a denied tool call to its result so the transcript stays well-formed', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: Array<Array<{ role: string; content: unknown; toolCallId?: string }>> = [];
+    const chat = async (req: { messages: Array<{ role: string; content: unknown; toolCallId?: string }> }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push(req.messages);
+      if (seen.length === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 'call_9', name: 'echo', arguments: {} }] });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: null };
+      }
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2, approvalGate: async () => false });
+    await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(seen[1][2]).toMatchObject({ role: 'tool', content: '[denied] echo', toolCallId: 'call_9' });
+  });
+
   it('passes registered tools to the model router', async () => {
     const reg = new ToolRegistry();
     reg.register({ name: 'echo', description: 'echo', parameters: {} }, async () => ({ ok: true, output: 'x' }));

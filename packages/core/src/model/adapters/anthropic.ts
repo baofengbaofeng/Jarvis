@@ -1,6 +1,8 @@
-import type { ChatRequest, ChatChunk, ProviderAdapter } from '../types';
+import type { ChatRequest, ChatChunk, ModelMessage, ProviderAdapter } from '../types';
 import { parseSSE } from '../../util/sse';
 import { normalizeContent } from '../../office/content';
+
+interface AnthropicMessage { role: 'user' | 'assistant'; content: unknown }
 
 export class AnthropicAdapter implements ProviderAdapter {
   readonly type = 'anthropic-compatible' as const;
@@ -13,9 +15,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     // content array, join only its text parts (image blocks are not valid in the
     // Anthropic `system` field).
     const system = req.messages.filter(m => m.role === 'system').map(m => typeof m.content === 'string' ? m.content : m.content.filter(p => p.type === 'text').map(p => p.text).join('\n')).join('\n');
-    // L23: normalize each message — image_url parts map to Anthropic image
-    // content blocks, string content passes through unchanged.
-    const rest = req.messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: normalizeContent(m.content, 'anthropic') }));
+    const rest = toAnthropicMessages(req.messages);
     const body = {
       model: req.modelId,
       max_tokens: req.maxTokens ?? 4096,
@@ -51,4 +51,50 @@ export class AnthropicAdapter implements ProviderAdapter {
     }
     ctx.onChunk({ kind: 'done' });
   }
+}
+
+// CORE-01: Anthropic has no `tool` role. An assistant turn's tool calls become
+// tool_use blocks and each tool result becomes a tool_result block inside the
+// FOLLOWING user message — and since the API requires alternating roles, all
+// results of one turn must be merged into that single user message.
+function toAnthropicMessages(messages: ModelMessage[]): AnthropicMessage[] {
+  const out: AnthropicMessage[] = [];
+  for (const m of messages) {
+    if (m.role === 'system') continue;
+    if (m.role === 'tool') {
+      const block = { type: 'tool_result', tool_use_id: m.toolCallId ?? '', content: toolResultContent(m.content) };
+      const prev = out[out.length - 1];
+      if (prev && prev.role === 'user' && isToolResultBlocks(prev.content)) prev.content.push(block);
+      else out.push({ role: 'user', content: [block] });
+      continue;
+    }
+    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+      const blocks: unknown[] = [...textBlocks(m.content)];
+      for (const c of m.toolCalls) blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: c.arguments ?? {} });
+      out.push({ role: 'assistant', content: blocks });
+      continue;
+    }
+    // L23: normalize each message — image_url parts map to Anthropic image
+    // content blocks, string content passes through unchanged.
+    out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: normalizeContent(m.content, 'anthropic') });
+  }
+  return out;
+}
+
+function isToolResultBlocks(content: unknown): content is unknown[] {
+  return Array.isArray(content) && content.every(b => (b as { type?: string } | null)?.type === 'tool_result');
+}
+
+function textBlocks(content: ModelMessage['content']): unknown[] {
+  const normalized = normalizeContent(content, 'anthropic');
+  // An assistant turn that only requested tools has no text, and Anthropic
+  // rejects an empty text block.
+  if (typeof normalized === 'string') return normalized ? [{ type: 'text', text: normalized }] : [];
+  return Array.isArray(normalized) ? normalized : [];
+}
+
+function toolResultContent(content: ModelMessage['content']): unknown {
+  if (typeof content === 'string') return content || '(no output)';
+  const normalized = normalizeContent(content, 'anthropic');
+  return Array.isArray(normalized) && normalized.length > 0 ? normalized : '(no output)';
 }

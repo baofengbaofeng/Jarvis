@@ -45,6 +45,32 @@ describe('openai adapter', () => {
     expect((capturedBody as unknown as { tools?: Array<{ function: { name: string } }> }).tools?.[0]?.function?.name).toBe('get_weather');
   });
 
+  it('serializes an assistant tool-call turn and links the tool result by tool_call_id', async () => {
+    let capturedBody: { messages?: Array<Record<string, unknown>> } | null = null;
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return (await mockFetch(['data: [DONE]'])()) as unknown as Response;
+    };
+    const adapter = createAdapter('openai-compatible', { fetchImpl: fetchImpl as typeof fetch });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'openai-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', stream: true,
+      messages: [
+        { role: 'user', content: 'weather in SF?' },
+        { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'SF' } }] },
+        { role: 'tool', content: '18C', toolCallId: 'call_1', name: 'get_weather' }
+      ]
+    };
+    await adapter.chat(req, { apiKey: 'sk-test', onChunk: () => {} });
+    const messages = capturedBody!.messages!;
+    expect(messages[1]).toEqual({
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{"city":"SF"}' } }]
+    });
+    expect(messages[2]).toEqual({ role: 'tool', content: '18C', name: 'get_weather', tool_call_id: 'call_1' });
+  });
+
   it('accumulates multi-delta tool calls into one well-formed chunk', async () => {
     const adapter = createAdapter('openai-compatible', { fetchImpl: mockFetch([
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_weather","arguments":""}}]}}]}',
@@ -102,4 +128,60 @@ describe('anthropic adapter', () => {
     await adapter.chat(req, { apiKey: 'sk-ant-test', onChunk: (c) => { if (c.kind === 'usage') usageChunks.push(c.usage); } });
     expect(usageChunks).toEqual([{ promptTokens: 5, completionTokens: 2, totalTokens: 7 }]);
   });
+
+  it('maps an assistant tool-call turn to tool_use and the tool results to one user tool_result message', async () => {
+    let capturedBody: { messages?: Array<{ role: string; content: unknown }> } | null = null;
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return (await mockFetch(['event: message_stop', 'data: {"type":"message_stop"}'])()) as unknown as Response;
+    };
+    const adapter = createAdapter('anthropic-compatible', { fetchImpl: fetchImpl as typeof fetch });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'anthropic-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', stream: true,
+      messages: [
+        { role: 'user', content: 'weather in SF and NY?' },
+        { role: 'assistant', content: 'checking', toolCalls: [
+          { id: 'toolu_1', name: 'get_weather', arguments: { city: 'SF' } },
+          { id: 'toolu_2', name: 'get_weather', arguments: { city: 'NY' } }
+        ] },
+        { role: 'tool', content: '18C', toolCallId: 'toolu_1', name: 'get_weather' },
+        { role: 'tool', content: '24C', toolCallId: 'toolu_2', name: 'get_weather' }
+      ]
+    };
+    await adapter.chat(req, { apiKey: 'sk-ant-test', onChunk: () => {} });
+    const messages = capturedBody!.messages!;
+    // No `tool` role survives, and the two results share ONE user message so the
+    // user/assistant alternation Anthropic requires holds.
+    expect(messages.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(messages[1].content).toEqual([
+      { type: 'text', text: 'checking' },
+      { type: 'tool_use', id: 'toolu_1', name: 'get_weather', input: { city: 'SF' } },
+      { type: 'tool_use', id: 'toolu_2', name: 'get_weather', input: { city: 'NY' } }
+    ]);
+    expect(messages[2].content).toEqual([
+      { type: 'tool_result', tool_use_id: 'toolu_1', content: '18C' },
+      { type: 'tool_result', tool_use_id: 'toolu_2', content: '24C' }
+    ]);
+  });
+
+  it('omits the text block when a tool-only assistant turn has no text', async () => {
+    let capturedBody: { messages?: Array<{ role: string; content: unknown }> } | null = null;
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return (await mockFetch(['event: message_stop', 'data: {"type":"message_stop"}'])()) as unknown as Response;
+    };
+    const adapter = createAdapter('anthropic-compatible', { fetchImpl: fetchImpl as typeof fetch });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'anthropic-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', stream: true,
+      messages: [
+        { role: 'user', content: 'go' },
+        { role: 'assistant', content: '', toolCalls: [{ id: 'toolu_1', name: 'ls', arguments: {} }] }
+      ]
+    };
+    await adapter.chat(req, { apiKey: 'sk-ant-test', onChunk: () => {} });
+    expect(capturedBody!.messages![1].content).toEqual([{ type: 'tool_use', id: 'toolu_1', name: 'ls', input: {} }]);
+  });
+
 });
