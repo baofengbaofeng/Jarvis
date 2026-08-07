@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Textarea } from '@jarvis/ui';
 // office/writing is a pure module, so import its types from the renderer-safe
 // entry (@jarvis/core/renderer) rather than the full barrel, which pulls Node deps.
 import type { WritingAction } from '@jarvis/core/renderer';
@@ -66,17 +67,20 @@ export function WritingView() {
   }, [text, sideBySide]);
 
   return (
-    <div data-testid="writing-view">
-      <textarea data-testid="writing-text" value={text} onChange={e => setText(e.target.value)} rows={12} />
-      <div>
-        <button data-testid="writing-polish" onClick={() => void runAction('polish')}>{t('writing.polish')}</button>
-        <button data-testid="writing-continue" onClick={() => void runAction('continue')}>{t('writing.continue')}</button>
-        <button data-testid="writing-summarize" onClick={() => void runAction('summarize')}>{t('writing.summarize')}</button>
-        <button data-testid="writing-translate" onClick={() => void runAction('translate')}>{t('writing.translate')}</button>
-        <label><input type="checkbox" data-testid="writing-live" checked={sideBySide} onChange={e => setSideBySide(e.target.checked)} /> {t('writing.live')}</label>
+    <div data-testid="writing-view" className="writing-view">
+      <Textarea data-testid="writing-text" value={text} onChange={e => setText(e.target.value)} rows={12} />
+      <div className="writing-view__actions">
+        <Button data-testid="writing-polish" variant="ghost" size="sm" onClick={() => void runAction('polish')}>{t('writing.polish')}</Button>
+        <Button data-testid="writing-continue" variant="ghost" size="sm" onClick={() => void runAction('continue')}>{t('writing.continue')}</Button>
+        <Button data-testid="writing-summarize" variant="ghost" size="sm" onClick={() => void runAction('summarize')}>{t('writing.summarize')}</Button>
+        <Button data-testid="writing-translate" variant="ghost" size="sm" onClick={() => void runAction('translate')}>{t('writing.translate')}</Button>
+        <label className="checkbox-label">
+          <input type="checkbox" data-testid="writing-live" checked={sideBySide} onChange={e => setSideBySide(e.target.checked)} />
+          {t('writing.live')}
+        </label>
       </div>
       {live && <div data-testid="writing-live-result">{live.done.join('\n')}<span className="pending">{live.pending}</span></div>}
-      {error && <div data-testid="writing-error">{error}</div>}
+      {error && <div data-testid="writing-error" className="error-text">{error}</div>}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { EmptyState } from '@jarvis/ui';
 import { parseTable, type Artifact } from '@jarvis/core/renderer';
 
 // K6 (M8 Task 10): canvas workspace view. When a taskId is present it loads the
@@ -42,7 +43,11 @@ export function CanvasView({ taskId }: { taskId?: string }) {
           {a.kind === 'chart' && <pre data-testid="artifact-chart">{a.content}</pre>}
         </div>
       ))}
-      {artifacts.length === 0 && <div data-testid="canvas-empty">{t('canvas.no_artifacts')}</div>}
+      {artifacts.length === 0 && (
+        <div data-testid="canvas-empty">
+          <EmptyState title={t('canvas.no_artifacts')} />
+        </div>
+      )}
     </div>
   );
 }

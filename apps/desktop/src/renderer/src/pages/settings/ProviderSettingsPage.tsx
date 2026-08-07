@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Panel } from '@jarvis/ui';
+import { Button, Input, PageHeader, Panel } from '@jarvis/ui';
 import type { Model } from '@jarvis/protocol';
 import { useProviderStore } from '../../stores/provider-store';
 import { ProviderForm } from './ProviderForm';
@@ -54,13 +54,11 @@ export function ProviderSettingsPage() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   return (
-    <div data-testid="provider-settings" className="page">
-      <div className="page__header">
-        <h2 className="page__title">{t('settings.provider.title')}</h2>
-        <div className="page__actions">
-          <Button variant="primary" data-testid="provider-add-open" onClick={() => setShowForm(true)}>{t('settings.provider.add')}</Button>
-        </div>
-      </div>
+    <div data-testid="provider-settings" className="page settings-page">
+      <PageHeader
+        title={t('settings.provider.title')}
+        actions={<Button variant="primary" data-testid="provider-add-open" onClick={() => setShowForm(true)}>{t('settings.provider.add')}</Button>}
+      />
       {showForm && <ProviderForm onDone={() => setShowForm(false)} />}
       {providers.length === 0 && !showForm && <p data-testid="provider-empty" className="empty-text">{t('settings.provider.empty')}</p>}
       <ul className="settings-card-list">

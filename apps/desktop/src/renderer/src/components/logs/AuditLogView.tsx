@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, DataTable, PageHeader, Select } from '@jarvis/ui';
 import type { AuditEntry } from '@jarvis/core/renderer';
 
 // M8 Task 3 (J5): execution-audit view. Reads the audit_logs table through the
@@ -16,20 +17,30 @@ export function AuditLogView() {
     await window.jarvis.invoke('dialog.saveText', { defaultName: `audit.${format}`, content });
   };
   return (
-    <div data-testid="audit-log" className="audit-log">
-      <h2 className="audit-log__title">{t('audit.title')}</h2>
-      <div className="audit-log__toolbar">
-        <select data-testid="audit-kind" value={kind} onChange={e => setKind(e.target.value)}>
-          <option value="">{t('audit.filter.all')}</option><option value="tool_call">{t('audit.filter.tool_call')}</option><option value="approval">{t('audit.filter.approval')}</option>
-        </select>
-        <button onClick={() => void onExport('csv')}>{t('audit.export')} CSV</button>
-      </div>
-      <table className="data-table audit-log__table">
-        <thead><tr><th>{t('audit.col.ts')}</th><th>{t('audit.col.kind')}</th><th>{t('audit.col.action')}</th><th>{t('audit.col.result')}</th></tr></thead>
-        <tbody>{entries.map((e, i) => (
-          <tr key={i} data-testid="audit-row"><td>{e.ts}</td><td>{e.kind}</td><td>{e.action}</td><td>{e.result}</td></tr>
-        ))}</tbody>
-      </table>
+    <div data-testid="audit-log" className="page audit-log">
+      <PageHeader
+        title={t('audit.title')}
+        actions={(
+          <>
+            <Select data-testid="audit-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="">{t('audit.filter.all')}</option>
+              <option value="tool_call">{t('audit.filter.tool_call')}</option>
+              <option value="approval">{t('audit.filter.approval')}</option>
+            </Select>
+            <Button variant="ghost" size="sm" onClick={() => void onExport('csv')}>{t('audit.export')} CSV</Button>
+          </>
+        )}
+      />
+      <DataTable
+        columns={[
+          { key: 'ts', header: t('audit.col.ts'), render: (e) => <span data-testid="audit-row">{e.ts}</span> },
+          { key: 'kind', header: t('audit.col.kind') },
+          { key: 'action', header: t('audit.col.action') },
+          { key: 'result', header: t('audit.col.result') },
+        ]}
+        rows={entries}
+        rowKey={(e) => `${e.ts}-${e.action}-${e.result}`}
+      />
     </div>
   );
 }

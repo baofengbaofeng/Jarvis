@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input } from '@jarvis/ui';
+import { Button, Input, PageHeader } from '@jarvis/ui';
 
 export function ConcurrencySettingsPage() {
   const { t } = useTranslation('common');
@@ -18,8 +18,8 @@ export function ConcurrencySettingsPage() {
     await window.jarvis.invoke('daemon.restart');
   };
   return (
-    <div data-testid="concurrency-settings" className="form-stack">
-      <h2 className="page__title">{t('settings.title')}</h2>
+    <div data-testid="concurrency-settings" className="page form-stack settings-page">
+      <PageHeader title={t('settings.nav.concurrency')} />
       <div className="form-field">
         <label htmlFor="concurrency-peragent">{t('settings.concurrency.perAgent')}</label>
         <Input id="concurrency-peragent" data-testid="concurrency-peragent" type="number" value={perAgent} onChange={e => setPerAgent(Number(e.target.value))} />

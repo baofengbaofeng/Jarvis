@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DataTable, PageHeader, StatCard } from '@jarvis/ui';
 import { useUsageStore } from '../../stores/usage-store';
 
 export function UsageDashboard() {
@@ -9,33 +10,26 @@ export function UsageDashboard() {
   useEffect(() => { void load(); }, [load]);
   if (!summary) return <div data-testid="usage-loading">…</div>;
   return (
-    <div data-testid="usage-dashboard" className="usage-dashboard">
-      <h2 className="usage-dashboard__title">{t('usage.title')}</h2>
-      <div className="usage-dashboard__total">
-        <span data-testid="usage-total-tokens">{summary.total.totalTokens}</span> {t('usage.totalTokens')} / {summary.total.calls} {t('usage.col.calls')}
+    <div data-testid="usage-dashboard" className="page usage-dashboard">
+      <PageHeader title={t('usage.title')} />
+      <div className="usage-dashboard__stats">
+        <StatCard
+          label={t('usage.totalTokens')}
+          value={<span data-testid="usage-total-tokens">{summary.total.totalTokens}</span>}
+        />
+        <StatCard label={t('usage.col.calls')} value={summary.total.calls} />
       </div>
-      <table className="data-table usage-dashboard__table">
-        <thead>
-          <tr>
-            <th>{t('usage.col.agent')}</th>
-            <th>{t('usage.col.prompt')}</th>
-            <th>{t('usage.col.completion')}</th>
-            <th>{t('usage.col.total')}</th>
-            <th>{t('usage.col.calls')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {summary.byAgent.map((row) => (
-            <tr key={row.agentId}>
-              <td>{row.agentId}</td>
-              <td>{row.usage.promptTokens}</td>
-              <td>{row.usage.completionTokens}</td>
-              <td>{row.usage.totalTokens}</td>
-              <td>{row.usage.calls}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        columns={[
+          { key: 'agentId', header: t('usage.col.agent') },
+          { key: 'promptTokens', header: t('usage.col.prompt'), render: (row) => row.usage.promptTokens },
+          { key: 'completionTokens', header: t('usage.col.completion'), render: (row) => row.usage.completionTokens },
+          { key: 'totalTokens', header: t('usage.col.total'), render: (row) => row.usage.totalTokens },
+          { key: 'calls', header: t('usage.col.calls'), render: (row) => row.usage.calls },
+        ]}
+        rows={summary.byAgent}
+        rowKey={(row) => row.agentId}
+      />
     </div>
   );
 }

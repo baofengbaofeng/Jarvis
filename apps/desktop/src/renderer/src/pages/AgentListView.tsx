@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@jarvis/ui';
+import { Button, PageHeader } from '@jarvis/ui';
 import { useAgentStore } from '../stores/agent-store';
 import { AgentDetailPage } from './AgentDetailPage';
 
@@ -12,17 +12,19 @@ export function AgentListView() {
 
   return (
     <div data-testid="agent-list" className="page agent-list">
-      <div className="page__header">
-        <h2 className="page__title">{t('menu.agents')}</h2>
-        <div className="page__actions">
-          <Button variant="primary" data-testid="agent-add" onClick={() => setEditing('__new__')}>
-            {t('settings.provider.add')}
-          </Button>
-          <Button variant="ghost" data-testid="agent-templates" onClick={() => { window.location.href = '/agents/templates'; }}>
-            {t('menu.templates')}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('menu.agents')}
+        actions={(
+          <>
+            <Button variant="primary" data-testid="agent-add" onClick={() => setEditing('__new__')}>
+              {t('agents.add')}
+            </Button>
+            <Button variant="ghost" data-testid="agent-templates" onClick={() => { window.location.href = '/agents/templates'; }}>
+              {t('menu.templates')}
+            </Button>
+          </>
+        )}
+      />
       {editing !== null && (
         <AgentDetailPage
           key={editing}

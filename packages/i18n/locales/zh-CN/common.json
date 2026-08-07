@@ -16,7 +16,39 @@
   },
   "settings": {
     "title": "设置",
-    "nav": { "providers": "Provider", "logs": "日志", "mcp": "MCP 服务", "skills": "技能", "daemon": "Daemon", "permissions": "权限", "env": "环境", "concurrency": "并发", "dataSafety": "数据安全", "config": "配置导入导出", "shortcuts": "快捷键", "usage": "用量统计", "audit": "审计日志", "appearance": "外观" },
+    "nav": {
+      "providers": "Provider",
+      "logs": "日志",
+      "mcp": "MCP 服务",
+      "skills": "技能",
+      "daemon": "Daemon",
+      "permissions": "权限",
+      "env": "环境",
+      "concurrency": "并发",
+      "dataSafety": "数据安全",
+      "config": "配置导入导出",
+      "shortcuts": "快捷键",
+      "usage": "用量统计",
+      "audit": "审计日志",
+      "appearance": "外观",
+      "groups": {
+        "ai": "AI 与模型",
+        "runtime": "运行时",
+        "agent": "Agent",
+        "data": "数据与安全",
+        "preferences": "偏好"
+      }
+    },
+    "logs": {
+      "title": "日志调试面板",
+      "subtitle": "查看本地日志文件",
+      "refresh": "刷新",
+      "empty": "暂无日志文件",
+      "emptyHint": "日志将写入 ~/.jarvis/logs/",
+      "message": "内容",
+      "noLines": "该日志为空",
+      "error": "读取日志失败"
+    },
     "mcp": {
       "title": "MCP 服务",
       "name": "名称",
@@ -62,15 +94,47 @@
     }
   },
   "theme": { "light": "浅色", "dark": "深色", "system": "跟随系统" },
-  "onboarding": { "title": "欢迎使用 JARVIS", "start": "开始配置", "step1": "Provider", "step2": "Agent", "step3": "工作区" },
-  "chat": { "placeholder": "输入消息…", "sessions": "会话列表", "newSession": "新对话", "taskCancelled": "任务已取消" },
+  "onboarding": {
+    "title": "欢迎使用 JARVIS",
+    "subtitle": "步骤 {{step}} / 3",
+    "start": "开始使用",
+    "step1": "配置 Provider",
+    "step2": "创建 Agent",
+    "step3": "环境诊断",
+    "defaultPrompt": "你是一个有帮助的本地 AI 助手。"
+  },
+  "chat": {
+    "placeholder": "输入消息，@ 引用文件或 Agent…",
+    "sessions": "会话列表",
+    "newSession": "新对话",
+    "taskCancelled": "任务已取消",
+    "subtitle": "主聊天",
+    "welcome": "开始与 Agent 对话",
+    "welcomeHint": "在下方输入消息，或使用 @ 引用文件。"
+  },
   "approval": { "title": "需要审批", "approve": "批准", "deny": "拒绝", "reject": "驳回", "summary": "结果摘要" },
-  "agent": { "bindWorkspace": "绑定工作区", "workspaceBound": "已绑定工作区", "systemPrompt": "系统提示词", "modelId": "模型 ID" },
+  "agent": {
+    "name": "名称",
+    "add": "添加 Agent",
+    "bindWorkspace": "绑定工作区",
+    "workspaceBound": "已绑定工作区",
+    "systemPrompt": "系统提示词",
+    "modelId": "模型 ID"
+  },
+  "agents": {
+    "add": "添加 Agent"
+  },
   "board": {
-    "title": "任务看板",
+    "title": "Task 看板",
+    "subtitle": "任务生命周期管理",
+    "pause": "暂停",
+    "resume": "继续",
+    "cancel": "取消",
+    "retry": "重试",
     "col": { "queued": "排队", "running": "运行中", "paused": "已暂停", "completed": "已完成", "failed": "失败", "cancelled": "已取消" }
   },
-  "canvas": { "title": "画布", "no_artifacts": "暂无任务产物" },
+  "task": { "logs": "任务日志" },
+  "canvas": { "title": "画布", "no_artifacts": "暂无任务产物", "selectTask": "选择任务" },
   "daemon": {
     "title": "Daemon 管理",
     "running": "运行中",
@@ -218,17 +282,24 @@
   "error": { "title": "页面发生错误", "reload": "重新加载" },
   "workflow": {
     "title": "工作流编辑器",
+    "subtitle": "DAG 编排与执行",
     "run": "运行",
     "add": "+ {{name}}",
     "edge": "→ {{to}}",
     "connectTo": "连接到…",
     "remove": "删除",
-    "inputPlaceholder": "输入模板"
+    "inputPlaceholder": "输入模板",
+    "viewList": "列表",
+    "viewGraph": "图形",
+    "empty": "尚未添加节点",
+    "emptyHint": "从上方选择一个 Agent 添加到工作流。"
   },
   "shell": {
-    "groupWork": "工作",
+    "groupWork": "功能",
     "groupCollab": "协作",
-    "navChat": "对话"
+    "groupAgents": "Agent",
+    "navChat": "对话",
+    "searchAgents": "搜索 Agent"
   },
   "shortcuts": {
     "title": "键盘快捷键",

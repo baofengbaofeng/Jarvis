@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Select, Textarea } from '@jarvis/ui';
+import { Button, PageHeader, Select, Textarea } from '@jarvis/ui';
 import { useAgentStore } from '../../stores/agent-store';
 
 export function EnvSettingsPage() {
@@ -35,8 +35,8 @@ export function EnvSettingsPage() {
   };
 
   return (
-    <div data-testid="env-settings" className="form-stack">
-      <h2 className="page__title">{t('settings.title')}</h2>
+    <div data-testid="env-settings" className="page form-stack settings-page">
+      <PageHeader title={t('settings.nav.env')} />
       <div className="form-field">
         <label htmlFor="env-agent">{t('settings.env.agent')}</label>
         <Select id="env-agent" data-testid="env-agent" value={agentId} onChange={e => selectAgent(e.target.value)}>

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tabs, TabPanel, Textarea } from '@jarvis/ui';
+import { FileChip, PageHeader, Tabs, TabPanel, Textarea } from '@jarvis/ui';
 import { WritingView } from '../components/office/WritingView';
 import { VoiceInputButton } from '../components/office/VoiceInputButton';
 import { DropZone } from '../components/office/DropZone';
@@ -38,6 +38,11 @@ export function OfficePage() {
     }
   };
 
+  const removeAttached = (name: string) => {
+    setAttached(prev => prev.filter(n => n !== name));
+    setAnalysis(prev => prev.filter(a => a.name !== name));
+  };
+
   const insertToComposer = (text: string) => {
     const el = composerRef.current;
     if (el && document.activeElement === el) {
@@ -55,9 +60,7 @@ export function OfficePage() {
 
   return (
     <div data-testid="office-page" className="office-page page page--wide">
-      <div className="page__header office-page__header">
-        <h1 className="page__title">{t('office.title')}</h1>
-      </div>
+      <PageHeader title={t('office.title')} />
       <Tabs
         tabs={OFFICE_TABS.map(tb => ({ id: tb, label: t(`office.tabs.${tb}`), testId: `office-tab-${tb}` }))}
         active={tab}
@@ -69,19 +72,24 @@ export function OfficePage() {
           <DropZone onAttach={(files) => void handleAttach(files)} onCopied={(names) => setAttached(prev => [...prev, ...names])}>
             <WritingView />
           </DropZone>
+          {attached.length > 0 && (
+            <div data-testid="office-attached" className="office-attached">
+              {attached.map((name) => (
+                <FileChip key={name} name={name} onRemove={() => removeAttached(name)} />
+              ))}
+            </div>
+          )}
+          {analysis.length > 0 && (
+            <div data-testid="office-analysis" className="office-analysis">
+              <h3 className="office-analysis__title">{t('officeTools.analysis')}</h3>
+              {analysis.map((a, i) => (
+                <div key={`${a.name}-${i}`} data-testid={`office-analysis-${i}`} className="office-analysis__item">
+                  <strong>{a.name}</strong> — {a.status === 'ok' ? a.text : `${t('officeTools.error')}: ${a.text}`}
+                </div>
+              ))}
+            </div>
+          )}
         </TabPanel>
-
-        {attached.length > 0 && <div data-testid="office-attached">📎 {attached.join(', ')}</div>}
-        {analysis.length > 0 && (
-          <div data-testid="office-analysis" className="office-analysis">
-            <h3 className="office-analysis__title">{t('officeTools.analysis')}</h3>
-            {analysis.map((a, i) => (
-              <div key={`${a.name}-${i}`} data-testid={`office-analysis-${i}`} className="office-analysis__item">
-                <strong>{a.name}</strong> — {a.status === 'ok' ? a.text : `${t('officeTools.error')}: ${a.text}`}
-              </div>
-            ))}
-          </div>
-        )}
 
         <TabPanel active={tab === 'pdf'}>
           <Suspense fallback={null}><PdfReaderPage /></Suspense>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Panel, Select } from '@jarvis/ui';
+import { Button, Input, PageHeader, Panel, Select } from '@jarvis/ui';
 
 interface McpServerRow { id: string; name: string; transport: string; config: { command?: string; args?: string[]; agentIds?: string[] } }
 interface AgentOption { id: string; name: string }
@@ -41,8 +41,8 @@ export function McpSettingsPage() {
   };
 
   return (
-    <div data-testid="mcp-settings" className="page form-stack">
-      <h2 className="page__title">{t('settings.mcp.title')}</h2>
+    <div data-testid="mcp-settings" className="page form-stack settings-page">
+      <PageHeader title={t('settings.mcp.title')} />
       <Panel className="form-stack">
         <div className="settings-inline-row">
           <Input data-testid="mcp-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('settings.mcp.name')} />

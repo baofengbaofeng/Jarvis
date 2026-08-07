@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Panel } from '@jarvis/ui';
+import { Button, Input, PageHeader, Panel } from '@jarvis/ui';
 
 const SKILL_ERROR_KEYS: Record<string, string> = {
   SKILL_NAME_INVALID: 'settings.skills.errors.nameInvalid',
@@ -46,11 +46,11 @@ export function SkillsSettingsPage() {
     await refresh();
   };
   return (
-    <div data-testid="skills-settings" className="page form-stack">
-      <h2 className="page__title">{t('menu.skills')}</h2>
-      <div className="page__actions">
-        <Button variant="primary" data-testid="skills-import" onClick={() => void pickImport()}>{t('settings.skills.importLocal')}</Button>
-      </div>
+    <div data-testid="skills-settings" className="page form-stack settings-page">
+      <PageHeader
+        title={t('menu.skills')}
+        actions={<Button variant="primary" data-testid="skills-import" onClick={() => void pickImport()}>{t('settings.skills.importLocal')}</Button>}
+      />
       <Panel className="settings-inline-row">
         <Input
           data-testid="skills-url-input"

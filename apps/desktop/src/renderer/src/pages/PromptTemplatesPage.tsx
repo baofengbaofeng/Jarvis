@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel, Textarea } from '@jarvis/ui';
 // Renderer-safe entry: listTemplateVars/substituteTemplate are pure helpers and
 // the page runs them in the browser, so they must NOT come from the full
 // `@jarvis/core` barrel (which pulls node:* modules).
@@ -62,23 +63,29 @@ export function PromptTemplatesPage({ onInsert }: PromptTemplatesPageProps) {
   };
   const detectedVars = listTemplateVars(content);
   return (
-    <div data-testid="prompt-templates">
-      <h2>{t('templates.title')}</h2>
-      <input data-testid="tpl-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('templates.name')} />
-      <textarea data-testid="tpl-text" value={content} onChange={e => setContent(e.target.value)} placeholder={t('templates.textPlaceholder')} />
-      <div data-testid="tpl-vars">{t('templates.variables')}: {detectedVars.length ? detectedVars.join(', ') : '—'}</div>
-      <button data-testid="tpl-save" onClick={() => void save()}>{t('templates.save')}</button>
-      {error && <div data-testid="tpl-error" role="alert">{error}</div>}
-      <ul>
+    <div data-testid="prompt-templates" className="prompt-templates">
+      <h2 className="prompt-templates__title">{t('templates.title')}</h2>
+      <Panel className="prompt-templates__form form-stack">
+        <Input data-testid="tpl-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('templates.name')} />
+        <Textarea data-testid="tpl-text" value={content} onChange={e => setContent(e.target.value)} placeholder={t('templates.textPlaceholder')} rows={6} />
+        <div data-testid="tpl-vars" className="prompt-templates__vars">{t('templates.variables')}: {detectedVars.length ? detectedVars.join(', ') : '—'}</div>
+        <Button data-testid="tpl-save" variant="primary" onClick={() => void save()}>{t('templates.save')}</Button>
+        {error && <div data-testid="tpl-error" role="alert" className="error-text">{error}</div>}
+      </Panel>
+      <ul className="prompt-templates__list">
         {tpls.map(tpl => (
           <li key={tpl.id}>
-            {tpl.name}
-            <button data-testid={`tpl-render-${tpl.id}`} onClick={() => void renderPreview(tpl.id)}>{t('templates.preview')}</button>
-            <button data-testid={`tpl-insert-${tpl.id}`} onClick={() => insert(tpl)}>{t('templates.insert')}</button>
+            <Panel className="prompt-templates__item">
+              <span className="prompt-templates__item-name">{tpl.name}</span>
+              <div className="prompt-templates__item-actions">
+                <Button variant="ghost" size="sm" data-testid={`tpl-render-${tpl.id}`} onClick={() => void renderPreview(tpl.id)}>{t('templates.preview')}</Button>
+                <Button variant="ghost" size="sm" data-testid={`tpl-insert-${tpl.id}`} onClick={() => insert(tpl)}>{t('templates.insert')}</Button>
+              </div>
+            </Panel>
           </li>
         ))}
       </ul>
-      <div data-testid="tpl-preview">{preview}</div>
+      <Panel data-testid="tpl-preview" className="prompt-templates__preview">{preview}</Panel>
     </div>
   );
 }

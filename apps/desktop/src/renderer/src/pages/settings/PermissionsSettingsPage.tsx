@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Select } from '@jarvis/ui';
+import { Button, PageHeader, Select } from '@jarvis/ui';
 import { useAgentStore } from '../../stores/agent-store';
 
 export type SandboxLevel = 'readonly' | 'readwrite' | 'system';
@@ -27,8 +27,8 @@ export function PermissionsSettingsPage() {
   };
 
   return (
-    <div data-testid="permissions-settings" className="form-stack">
-      <h2 className="page__title">{t('settings.title')}</h2>
+    <div data-testid="permissions-settings" className="page form-stack settings-page">
+      <PageHeader title={t('settings.nav.permissions')} />
       <div className="form-field">
         <label htmlFor="perm-agent">{t('settings.permissions.agent')}</label>
         <Select id="perm-agent" data-testid="perm-agent" value={selected} onChange={e => selectAgent(e.target.value)}>
