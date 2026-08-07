@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-JARVIS is a local-first (纯本地, no telemetry/cloud) AI assistant desktop app, built zh-CN-first with full en support. It is developed milestone-by-milestone (M0–M8, now at 1.0.0-Preview freeze level) against implementation plans under `docs/superpowers/plans/`. Product/requirements/tutorial docs live under `wiki/` (HTML); `docs/provider-guide.md` documents third-party provider onboarding.
+JARVIS is a local-first (纯本地, no telemetry/cloud) AI assistant desktop app, built zh-CN-first with full en support. It is developed milestone-by-milestone (M0–M8, now at 1.0.0-Preview freeze level). Product/requirements/tutorial docs live under `wiki/` (HTML); `docs/provider-guide.md` documents third-party provider onboarding. Implementation plans and design specs directories under `docs/superpowers/plans/` and `docs/superpowers/specs/` are reserved placeholders.
 
 ## Commands
 
@@ -62,5 +62,5 @@ All UI must ship zh-CN **and** en symmetrically. Locales live in `packages/i18n/
 - **API keys never land on disk in plaintext**: keychain via `SecureStorage`, config/export carries only `apiKeyRef`. Config export/import (C12) validates `schemaVersion` (`1.0.0-Preview`; legacy numeric ≤ 12 still accepted on import) and supports `skip | overwrite | merge` strategies.
 - **Local-only**: no telemetry, no cloud sync. The `settings.data_policy.local_only` toggle is declarative only.
 - **Pure logic goes in `packages/core`; main does wiring + persistence; renderer is views.** A new feature typically needs a core pure module + spec, a main IPC handler, a zustand store, a renderer component + spec, and i18n keys in both locales.
-- **Every milestone's Global Constraints** (in the M0 plan, `docs/superpowers/plans/2026-08-03-m0-skeleton.md`) apply to all work: performance targets (<3s cold start), path conventions, single-writer tables, and the 1.0.0-Preview exclusion list (no global shortcuts, auto-update, offline mode, local models, Monaco, etc.).
+- **Every milestone's Global Constraints** apply to all work: performance targets (<3s cold start), path conventions, single-writer tables, and the 1.0.0-Preview exclusion list (no global shortcuts, auto-update, offline mode, local models, Monaco, etc.).
 - **Commit convention**: one commit per completed task, `feat:`/`fix:`/`test:`/`refactor:` prefix. Planned work is executed task-by-task with TDD steps using the superpowers skills (`subagent-driven-development` / `executing-plans`).

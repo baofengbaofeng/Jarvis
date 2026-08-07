@@ -253,7 +253,7 @@ Jarvis/
 │   ├── i18n/             # 国际化资源
 │   └── views/            # 脚手架（页面目前在 desktop renderer）
 ├── daemon/               # Go 运行时（jarvis-daemon / jarvis-agent）
-├── docs/                 # 实现计划与设计规格
+├── docs/                 # 文档占位（plans/specs 仅保留 .gitkeep）
 ├── wiki/                 # 产品 / 技术 / 需求文档（HTML）
 ├── test/                 # 功能回归与测试辅助
 ├── scripts/              # i18n-check 等脚本
@@ -289,10 +289,10 @@ Jarvis/
 | [`CLAUDE.md`](CLAUDE.md) | 仓库开发约定与架构速查（面向 AI / 贡献者） |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | 桌面端 native 模块与 Daemon 构建说明 |
 | [`wiki/`](wiki/) | 产品、技术、需求文档 1.0.0-Preview |
-| [`wiki/质量报告/JARVIS CodeReview_2026-08-07.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07.md) | 全仓 Code Review 复审报告（含 AI 可执行整改矩阵） |
-| [`docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`](docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md) | CR 整改 AI backlog（Wave 顺序与验证命令） |
-| [`docs/superpowers/plans/`](docs/superpowers/plans/) | M0–M8 与 CR 整改分域实现计划 |
-| [`docs/superpowers/specs/`](docs/superpowers/specs/) | UI 设计系统与 CR 整改规格 |
+| [`wiki/质量报告/JARVIS CodeReview_2026-08-07.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07.md) | 全仓 Code Review 报告（含 AI 整改手册） |
+| [`wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07_AI-backlog.md) | CR 整改 AI backlog（Wave + 验证命令） |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | 实现计划目录（占位） |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | 设计规格目录（占位） |
 | [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) | 1.0.0-Preview 功能测试矩阵 |
 
 ### 贡献
@@ -549,7 +549,7 @@ Jarvis/
 │   ├── i18n/             # Locale resources
 │   └── views/            # Scaffold (pages live in desktop renderer)
 ├── daemon/               # Go runtime (jarvis-daemon / jarvis-agent)
-├── docs/                 # Implementation plans & specs
+├── docs/                 # Docs placeholders (plans/specs keep .gitkeep only)
 ├── wiki/                 # Product / tech / requirements docs (HTML)
 ├── test/                 # Functional regression & helpers
 ├── scripts/              # i18n-check, etc.
@@ -585,8 +585,10 @@ Override the data directory with `JARVIS_DATA_DIR` (tests & CI).
 | [`CLAUDE.md`](CLAUDE.md) | Dev conventions & architecture cheat sheet |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | Native modules & daemon build notes |
 | [`wiki/`](wiki/) | Product, technical & requirements docs 1.0.0-Preview |
-| [`docs/superpowers/plans/`](docs/superpowers/plans/) | M0–M8 milestone plans |
-| [`docs/superpowers/specs/`](docs/superpowers/specs/) | UI design system & other specs |
+| [`wiki/质量报告/JARVIS CodeReview_2026-08-07.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07.md) | Full-repo Code Review report (AI remediation guide) |
+| [`wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07_AI-backlog.md) | CR remediation AI backlog (waves + validation) |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans directory (placeholder) |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | Design specs directory (placeholder) |
 | [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) | 1.0.0-Preview functional test matrix |
 
 ### Contributing
