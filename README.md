@@ -253,7 +253,7 @@ Jarvis/
 │   ├── i18n/             # 国际化资源
 │   └── views/            # 脚手架（页面目前在 desktop renderer）
 ├── daemon/               # Go 运行时（jarvis-daemon / jarvis-agent）
-├── docs/                 # 实现计划与设计规格
+├── docs/                 # 文档占位（plans/specs 仅保留 .gitkeep）
 ├── wiki/                 # 产品 / 技术 / 需求文档（HTML）
 ├── test/                 # 功能回归与测试辅助
 ├── scripts/              # i18n-check 等脚本
@@ -549,7 +549,7 @@ Jarvis/
 │   ├── i18n/             # Locale resources
 │   └── views/            # Scaffold (pages live in desktop renderer)
 ├── daemon/               # Go runtime (jarvis-daemon / jarvis-agent)
-├── docs/                 # Implementation plans & specs
+├── docs/                 # Docs placeholders (plans/specs keep .gitkeep only)
 ├── wiki/                 # Product / tech / requirements docs (HTML)
 ├── test/                 # Functional regression & helpers
 ├── scripts/              # i18n-check, etc.
