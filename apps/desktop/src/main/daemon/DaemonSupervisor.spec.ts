@@ -112,3 +112,47 @@ describe('defaultCoreEntryPath / buildDaemonEnv (DAEM-01)', () => {
     expect(env.JARVIS_CORE_ENTRY).toBe('/abs/packages/core/dist/headless.mjs');
   });
 });
+
+describe('createHealthPoller (DESK-17)', () => {
+  it('calls onReady only once across repeated healthy ticks', async () => {
+    const onReady = vi.fn();
+    const onUnhealthy = vi.fn();
+    let n = 0;
+    const p = createHealthPoller({
+      port: 17890,
+      intervalMs: 20,
+      fetchImpl: async () => ({ ok: true }),
+    });
+    await p.start(onReady, onUnhealthy);
+    await new Promise((r) => setTimeout(r, 60));
+    p.stop();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onUnhealthy).not.toHaveBeenCalled();
+    n++;
+    void n;
+  });
+
+  it('calls onUnhealthy when health flips from ok to fail', async () => {
+    const onReady = vi.fn();
+    const onUnhealthy = vi.fn();
+    let ok = true;
+    const p = createHealthPoller({
+      port: 17890,
+      intervalMs: 15,
+      fetchImpl: async () => ({ ok }),
+    });
+    await p.start(onReady, onUnhealthy);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    ok = false;
+    await new Promise((r) => setTimeout(r, 50));
+    p.stop();
+    expect(onUnhealthy).toHaveBeenCalled();
+  });
+});
+
+describe('daemonSpawnStdio (DESK-17)', () => {
+  it('ignores stdio to avoid pipe-buffer deadlock', async () => {
+    const { daemonSpawnOptions } = await import('./DaemonSupervisor');
+    expect(daemonSpawnOptions().stdio).toBe('ignore');
+  });
+});

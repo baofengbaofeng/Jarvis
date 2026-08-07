@@ -70,21 +70,43 @@ export function createHealthPoller(opts: HealthPollerOptions) {
   const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url));
   let timer: NodeJS.Timeout | null = null;
   let stopped = false;
+  let readyNotified = false;
+  let wasHealthy = false;
   return {
-    async start(onReady: () => void): Promise<void> {
+    // DESK-17: onReady fires once; onUnhealthy fires when health flips false after ready.
+    async start(onReady: () => void, onUnhealthy?: () => void): Promise<void> {
       const url = `http://127.0.0.1:${opts.port}/health`;
       const tick = async () => {
         if (stopped) return;
         try {
           const res = await fetchImpl(url);
-          if (res.ok) { onReady(); }
-        } catch { /* not ready yet */ }
+          if (res.ok) {
+            wasHealthy = true;
+            if (!readyNotified) {
+              readyNotified = true;
+              onReady();
+            }
+          } else if (wasHealthy) {
+            wasHealthy = false;
+            onUnhealthy?.();
+          }
+        } catch {
+          if (wasHealthy) {
+            wasHealthy = false;
+            onUnhealthy?.();
+          }
+        }
       };
       await tick();
       timer = setInterval(() => void tick(), opts.intervalMs);
     },
     stop(): void { stopped = true; if (timer) clearInterval(timer); }
   };
+}
+
+/** DESK-17: ignore stdio so a chatty daemon cannot fill unread pipes and deadlock. */
+export function daemonSpawnOptions(): { stdio: 'ignore' } {
+  return { stdio: 'ignore' };
 }
 
 // M7 Task 9 (L39 数据面): runtime status + L38 conflicts, cached by the
@@ -215,9 +237,13 @@ export class DaemonSupervisor {
     this.concurrencyProvider = fn;
   }
 
+  private generation = 0;
+
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
+    const gen = ++this.generation;
     this.child = spawn(this.binaryPath, [], {
+      ...daemonSpawnOptions(),
       env: buildDaemonEnv(
         process.env,
         this.port,
@@ -226,9 +252,26 @@ export class DaemonSupervisor {
         this.coreEntryPath,
       ),
     });
-    this.child.on('error', () => { this.healthy = false; this.resetRuntimeCache(); this.child = null; });
+    const child = this.child;
+    // DESK-17: ignore handlers from a previous generation after restart().
+    child.on('error', () => {
+      if (gen !== this.generation) return;
+      this.healthy = false;
+      this.resetRuntimeCache();
+      if (this.child === child) this.child = null;
+    });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });
-    void this.poller.start(() => { this.healthy = true; onReady?.(); });
+    void this.poller.start(
+      () => {
+        if (gen !== this.generation) return;
+        this.healthy = true;
+        onReady?.();
+      },
+      () => {
+        if (gen !== this.generation) return;
+        this.healthy = false;
+      },
+    );
     // M7 Task 9: cache L39 runtime status + L38 conflicts at 3s. The cache stays
     // at the local-mode default until the daemon answers, so a supervisor that
     // never starts still reports local mode via getRuntimeStatus().
@@ -240,7 +283,13 @@ export class DaemonSupervisor {
       onConflicts: (items) => { this.conflictsCache = items; },
     });
     void this.runtimePoller.start();
-    this.child.on('exit', () => { this.healthy = false; this.resetRuntimeCache(); onExit?.(); });
+    child.on('exit', () => {
+      if (gen !== this.generation) return;
+      this.healthy = false;
+      this.resetRuntimeCache();
+      if (this.child === child) this.child = null;
+      onExit?.();
+    });
   }
 
   async status(): Promise<DaemonStatus> {
@@ -265,13 +314,20 @@ export class DaemonSupervisor {
     this.conflictsCache = [];
   }
 
-  restart(): void { this.stop(); this.start(); }
+  restart(): void {
+    this.stop();
+    this.start();
+  }
   stop(): void {
+    this.generation += 1; // DESK-17: invalidate in-flight exit/error/health from the old child
+    this.healthy = false;
     this.poller?.stop();
     this.poller = null;
     this.runtimePoller?.stop();
     this.runtimePoller = null;
-    this.child?.kill();
+    this.resetRuntimeCache();
+    const child = this.child;
     this.child = null;
+    child?.kill();
   }
 }
