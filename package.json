@@ -8,7 +8,8 @@
     "dev": "turbo run dev",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "i18n:check": "node scripts/i18n-check.mjs"
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "test:functional": "pnpm --dir test/V1.0 exec playwright test --pass-with-no-tests"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
