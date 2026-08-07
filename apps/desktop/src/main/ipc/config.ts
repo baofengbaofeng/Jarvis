@@ -84,7 +84,9 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
       db.transaction(() => {
         const insP = db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)');
         for (const p of plan.create) {
-          if ('baseUrl' in p) insP.run(p.id, p.name, p.type, p.baseUrl, p.apiKeyRef ?? '', now, now);
+          // DESK-18: never trust imported apiKeyRef — keys live in SecureStorage;
+          // bind only the canonical empty/local ref for the new provider id.
+          if ('baseUrl' in p) insP.run(p.id, p.name, p.type, p.baseUrl, `provider:${p.id}:key`, now, now);
         }
         const updP = db.prepare('UPDATE providers SET name = ?, type = ?, base_url = ?, updated_at = ? WHERE id = ?');
         for (const p of plan.update) {
