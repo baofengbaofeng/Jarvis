@@ -84,22 +84,13 @@ JARVIS 是一款 **本地优先（local-first）** 的 AI 助手桌面应用：�
 
 JARVIS 采用五层架构，自底向上：
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Electron Renderer (React 19 + react-router-dom + zustand)   │
-│  pages / components / stores / i18n                         │
-├─────────────────────────────────────────────────────────────┤
-│  Electron Main + IPC (better-sqlite3, DaemonSupervisor)     │
-│  IpcRouter · SecureStorage · migrations                     │
-├─────────────────────────────────────────────────────────────┤
-│  packages/core — AgentEngine / ModelRouter / ToolRegistry    │
-│  REACT loop · MCP · Sandbox · Squad · Office · Coding       │
-├─────────────────────────────────────────────────────────────┤
-│  Go daemon (jarvis-daemon) — 调度队列 · HTTP API · Multica   │
-├─────────────────────────────────────────────────────────────┤
-│  SQLite (WAL) — ~/.jarvis/jarvis.db                         │
-└─────────────────────────────────────────────────────────────┘
-```
+| 层级 | 组件 | 职责 |
+|:----:|------|------|
+| 5 | Electron Renderer | React 19、react-router-dom、zustand；页面、组件、状态与 i18n |
+| 4 | Electron Main + IPC | better-sqlite3、DaemonSupervisor；IpcRouter、SecureStorage、数据库迁移 |
+| 3 | `packages/core` | AgentEngine、ModelRouter、ToolRegistry；REACT 循环、MCP、沙箱、Squad、Office、Coding |
+| 2 | Go daemon (`jarvis-daemon`) | 任务调度队列、HTTP API（`127.0.0.1:17890`）、Multica 客户端 |
+| 1 | SQLite (WAL) | 本地持久化；主库 `~/.jarvis/jarvis.db` |
 
 **引擎归属（决策 A）**：`AgentEngine`、REACT 循环、`ModelRouter`、`MCPClient` **仅在 `packages/core`（TypeScript）中实现一次**。Go `jarvis-agent` 为瘦协议壳；Multica 路径通过内嵌 Node 执行同一 TS 引擎。本地任务在 Electron 主进程内运行 TS 引擎，Daemon 负责调度与队列。
 
@@ -377,22 +368,13 @@ JARVIS is a **local-first** AI assistant desktop app that unifies chat, task exe
 
 JARVIS uses a five-layer stack, bottom to top:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Electron Renderer (React 19 + react-router-dom + zustand)   │
-│  pages / components / stores / i18n                         │
-├─────────────────────────────────────────────────────────────┤
-│  Electron Main + IPC (better-sqlite3, DaemonSupervisor)     │
-│  IpcRouter · SecureStorage · migrations                     │
-├─────────────────────────────────────────────────────────────┤
-│  packages/core — AgentEngine / ModelRouter / ToolRegistry    │
-│  REACT loop · MCP · Sandbox · Squad · Office · Coding       │
-├─────────────────────────────────────────────────────────────┤
-│  Go daemon (jarvis-daemon) — queue · HTTP API · Multica      │
-├─────────────────────────────────────────────────────────────┤
-│  SQLite (WAL) — ~/.jarvis/jarvis.db                         │
-└─────────────────────────────────────────────────────────────┘
-```
+| Layer | Component | Responsibility |
+|:-----:|-----------|----------------|
+| 5 | Electron Renderer | React 19, react-router-dom, zustand; pages, components, stores, i18n |
+| 4 | Electron Main + IPC | better-sqlite3, DaemonSupervisor; IpcRouter, SecureStorage, migrations |
+| 3 | `packages/core` | AgentEngine, ModelRouter, ToolRegistry; REACT loop, MCP, sandbox, squad, office, coding |
+| 2 | Go daemon (`jarvis-daemon`) | Task queue, HTTP API (`127.0.0.1:17890`), Multica client |
+| 1 | SQLite (WAL) | Local persistence; main DB at `~/.jarvis/jarvis.db` |
 
 **Engine ownership (Decision A)**: `AgentEngine`, the REACT loop, `ModelRouter`, and `MCPClient` are implemented **once in `packages/core` (TypeScript)**. Go `jarvis-agent` is a thin protocol shell; Multica tasks run the same TS engine via embedded Node. Local tasks run the TS engine in the Electron main process; the daemon handles scheduling and queuing.
 
