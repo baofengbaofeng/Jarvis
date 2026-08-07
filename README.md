@@ -290,9 +290,9 @@ Jarvis/
 | [`apps/desktop/README.md`](apps/desktop/README.md) | 桌面端 native 模块与 Daemon 构建说明 |
 | [`wiki/`](wiki/) | 产品、技术、需求文档 1.0.0-Preview |
 | [`wiki/质量报告/JARVIS CodeReview_2026-08-07.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07.md) | 全仓 Code Review 报告（含 AI 整改手册） |
-| [`docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`](docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md) | CR 整改 AI backlog（Wave + 验证命令） |
-| [`docs/superpowers/plans/`](docs/superpowers/plans/) | M0–M8 分里程碑实现计划 |
-| [`docs/superpowers/specs/`](docs/superpowers/specs/) | UI 设计系统等规格 |
+| [`wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07_AI-backlog.md) | CR 整改 AI backlog（Wave + 验证命令） |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | 实现计划目录（占位） |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | 设计规格目录（占位） |
 | [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) | 1.0.0-Preview 功能测试矩阵 |
 
 ### 贡献
@@ -586,9 +586,9 @@ Override the data directory with `JARVIS_DATA_DIR` (tests & CI).
 | [`apps/desktop/README.md`](apps/desktop/README.md) | Native modules & daemon build notes |
 | [`wiki/`](wiki/) | Product, technical & requirements docs 1.0.0-Preview |
 | [`wiki/质量报告/JARVIS CodeReview_2026-08-07.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07.md) | Full-repo Code Review report (AI remediation guide) |
-| [`docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`](docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md) | CR remediation AI backlog (waves + validation) |
-| [`docs/superpowers/plans/`](docs/superpowers/plans/) | M0–M8 milestone plans |
-| [`docs/superpowers/specs/`](docs/superpowers/specs/) | UI design system & other specs |
+| [`wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`](wiki/质量报告/JARVIS%20CodeReview_2026-08-07_AI-backlog.md) | CR remediation AI backlog (waves + validation) |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans directory (placeholder) |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | Design specs directory (placeholder) |
 | [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) | 1.0.0-Preview functional test matrix |
 
 ### Contributing

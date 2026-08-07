@@ -300,7 +300,7 @@ JARVIS 面向个人办公，把对话、REACT 任务、编程辅助、办公增�
 | TEST-05..09 | M/L | Go 未聚合、覆盖倒置、passWithNoTests 等 |
 | BUILD-07..10 | M/L | 无 lint、未签名、i18n 未入 CI、死依赖 |
 
-完整 AI_FIX 细节与文件列表见配套 backlog：`docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`。
+完整 AI_FIX 细节与文件列表见配套 backlog：`wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`。
 
 ---
 
@@ -429,4 +429,4 @@ Medium/Low: 见 §4.3 与 backlog。
 
 ## 附录 B — 给自动化 Agent 的一句话
 
-> 打开 `docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`，按 Wave 取下一个 `status: open` 的 ID，严格按本报告 §5 执行 TDD 与验证，禁止阅读或复用任何历史「质量报告」中的旧 ID 作为结案依据；以本报告 ID 为唯一真源。
+> 打开 `wiki/质量报告/JARVIS CodeReview_2026-08-07_AI-backlog.md`，按 Wave 取下一个 `status: open` 的 ID，严格按本报告 §5 执行 TDD 与验证，禁止阅读或复用任何历史「质量报告」中的旧 ID 作为结案依据；以本报告 ID 为唯一真源。
