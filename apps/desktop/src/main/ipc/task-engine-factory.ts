@@ -4,6 +4,7 @@ import type { BrowserWindow } from 'electron';
 import {
   AgentEngine,
   ToolRegistry,
+  ModelRouter,
   createAdapter,
   createApprovalGate,
   createFileTools,
@@ -18,7 +19,7 @@ import {
   hashEmbedding,
   type EngineChatFn,
   type SandboxPolicy,
-  type Usage,
+  type ProviderPolicy,
 } from '@jarvis/core';
 import { sqliteAuditSink } from '../audit/sqliteAuditSink';
 import { createMemoryAdapter } from './memory';
@@ -34,6 +35,8 @@ export interface TaskEngineDeps {
   chatFn?: EngineChatFn;
   maxSteps?: number;
   settings?: SettingsStore;
+  /** CORE-04: optional shared ModelRouter (timeout/retry/fallback/circuit). */
+  router?: ModelRouter;
 }
 
 export interface TaskEngineRuntime {
@@ -44,21 +47,30 @@ export interface TaskEngineRuntime {
   registerMemoryToolsFor: (agentId: string) => void;
 }
 
-export function createDefaultChatFn(http: SafeHttpClient = createDefaultSafeUrlPolicy()): EngineChatFn {
-  return async (req, opts) => {
-    const adapter = createAdapter(req.provider.type, { http });
-    let text = '';
-    let usage: Usage | null = null;
-    await adapter.chat(req, {
-      apiKey: opts.apiKey,
-      signal: opts.signal,
-      onChunk: (c) => {
-        if (c.kind === 'delta') text += c.delta;
-        else if (c.kind === 'usage') usage = c.usage;
-        opts.onChunk?.(c);
-      }
+export interface DefaultChatFnOpts {
+  router?: ModelRouter;
+  policy?: ProviderPolicy;
+  fallbackModelIds?: string[];
+}
+
+/**
+ * CORE-04: task chat goes through ModelRouter (same retry/timeout/circuit path
+ * as interactive chat), not a bare adapter call that bypasses those policies.
+ */
+export function createDefaultChatFn(
+  http: SafeHttpClient = createDefaultSafeUrlPolicy(),
+  opts: DefaultChatFnOpts = {},
+): EngineChatFn {
+  const router = opts.router ?? new ModelRouter({
+    createAdapter: (type) => createAdapter(type, { http }),
+  });
+  return async (req, chatOpts) => {
+    return router.chat(req, {
+      apiKeyResolver: async () => chatOpts.apiKey,
+      onChunk: chatOpts.onChunk,
+      policy: opts.policy,
+      fallbackModelIds: opts.fallbackModelIds,
     });
-    return { text, usage };
   };
 }
 
@@ -93,7 +105,8 @@ export function createTaskEngineRuntime(
   });
   const approvalGate = createApprovalGate();
   const approval = new ApprovalCenter(getWindow);
-  const chatFn = deps.chatFn ?? createDefaultChatFn();
+  // CORE-04: default task chat uses ModelRouter (optionally the shared instance).
+  const chatFn = deps.chatFn ?? createDefaultChatFn(createDefaultSafeUrlPolicy(), { router: deps.router });
   const engine = new AgentEngine({
     modelRouter: { chat: chatFn },
     toolRegistry,

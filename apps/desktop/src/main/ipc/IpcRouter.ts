@@ -2,7 +2,7 @@ import { app, ipcMain, BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { join } from 'node:path';
 import { IpcChannel } from '@jarvis/protocol';
-import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, type TreeNode, type WipeScope, type ImportStrategy, type ShortcutBindings } from '@jarvis/core';
+import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, ModelRouter, createAdapter, type TreeNode, type WipeScope, type ImportStrategy, type ShortcutBindings } from '@jarvis/core';
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
@@ -328,12 +328,17 @@ export class IpcRouter {
     // path, and the usage.* IPC channels.
     const usageTracker = new UsageTracker(this.db);
     const getMainWindow = () => this.opts.getMainWindow?.() ?? null;
-    const chat = registerChatHandlers(this.db, secrets, getMainWindow, { usageTracker });
+    // CORE-04: ONE shared ModelRouter for chat + tasks so timeout/retry/
+    // fallback/circuit-breaker apply to both paths (tasks previously bypassed).
+    const modelRouter = new ModelRouter({
+      createAdapter: (type) => createAdapter(type, { http: safeUrlPolicy }),
+    });
+    const chat = registerChatHandlers(this.db, secrets, getMainWindow, { usageTracker, router: modelRouter });
     this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as Parameters<typeof chat.send>[1]));
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
-    const tasks = registerTaskHandlers(this.db, secrets, getMainWindow, createAgentStore(this.db), { settings, usageTracker });
+    const tasks = registerTaskHandlers(this.db, secrets, getMainWindow, createAgentStore(this.db), { settings, usageTracker, router: modelRouter });
     this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string; sessionId?: string }));
     this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
     this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));

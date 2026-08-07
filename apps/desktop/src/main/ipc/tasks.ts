@@ -39,6 +39,8 @@ export interface TaskHandlerDeps {
   maxSteps?: number;
   settings?: SettingsStore;
   usageTracker?: UsageTracker;
+  /** CORE-04: shared ModelRouter with the chat path. */
+  router?: import('@jarvis/core').ModelRouter;
 }
 
 export { appendAudit } from './task-messages';

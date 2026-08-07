@@ -1,12 +1,12 @@
 import type { ChatRequest, ChatChunk, ProviderAdapter, Usage } from './types';
-import { createAdapter } from './adapters/index';
+import { createAdapter, type CreateAdapterDeps } from './adapters/index';
 
 export class RetryableError extends Error {}
 export class TimeoutError extends Error {}
 
 export interface ProviderPolicy { timeoutMs: number; maxRetries: number; circuitBreaker: boolean }
 
-export interface RouterDeps { createAdapter?: (type: ChatRequest['provider']['type'], deps?: { fetchImpl?: typeof fetch }) => ProviderAdapter }
+export interface RouterDeps { createAdapter?: (type: ChatRequest['provider']['type'], deps?: CreateAdapterDeps) => ProviderAdapter }
 export interface RouterChatOpts {
   apiKeyResolver: (ref: string) => Promise<string | null>;
   policy?: ProviderPolicy;
