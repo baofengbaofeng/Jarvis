@@ -11,9 +11,28 @@ import type { AgentConfig } from '@jarvis/protocol';
 
 const agent: AgentConfig = { id: 'a1', name: 'A', slug: 'a', description: '', systemPrompt: '', modelId: 'm1', workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' };
 
+/** CORE-16: blank-line-delimited SSE; auto-frame consecutive data: lines. */
+function frameSSE(lines: string[]): string {
+  if (lines.some(l => l === '')) return lines.join('\n') + '\n';
+  const framed: string[] = [];
+  let pending: string[] = [];
+  const flush = () => {
+    if (!pending.length) return;
+    framed.push(...pending, '');
+    pending = [];
+  };
+  for (const l of lines) {
+    if (l.startsWith('data:') && pending.some(p => p.startsWith('data:'))) flush();
+    else if (l.startsWith('event:') && pending.length) flush();
+    pending.push(l);
+  }
+  flush();
+  return framed.join('\n');
+}
+
 function sseResponse(lines: string[]): Response {
   return { ok: true, status: 200, body: new ReadableStream({
-    start(c) { c.enqueue(new TextEncoder().encode(lines.join('\n') + '\n')); c.close(); }
+    start(c) { c.enqueue(new TextEncoder().encode(frameSSE(lines))); c.close(); }
   }) } as unknown as Response;
 }
 

@@ -2,8 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { createAdapter } from './index';
 import type { ChatRequest } from '../types';
 
+/** CORE-16: parseSSE dispatches on blank lines; frame fixtures accordingly. */
+function frameSSE(lines: string[]): string {
+  if (lines.some(l => l === '')) return lines.join('\n') + '\n';
+  const framed: string[] = [];
+  let pending: string[] = [];
+  const flush = () => {
+    if (!pending.length) return;
+    framed.push(...pending, '');
+    pending = [];
+  };
+  for (const l of lines) {
+    if (l.startsWith('data:') && pending.some(p => p.startsWith('data:'))) flush();
+    else if (l.startsWith('event:') && pending.length) flush();
+    pending.push(l);
+  }
+  flush();
+  return framed.join('\n');
+}
+
 function mockFetch(lines: string[]) {
-  const body = lines.join('\n') + '\n';
+  const body = frameSSE(lines);
   return async () => ({ ok: true, status: 200, body: new ReadableStream({
     start(c) {
       const enc = new TextEncoder();
