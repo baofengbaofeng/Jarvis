@@ -398,13 +398,20 @@ export function latestVersion(): number {
   return MIGRATIONS[MIGRATIONS.length - 1].version;
 }
 
-export function applyMigrations(db: Database.Database): void {
+// DESK-11: each pending version runs inside its own better-sqlite3 transaction
+// so a mid-version failure rolls back both the version SQL and the
+// schema_migrations insert — no partial schema, no half-applied version row.
+export function applyMigrations(db: Database.Database, migrations: Migration[] = MIGRATIONS): void {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);`);
   const applied = new Set((db.prepare('SELECT version FROM schema_migrations').all() as Array<{ version: number }>).map(r => r.version));
-  for (const m of MIGRATIONS) {
+  const insertVersion = db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)');
+  for (const m of migrations) {
     if (applied.has(m.version)) continue;
-    db.exec(m.sql);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(m.version, new Date().toISOString());
+    const applyOne = db.transaction(() => {
+      db.exec(m.sql);
+      insertVersion.run(m.version, new Date().toISOString());
+    });
+    applyOne();
   }
 }
 

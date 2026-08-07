@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { applyMigrations, latestVersion, MIGRATIONS } from './migrations';
+import { applyMigrations, latestVersion, MIGRATIONS, type Migration } from './migrations';
 
 describe('db migrations', () => {
   let db: Database.Database;
@@ -11,6 +11,44 @@ describe('db migrations', () => {
     applyMigrations(db);
     const row = db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number };
     expect(row.v).toBe(latestVersion());
+  });
+
+  // DESK-11: each migration version must run inside a transaction so a mid-
+  // version failure rolls back both DDL/DML and the schema_migrations insert.
+  it('DESK-11 rolls back a failed migration version (no partial schema, no version row)', () => {
+    const migrations: Migration[] = [
+      {
+        version: 1,
+        sql: `CREATE TABLE ok_table (id INTEGER PRIMARY KEY); INSERT INTO ok_table (id) VALUES (1);`,
+      },
+      {
+        version: 2,
+        sql: `
+          CREATE TABLE partial_table (id INTEGER PRIMARY KEY);
+          INSERT INTO partial_table (id) VALUES (1);
+          INSERT INTO does_not_exist (id) VALUES (1);
+        `,
+      },
+    ];
+    expect(() => applyMigrations(db, migrations)).toThrow();
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>).map(t => t.name);
+    expect(tables).toContain('ok_table');
+    expect(tables).not.toContain('partial_table');
+    const versions = (db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as Array<{ version: number }>).map(r => r.version);
+    expect(versions).toEqual([1]);
+    expect((db.prepare('SELECT COUNT(*) AS c FROM ok_table').get() as { c: number }).c).toBe(1);
+  });
+
+  it('DESK-11 records schema_migrations in the same transaction as the version SQL', () => {
+    const migrations: Migration[] = [
+      { version: 1, sql: `CREATE TABLE t1 (id INTEGER PRIMARY KEY);` },
+      { version: 2, sql: `CREATE TABLE t2 (id INTEGER PRIMARY KEY);` },
+    ];
+    applyMigrations(db, migrations);
+    const versions = (db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as Array<{ version: number }>).map(r => r.version);
+    expect(versions).toEqual([1, 2]);
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>).map(t => t.name);
+    expect(tables).toEqual(expect.arrayContaining(['t1', 't2', 'schema_migrations']));
   });
 
   it('creates core tables', () => {
