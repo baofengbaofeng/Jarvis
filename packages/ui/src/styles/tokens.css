@@ -1,9 +1,9 @@
 :root,
 [data-theme='light'] {
   color-scheme: light;
-  --bg: #f5f5f7;
+  --bg: #fafafa;
   --surface: #ffffff;
-  --surface-raised: #ececec;
+  --surface-raised: #f0f0f0;
   --border: #d1d1d6;
   --border-subtle: #e5e5ea;
   --fg: #1d1d1f;
@@ -45,7 +45,7 @@
   --font-mono: "SF Mono", "Cascadia Code", "Consolas", monospace;
   --shell-sidebar-width: 264px;
   --shell-topbar-height: 48px;
-  --sidebar-bg: #ececec;
+  --sidebar-bg: #f0f0f0;
   --settings-bg: #f2f2f7;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);

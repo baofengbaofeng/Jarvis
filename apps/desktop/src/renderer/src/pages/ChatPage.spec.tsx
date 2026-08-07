@@ -38,7 +38,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  useChatStore.setState({ sessionId: null, sessions: [], messages: [], streaming: false, streamingText: '' });
+  useChatStore.setState({ sessionId: null, sessions: [], messages: [], streaming: false, streamingText: '', steps: [] });
   useAgentStore.setState({ agents: [AGENT], current: AGENT });
 });
 
@@ -47,10 +47,30 @@ afterEach(() => {
 });
 
 describe('ChatPage', () => {
+  it('shows empty composer layout without an inner sessions sidebar', async () => {
+    render(<ChatPage />);
+    await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
+    useChatStore.setState({ sessionId: 's2', messages: [], streamingText: '', steps: [] });
+    await waitFor(() => expect(screen.getByTestId('chat-empty-composer')).toBeTruthy());
+    expect(screen.queryByTestId('chat-sessions')).toBeNull();
+    expect(screen.queryByTestId('chat-session-s1')).toBeNull();
+  });
+
   it('renders and accepts input with an optimistic user message', async () => {
     render(<ChatPage />);
-    await waitFor(() => expect(screen.getByTestId('chat-session-s1')).toBeTruthy());
-    fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
+    await waitFor(() => expect(useChatStore.getState().sessionId).toBeTruthy());
+    useChatStore.setState({
+      sessionId: 's1',
+      messages: [],
+      sessions: SESSIONS,
+      streaming: false,
+      streamingText: '',
+      steps: [],
+    });
+    await waitFor(() => expect(screen.getByTestId('chat-empty-composer')).toBeTruthy());
+    const input = screen.getByTestId('chat-input');
+    fireEvent.change(input, { target: { value: 'hello' } });
+    expect((input as HTMLTextAreaElement).value).toBe('hello');
     fireEvent.click(screen.getByTestId('chat-send'));
     await waitFor(() => expect(screen.getByText('hello')).toBeTruthy());
   });
@@ -58,24 +78,25 @@ describe('ChatPage', () => {
   it('routes the chat send through the task execution path', async () => {
     taskCreateSpy.mockClear();
     render(<ChatPage />);
-    await waitFor(() => expect(screen.getByTestId('chat-session-s1')).toBeTruthy());
+    await waitFor(() => expect(useChatStore.getState().sessionId).toBeTruthy());
+    useChatStore.setState({
+      sessionId: 's1',
+      messages: [],
+      sessions: SESSIONS,
+      streaming: false,
+      streamingText: '',
+      steps: [],
+    });
+    await waitFor(() => expect(screen.getByTestId('chat-empty-composer')).toBeTruthy());
     fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
     fireEvent.click(screen.getByTestId('chat-send'));
     await waitFor(() => expect(taskCreateSpy).toHaveBeenCalledWith({ agentId: 'a1', prompt: 'hello', sessionId: 's1' }));
   });
 
-  it('renders the session list and loads the first session', async () => {
+  it('shows loaded session messages in the active layout', async () => {
     render(<ChatPage />);
-    await waitFor(() => expect(screen.getByTestId('chat-session-s1')).toBeTruthy());
-    expect(screen.getByTestId('chat-session-s2')).toBeTruthy();
-    // init() loads the first session's messages.
     await waitFor(() => expect(screen.getByText('hello from s1')).toBeTruthy());
-  });
-
-  it('clicking a session loads its messages and highlights it', async () => {
-    render(<ChatPage />);
-    await waitFor(() => expect(screen.getByTestId('chat-session-s2')).toBeTruthy());
-    fireEvent.click(screen.getByTestId('chat-session-s2'));
-    await waitFor(() => expect(screen.queryByText('hello from s1')).toBeNull());
+    expect(screen.queryByTestId('chat-empty-composer')).toBeNull();
+    expect(screen.getByTestId('chat-page').className).toMatch(/chat-page--active/);
   });
 });

@@ -11,8 +11,9 @@ test('01-shell: onboarding completes and shows nav', async () => {
   try {
     await completeOnboarding(window);
     await expect(window.getByTestId('chat-page')).toBeVisible();
-    await expect(window.getByTestId('nav-chat')).toBeVisible();
-    await expect(window.getByTestId('nav-settings')).toBeVisible();
+    await expect(window.getByTestId('sidebar-new-chat')).toBeVisible();
+    await expect(window.getByTestId('sidebar-settings-gear')).toBeVisible();
+    await expect(window.getByTestId('shell-repo-link')).toBeVisible();
   } finally {
     await closeJarvisElectron(app);
     removeDataDir(dataDir);

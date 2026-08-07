@@ -28,4 +28,17 @@ describe('AppShell', () => {
     expect(screen.getByTestId('main-slot')).toBeTruthy();
     expect(screen.getByText('Chat').className).toMatch(/jui-navitem--active/);
   });
+
+  it('renders mainFooter when provided', () => {
+    render(
+      <AppShell
+        sidebar={<Sidebar brand="JARVIS">nav</Sidebar>}
+        mainFooter={<a href="https://example.com">repo</a>}
+      >
+        <div>Main</div>
+      </AppShell>
+    );
+    expect(screen.getByTestId('jui-appshell-footer')).toBeTruthy();
+    expect(screen.getByText('repo')).toBeTruthy();
+  });
 });

@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CollapsibleNavGroup, NavItem } from '@jarvis/ui';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { ThemeSwitcher } from '../components/theme/ThemeSwitcher';
 
 export function SettingsLayout() {
@@ -51,6 +52,7 @@ export function SettingsLayout() {
         <CollapsibleNavGroup label={t('settings.nav.groups.preferences')}>
           {link('/settings/shortcuts', t('settings.nav.shortcuts'))}
           <ThemeSwitcher />
+          <LanguageSwitcher />
         </CollapsibleNavGroup>
       </nav>
       <main className="settings-layout__main">

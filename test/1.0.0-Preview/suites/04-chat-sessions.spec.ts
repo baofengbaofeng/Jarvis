@@ -31,7 +31,7 @@ test.afterAll(async () => {
 });
 
 test('04-chat P0: chat-new increases session count', async () => {
-  await window.getByTestId('chat-new').click();
+  await window.getByTestId('sidebar-new-chat').click();
   const sessionCount = await window.evaluate(async (listChannel) => {
     const sessions = (await window.jarvis.invoke(listChannel)) as Array<{ id: string }>;
     return sessions.length;

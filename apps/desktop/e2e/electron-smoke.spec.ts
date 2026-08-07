@@ -48,7 +48,8 @@ test('real shell: onboarding persists through SQLite + IPC', async ({}, testInfo
   const first = await launchJarvisElectron(dataDir);
   try {
     await completeOnboarding(first.window);
-    await expect(first.window.getByTestId('chat-sessions-title')).toBeVisible();
+    await expect(first.window.getByTestId('chat-page')).toBeVisible();
+    await expect(first.window.getByTestId('sidebar-new-chat')).toBeVisible();
   } finally {
     await first.app.close();
   }
@@ -86,7 +87,7 @@ test('real shell: agent.create and chat session IPC', async ({}, testInfo) => {
     await window.getByTestId('agent-switcher').waitFor();
     await expect(window.getByTestId(`agent-e2e-agent`)).toBeVisible({ timeout: 15_000 });
 
-    await window.getByTestId('chat-new').click();
+    await window.getByTestId('sidebar-new-chat').click();
     const sessionCount = await window.evaluate(async (listChannel) => {
       const sessions = (await window.jarvis.invoke(listChannel)) as Array<{ id: string }>;
       return sessions.length;

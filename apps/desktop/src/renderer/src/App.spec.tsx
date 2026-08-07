@@ -75,7 +75,8 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByTestId('chat-page')).toBeTruthy();
     expect(screen.getByTestId('app-shell')).toBeTruthy();
-    expect(screen.getByTestId('nav-chat')).toBeTruthy();
+    expect(screen.getByTestId('sidebar-new-chat')).toBeTruthy();
+    expect(screen.getByTestId('sidebar-settings-gear')).toBeTruthy();
   });
 
   // M6 Task 10 review finding: the App-root global ApprovalPanel and the
