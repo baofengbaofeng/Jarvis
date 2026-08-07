@@ -40,6 +40,8 @@ export function registerMemoryTools(registry: ToolRegistry, store: MemoryStore, 
   // (ctx.agent, threaded through AgentEngine.run) wins when present — a leader
   // run then a member run on the same registry each memorize to their own
   // memory, not to the last-registered agent.
+  // CORE-07: tools are registered once; re-entry is a no-op (ctx.agent scopes).
+  if (registry.has('memorize') || registry.has('recall')) return;
   const resolveAgent = (ctx: { agent?: { id: string } }): string => ctx.agent?.id ?? agentId;
   registry.register({
     name: 'memorize', description: 'Store a persistent memory for the current agent',

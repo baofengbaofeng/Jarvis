@@ -50,4 +50,27 @@ describe('ToolRegistry', () => {
     expect(onExec).toHaveBeenCalledTimes(1);
     expect(onExec.mock.calls[0][0].result).toBe('error');
   });
+
+  // CORE-07: name conflicts must throw — silent overwrite lets plugins shadow builtins.
+  it('throws when registering a duplicate tool name (CORE-07)', () => {
+    const reg = new ToolRegistry();
+    const handler = async () => ({ ok: true, output: 'a' });
+    reg.register({ name: 'echo', description: '', parameters: {} }, handler);
+    expect(() =>
+      reg.register({ name: 'echo', description: 'shadow', parameters: {} }, async () => ({ ok: true, output: 'b' })),
+    ).toThrow(/already registered|conflict/i);
+    expect(reg.get('echo')?.description).toBe('');
+  });
+
+  it('unregister removes a tool so it can be registered again (CORE-07)', () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: '' }));
+    expect(reg.unregister('echo')).toBe(true);
+    expect(reg.has('echo')).toBe(false);
+    expect(reg.unregister('echo')).toBe(false);
+    expect(() =>
+      reg.register({ name: 'echo', description: 'again', parameters: {} }, async () => ({ ok: true, output: '' })),
+    ).not.toThrow();
+    expect(reg.get('echo')?.description).toBe('again');
+  });
 });

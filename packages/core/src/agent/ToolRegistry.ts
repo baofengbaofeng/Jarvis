@@ -14,7 +14,16 @@ export class ToolRegistry {
   constructor(private opts: ToolRegistryOpts = {}) {}
 
   register(def: ToolDef, handler: ToolHandler): void {
+    // CORE-07: refuse silent overwrite — plugins must not shadow builtins.
+    if (this.tools.has(def.name)) {
+      throw new Error(`tool already registered: ${def.name}`);
+    }
     this.tools.set(def.name, { def, handler });
+  }
+
+  /** CORE-07: remove a tool by name; returns true if it was present. */
+  unregister(name: string): boolean {
+    return this.tools.delete(name);
   }
 
   list(): ToolDef[] { return [...this.tools.values()].map(t => t.def); }

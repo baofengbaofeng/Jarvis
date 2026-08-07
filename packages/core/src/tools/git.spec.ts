@@ -9,12 +9,13 @@ import { ToolRegistry } from '../agent/ToolRegistry';
 describe('git tools', () => {
   let ws: string;
   let outside: string;
+  let reg: ToolRegistry;
   const policy: SandboxPolicy = { level: 'readwrite', allowDomains: [], allowCommands: ['git status'] };
-  const reg = new ToolRegistry();
 
   beforeEach(() => {
     ws = mkdtempSync(join(tmpdir(), 'jarvis-git-ws-'));
     outside = mkdtempSync(join(tmpdir(), 'jarvis-git-out-'));
+    reg = new ToolRegistry();
     createGitTools(reg, policy, { execImpl: async () => ({ stdout: '## main', stderr: '' }) });
   });
 

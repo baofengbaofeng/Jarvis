@@ -11,12 +11,23 @@ export interface PluginRunner {
   close(pluginId: string): Promise<void>;
 }
 
+/** CORE-07: plugin tools are namespaced so they cannot shadow builtins. */
+export function pluginToolName(pluginId: string, toolName: string): string {
+  if (toolName.startsWith('plugin:')) return toolName;
+  return `plugin:${pluginId}:${toolName}`;
+}
+
 export function createPluginHost(registry: ToolRegistry, runner: PluginRunner) {
   return {
     async load(descriptor: PluginDescriptor): Promise<void> {
+      const pluginId = descriptor.manifest.id;
       for (const tool of await runner.load(descriptor)) {
-        registry.register(tool.definition, (args, ctx) =>
-          runner.invoke(descriptor.manifest.id, tool.definition.name, args, ctx));
+        const localName = tool.definition.name;
+        const fullName = pluginToolName(pluginId, localName);
+        registry.register(
+          { ...tool.definition, name: fullName },
+          (args, ctx) => runner.invoke(pluginId, localName, args, ctx),
+        );
       }
     },
   };
