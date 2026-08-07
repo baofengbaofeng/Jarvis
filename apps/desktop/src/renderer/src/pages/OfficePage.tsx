@@ -55,7 +55,7 @@ export function OfficePage() {
 
   return (
     <div data-testid="office-page" className="office-page page page--wide">
-      <div className="page__header" style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
+      <div className="page__header office-page__header">
         <h1 className="page__title">{t('office.title')}</h1>
       </div>
       <Tabs
@@ -73,10 +73,10 @@ export function OfficePage() {
 
         {attached.length > 0 && <div data-testid="office-attached">📎 {attached.join(', ')}</div>}
         {analysis.length > 0 && (
-          <div data-testid="office-analysis" style={{ marginTop: 'var(--space-2)' }}>
-            <h3 style={{ margin: '4px 0' }}>{t('officeTools.analysis')}</h3>
+          <div data-testid="office-analysis" className="office-analysis">
+            <h3 className="office-analysis__title">{t('officeTools.analysis')}</h3>
             {analysis.map((a, i) => (
-              <div key={`${a.name}-${i}`} data-testid={`office-analysis-${i}`} style={{ marginBottom: 6 }}>
+              <div key={`${a.name}-${i}`} data-testid={`office-analysis-${i}`} className="office-analysis__item">
                 <strong>{a.name}</strong> — {a.status === 'ok' ? a.text : `${t('officeTools.error')}: ${a.text}`}
               </div>
             ))}
@@ -95,7 +95,7 @@ export function OfficePage() {
             value={composer}
             onChange={e => setComposer(e.target.value)}
             rows={8}
-            style={{ marginTop: 'var(--space-2)' }}
+            className="office-composer"
           />
         </TabPanel>
 

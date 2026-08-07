@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Panel } from '@jarvis/ui';
 
 export interface ConflictItem {
   taskId: string;
@@ -34,19 +35,19 @@ export function SkillsMerger() {
   };
   const pending = conflicts.filter((c) => !c.resolved);
   return (
-    <div data-testid="skills-merger">
-      <h3>{t('runtime.skillsMerger.title')}</h3>
-      {pending.length === 0 && <p data-testid="no-conflicts">{t('runtime.skillsMerger.none')}</p>}
-      <ul>
+    <Panel data-testid="skills-merger" className="settings-card">
+      <h3 className="settings-card__title">{t('runtime.skillsMerger.title')}</h3>
+      {pending.length === 0 && <p data-testid="no-conflicts" className="empty-text">{t('runtime.skillsMerger.none')}</p>}
+      <ul className="settings-card-list">
         {pending.map((c) => (
-          <li key={`${c.taskId}-${nameOf(c)}`} data-testid="conflict-item">
-            <span>{nameOf(c)}</span>
-            <button onClick={() => void resolve(c, 'local')}>{t('runtime.skillsMerger.local')}</button>
-            <button onClick={() => void resolve(c, 'multica')}>{t('runtime.skillsMerger.multica')}</button>
-            <button onClick={() => void resolve(c, 'merge')}>{t('runtime.skillsMerger.merge')}</button>
+          <li key={`${c.taskId}-${nameOf(c)}`} data-testid="conflict-item" className="settings-inline-row">
+            <span className="settings-card__meta">{nameOf(c)}</span>
+            <Button size="sm" variant="ghost" onClick={() => void resolve(c, 'local')}>{t('runtime.skillsMerger.local')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => void resolve(c, 'multica')}>{t('runtime.skillsMerger.multica')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => void resolve(c, 'merge')}>{t('runtime.skillsMerger.merge')}</Button>
           </li>
         ))}
       </ul>
-    </div>
+    </Panel>
   );
 }

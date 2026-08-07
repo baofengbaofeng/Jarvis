@@ -14,5 +14,5 @@ export function CallGraphView({ rows }: { rows: Array<{ from: string; to: string
     setNodes(agents.map((a, i) => ({ id: a, position: { x: i * 160, y: 40 }, data: { label: a } })));
     setEdges(rows.map((r, i) => ({ id: `e${i}`, source: r.from, target: r.to, label: r.label })));
   }, [rows]);
-  return <div data-testid="call-graph" style={{ width: '100%', height: 240 }}><ReactFlow nodes={nodes} edges={edges} fitView /></div>;
+  return <div data-testid="call-graph" className="call-graph"><ReactFlow nodes={nodes} edges={edges} fitView /></div>;
 }

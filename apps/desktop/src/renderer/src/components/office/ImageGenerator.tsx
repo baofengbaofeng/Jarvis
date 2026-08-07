@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel, Select } from '@jarvis/ui';
 
 // D10 renderer entry: text-to-image. prompt + size → office.image.generate
 // (OpenAI-compatible endpoint only; the key comes from settings image.api_key_ref).
@@ -33,31 +34,35 @@ export function ImageGenerator() {
   };
 
   return (
-    <div data-testid="image-generator">
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
+    <Panel data-testid="image-generator" className="office-tool">
+      <div className="office-tool__row">
+        <Input
           data-testid="image-prompt"
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
           placeholder={t('officeTools.promptPlaceholder')}
-          style={{ minWidth: 320 }}
+          className="office-tool__input"
         />
-        <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <label className="checkbox-label">
           {t('officeTools.size')}
-          <select data-testid="image-size" value={size} onChange={e => setSize(e.target.value)}>
+          <Select
+            data-testid="image-size"
+            value={size}
+            onChange={e => setSize(e.target.value)}
+          >
             {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          </Select>
         </label>
-        <button data-testid="image-generate" onClick={() => void generate()} disabled={busy}>
+        <Button data-testid="image-generate" onClick={() => void generate()} disabled={busy}>
           {t('officeTools.generate')}
-        </button>
+        </Button>
       </div>
-      {error && <div data-testid="image-error" role="alert">{error}</div>}
+      {error && <div data-testid="image-error" role="alert" className="error-text">{error}</div>}
       {urls.length > 0 && (
-        <div data-testid="image-result" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          {urls.map(u => <img key={u} src={u} alt={prompt} width={120} style={{ border: '1px solid #ddd', borderRadius: 4 }} />)}
+        <div data-testid="image-result" className="office-tool__images">
+          {urls.map(u => <img key={u} src={u} alt={prompt} width={120} className="office-tool__thumb" />)}
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

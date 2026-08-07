@@ -17,6 +17,7 @@ describe('chat-store', () => {
       sessionId: 'sess-1',
       sessions: [],
       messages: [],
+      steps: [],
       streaming: false,
       streamingText: '',
       streamingTaskSessionId: null,

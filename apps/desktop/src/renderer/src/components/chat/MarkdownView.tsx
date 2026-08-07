@@ -1,6 +1,15 @@
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism/one-light';
+import { useTheme } from '../theme/theme-store';
 
 export function MarkdownView({ content }: { content: string }) {
+  const mode = useTheme((s) => s.mode);
+  const resolved = useTheme((s) => s.resolved);
+  const theme = resolved(mode);
+  const codeStyle = theme === 'dark' ? oneDark : oneLight;
+
   return (
     <ReactMarkdown
       components={{
@@ -17,9 +26,9 @@ export function MarkdownView({ content }: { content: string }) {
           const match = /language-(\w+)/.exec(className ?? '');
           if (match) {
             return (
-              <pre className="markdown-code-block">
-                <code data-language={match[1]}>{String(children).replace(/\n$/, '')}</code>
-              </pre>
+              <SyntaxHighlighter style={codeStyle} language={match[1]} PreTag="div">
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
             );
           }
           return <code className="markdown-code-inline" {...props}>{children}</code>;

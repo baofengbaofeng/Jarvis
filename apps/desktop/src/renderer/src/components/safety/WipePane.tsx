@@ -1,12 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel } from '@jarvis/ui';
 import { DEFAULT_WIPE_TABLES, confirmPhrase, type WipeScope } from '@jarvis/core/renderer';
 
-// L20 (M8 Task 5): sensitive-data wipe UI. The scope defaults to the FULL L20
-// wipe range (all DEFAULT_WIPE_TABLES + keychain). The user must type the
-// confirmation phrase returned by confirmPhrase (DELETE ALL when the keychain
-// box is checked, DELETE otherwise) — matching what the main-process
-// WipeService validates. The result is shown as JSON for diagnostic transparency.
 export function WipePane() {
   const { t } = useTranslation('common');
   const [phrase, setPhrase] = useState('');
@@ -21,8 +17,8 @@ export function WipePane() {
     }
   };
   return (
-    <div data-testid="wipe-pane">
-      <label>
+    <div data-testid="wipe-pane" className="form-stack">
+      <label className="checkbox-label">
         <input
           type="checkbox"
           data-testid="wipe-keychain"
@@ -31,17 +27,17 @@ export function WipePane() {
         />
         {t('safety.wipe_keychain')}
       </label>
-      <input
+      <Input
         data-testid="wipe-phrase"
         value={phrase}
         onChange={e => setPhrase(e.target.value)}
         placeholder={confirmPhrase(scope)}
       />
-      <button onClick={() => void onWipe()} data-testid="wipe-run">{t('safety.wipe_now')}</button>
+      <Button variant="danger" onClick={() => void onWipe()} data-testid="wipe-run">{t('safety.wipe_now')}</Button>
       {msg && (
-        <div data-testid="wipe-msg">
-          <span>{t('safety.wipe_msg')}:</span> {msg}
-        </div>
+        <Panel data-testid="wipe-msg">
+          <span>{t('safety.wipe_msg')}:</span> <pre>{msg}</pre>
+        </Panel>
       )}
     </div>
   );

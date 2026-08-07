@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@jarvis/ui';
 // office/selection is a pure module, so import it from the renderer-safe entry
 // (@jarvis/core/renderer) rather than the full barrel, which pulls Node deps.
 import type { SelectionAction } from '@jarvis/core/renderer';
@@ -52,7 +53,7 @@ export function SelectionMenu() {
     <div data-testid="selection-menu">
       {pos && (
         <div className="selection-menu" style={{ left: pos.x, top: pos.y }}>
-          {ACTIONS.map(a => <button key={a.key} data-testid={`sel-${a.key}`} onClick={() => void run(a.key)}>{t(`selection.${a.key}`, a.label)}</button>)}
+          {ACTIONS.map(a => <Button key={a.key} size="sm" variant="ghost" data-testid={`sel-${a.key}`} onClick={() => void run(a.key)}>{t(`selection.${a.key}`, a.label)}</Button>)}
         </div>
       )}
       {result && <div data-testid="selection-result" className="selection-result">{result}</div>}

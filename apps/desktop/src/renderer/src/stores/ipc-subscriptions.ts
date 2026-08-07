@@ -9,6 +9,44 @@ import { toast } from './toast-store';
 
 let initialized = false;
 
+type StreamChunk = {
+  kind: string;
+  delta?: string;
+  toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+  name?: string;
+  ok?: boolean;
+  output?: string;
+  arguments?: Record<string, unknown>;
+};
+
+function handleStreamChunk(chunk: StreamChunk) {
+  const store = useChatStore.getState();
+  if (chunk.kind === 'delta') {
+    store.appendDelta(chunk.delta ?? '');
+    return;
+  }
+  if (chunk.kind === 'tool_call' && chunk.toolCalls) {
+    for (const tc of chunk.toolCalls) {
+      store.upsertStep({
+        id: tc.id,
+        title: tc.name,
+        status: 'running',
+        detail: JSON.stringify(tc.arguments, null, 2),
+      });
+    }
+    return;
+  }
+  if (chunk.kind === 'tool_done' && chunk.name) {
+    const existing = store.steps.find((s) => s.title === chunk.name && s.status === 'running');
+    store.upsertStep({
+      id: existing?.id ?? `tool-${chunk.name}-${Date.now()}`,
+      title: chunk.name,
+      status: chunk.ok ? 'success' : 'error',
+      detail: chunk.output ?? JSON.stringify(chunk.arguments ?? {}, null, 2),
+    });
+  }
+}
+
 /** Install renderer IPC event subscriptions once (called from initRendererState). */
 export function initIpcSubscriptions(): void {
   if (initialized) return;
@@ -16,9 +54,9 @@ export function initIpcSubscriptions(): void {
   initialized = true;
 
   window.jarvis.onDidReceive(IpcEvent.chatDelta, (payload) => {
-    const { sessionId, chunk } = payload as { sessionId: string; chunk: { kind: string; delta?: string } };
+    const { sessionId, chunk } = payload as { sessionId: string; chunk: StreamChunk };
     if (sessionId !== useChatStore.getState().sessionId) return;
-    if (chunk.kind === 'delta') useChatStore.getState().appendDelta(chunk.delta ?? '');
+    handleStreamChunk(chunk);
   });
 
   window.jarvis.onDidReceive(IpcEvent.chatDone, (p) => {

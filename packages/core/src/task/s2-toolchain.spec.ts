@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { TaskOrchestrator, type TaskStoreAdapter, type SubmitInput } from './TaskOrchestrator';
+import { TaskOrchestrator, type TaskStoreAdapter } from './TaskOrchestrator';
 import { AgentEngine } from '../agent/AgentEngine';
 import { ToolRegistry } from '../agent/ToolRegistry';
 import { createFileTools } from '../tools/file';
 import { createShellTool } from '../tools/shell';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
-import type { ToolCall, ToolResult } from '../agent/types';
 import type { AgentConfig } from '@jarvis/protocol';
 
 // S2 acceptance (MVP): an agent bound to a workspace issues write_file + run_shell
@@ -63,11 +62,10 @@ describe('S2 toolchain integration (write_file + run_shell)', () => {
       let doneOk = false;
       const done = new Promise<void>((resolve) => {
         const orb = new TaskOrchestrator(engine, store, {
+          onTool: (_id, call, result) => { if (call.name === 'run_shell') shellOutput = result.output; },
           onDone: (_id, ok) => { doneOk = ok; resolve(); }
         }, 1);
-        // onTool is a TaskOrchestrator passthrough into AgentEngine.run's EngineRunInput
-        // ({ ...input } is forwarded verbatim), so the submit input can carry it.
-        const submitInput = {
+        orb.submit({
           id: 's2-1',
           agent,
           messages: [{ role: 'user', content: 'create a file and list the workspace' }],
@@ -76,10 +74,8 @@ describe('S2 toolchain integration (write_file + run_shell)', () => {
           apiKey: 'sk-test',
           provider: { type: 'openai-compatible', baseUrl: 'https://api.openai.com' },
           modelId: 'm1',
-          workspaceRoot: ws,
-          onTool: (call: ToolCall, result: ToolResult) => { if (call.name === 'run_shell') shellOutput = result.output; }
-        } as SubmitInput & { onTool: (call: ToolCall, result: ToolResult) => void };
-        orb.submit(submitInput);
+          workspaceRoot: ws
+        });
       });
       await done;
 

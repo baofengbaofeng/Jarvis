@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Panel } from '@jarvis/ui';
 
 export interface BackupInfo { file: string; name: string; sizeBytes: number; createdAt: string }
 
-// L18 (M8 Task 4): backup management UI. Lists existing backups, creates a new
-// one on demand, and restores a chosen backup. Restore closes the db in main,
-// so after it succeeds the app relaunches immediately via app.relaunch.
 export function BackupPane() {
   const { t } = useTranslation('common');
   const [list, setList] = useState<BackupInfo[]>([]);
@@ -19,13 +17,17 @@ export function BackupPane() {
     }
   };
   return (
-    <div data-testid="backup-pane">
-      <button onClick={() => void onBackupNow()} data-testid="backup-now">{t('safety.backup_now')}</button>
-      <ul>
+    <div data-testid="backup-pane" className="form-stack">
+      <Button variant="primary" onClick={() => void onBackupNow()} data-testid="backup-now">{t('safety.backup_now')}</Button>
+      <ul className="settings-card-list">
         {list.map(b => (
-          <li key={b.file} data-testid="backup-item">
-            {b.name} · {(b.sizeBytes / 1024).toFixed(1)} KB
-            <button onClick={() => void onRestore(b.file)}>{t('safety.restore')}</button>
+          <li key={b.file}>
+            <Panel className="settings-card" data-testid="backup-item">
+              <div className="settings-card__header">
+                <span>{b.name} · {(b.sizeBytes / 1024).toFixed(1)} KB</span>
+                <Button variant="ghost" size="sm" onClick={() => void onRestore(b.file)}>{t('safety.restore')}</Button>
+              </div>
+            </Panel>
           </li>
         ))}
       </ul>

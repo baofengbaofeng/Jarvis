@@ -26,7 +26,7 @@ export function AppLayout() {
   );
 
   return (
-    <div data-testid="app-shell" style={{ height: '100%' }}>
+    <div data-testid="app-shell" className="app-shell-root">
       <AppShell
         sidebar={
           <Sidebar brand={<strong>{t('app.title')}</strong>} footer={<LanguageSwitcher />}>
@@ -42,7 +42,7 @@ export function AppLayout() {
               {item('/workflow', 'nav-workflow', t('workflow.title'), pathname.startsWith('/workflow'))}
               {item('/canvas', 'nav-canvas', t('canvas.title'), pathname.startsWith('/canvas'))}
             </NavGroup>
-            <div style={{ marginTop: 'auto' }}>
+            <div className="sidebar-footer">
               {item('/settings/providers', 'nav-settings', t('menu.settings'), pathname.startsWith('/settings'))}
             </div>
           </Sidebar>

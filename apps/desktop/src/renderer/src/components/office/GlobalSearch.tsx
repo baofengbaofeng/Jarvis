@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel } from '@jarvis/ui';
 // FtsRow is a pure type exported from the renderer-safe entry (@jarvis/core/renderer).
 import type { FtsRow } from '@jarvis/core/renderer';
 
@@ -38,38 +39,38 @@ export function GlobalSearch() {
   };
 
   return (
-    <div data-testid="global-search">
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
+    <Panel data-testid="global-search" className="office-tool">
+      <div className="office-tool__row">
+        <Input
           data-testid="global-search-query"
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder={t('officeTools.queryPlaceholder')}
-          style={{ minWidth: 320 }}
+          className="office-tool__input"
         />
-        <button data-testid="global-search-run" onClick={() => void search()} disabled={busy}>
+        <Button data-testid="global-search-run" onClick={() => void search()} disabled={busy}>
           {t('officeTools.search')}
-        </button>
+        </Button>
       </div>
-      {error && <div data-testid="global-search-error" role="alert">{error}</div>}
-      {done && results.length === 0 && !error && <div data-testid="global-search-empty">{t('officeTools.noResult')}</div>}
+      {error && <div data-testid="global-search-error" role="alert" className="error-text">{error}</div>}
+      {done && results.length === 0 && !error && <div data-testid="global-search-empty" className="empty-text">{t('officeTools.noResult')}</div>}
       <div data-testid="global-search-results">
         {TABLES.map(table => {
           const rows = results.filter(r => r.table === table);
           if (rows.length === 0) return null;
           return (
-            <div key={table} data-testid={`global-search-group-${table}`} style={{ marginTop: 8 }}>
-              <h4 style={{ margin: '4px 0' }}>{t(`officeTools.table.${table}`)}</h4>
+            <div key={table} data-testid={`global-search-group-${table}`} className="office-tool__group">
+              <h4 className="office-tool__group-title">{t(`officeTools.table.${table}`)}</h4>
               {rows.map(r => (
-                <div key={`${r.table}-${r.id}`} data-testid={`global-search-item-${table}-${r.id}`} style={{ padding: '4px 0' }}>
+                <div key={`${r.table}-${r.id}`} data-testid={`global-search-item-${table}-${r.id}`} className="office-tool__item">
                   <strong>{r.title || `#${r.id}`}</strong>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{r.snippet}</div>
+                  <div className="office-tool__result">{r.snippet}</div>
                 </div>
               ))}
             </div>
           );
         })}
       </div>
-    </div>
+    </Panel>
   );
 }

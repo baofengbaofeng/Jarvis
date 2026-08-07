@@ -15,7 +15,7 @@ export function SplitLayout({ left, right, minLeft = 220, defaultRatio = 0.35 }:
 
   return (
     <div ref={ref} data-testid="split-layout" className="split-layout">
-      <div style={{ width: `${ratio * 100}%` }} className="split-layout__left">{left}</div>
+      <div className="split-layout__left" style={{ width: `${ratio * 100}%` }}>{left}</div>
       <div
         className="split-layout__divider"
         onMouseDown={(e) => { dragging.current = true; document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp); e.preventDefault(); }}

@@ -4,13 +4,14 @@ import { Button } from '@jarvis/ui';
 import { useChatStore } from '../stores/chat-store';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { ChatInput } from '../components/chat/ChatInput';
+import { ChatStepList } from '../components/chat/ChatStepList';
 import { MarkdownView } from '../components/chat/MarkdownView';
 import { PlanModeBadge } from '../components/coding/PlanModeBadge';
 import { useAgentStore } from '../stores/agent-store';
 
 export function ChatPage() {
   const { t } = useTranslation('common');
-  const { messages, streamingText, sessions, sessionId, init } = useChatStore();
+  const { messages, streamingText, steps, sessions, sessionId, init } = useChatStore();
   const currentAgent = useAgentStore((s) => s.current);
 
   useEffect(() => { void init(); }, [init]);
@@ -51,9 +52,14 @@ export function ChatPage() {
         <div className="chat-page__messages">
           <div className="chat-page__stream">
             {messages.map(m => <MessageBubble key={m.id} message={m} />)}
-            {streamingText && (
-              <div data-testid="streaming-text" className="streaming-text">
-                <MarkdownView content={streamingText} />
+            {(steps.length > 0 || streamingText) && (
+              <div data-testid="chat-stream-active">
+                <ChatStepList />
+                {streamingText && (
+                  <div data-testid="streaming-text" className="streaming-text">
+                    <MarkdownView content={streamingText} />
+                  </div>
+                )}
               </div>
             )}
           </div>

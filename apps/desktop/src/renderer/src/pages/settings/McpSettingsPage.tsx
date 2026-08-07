@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel, Select } from '@jarvis/ui';
 
 interface McpServerRow { id: string; name: string; transport: string; config: { command?: string; args?: string[]; agentIds?: string[] } }
 interface AgentOption { id: string; name: string }
@@ -40,28 +41,34 @@ export function McpSettingsPage() {
   };
 
   return (
-    <div data-testid="mcp-settings">
-      <h2>{t('settings.mcp.title')}</h2>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-        <input data-testid="mcp-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('settings.mcp.name')} />
-        <input data-testid="mcp-command" value={command} onChange={e => setCommand(e.target.value)} placeholder={t('settings.mcp.command')} />
-        <input data-testid="mcp-args" value={args} onChange={e => setArgs(e.target.value)} placeholder={t('settings.mcp.args')} />
-      </div>
-      <div data-testid="mcp-agents" style={{ marginBottom: 8 }}>
-        {agents.map(a => (
-          <label key={a.id} style={{ marginRight: 8 }}>
-            <input type="checkbox" checked={agentIds.includes(a.id)} onChange={() => toggleAgent(a.id)} />
-            {a.name}
-          </label>
-        ))}
-      </div>
-      <button data-testid="mcp-add" onClick={() => void add()}>+</button>
-      <ul>
+    <div data-testid="mcp-settings" className="page form-stack">
+      <h2 className="page__title">{t('settings.mcp.title')}</h2>
+      <Panel className="form-stack">
+        <div className="settings-inline-row">
+          <Input data-testid="mcp-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('settings.mcp.name')} />
+          <Input data-testid="mcp-command" value={command} onChange={e => setCommand(e.target.value)} placeholder={t('settings.mcp.command')} />
+          <Input data-testid="mcp-args" value={args} onChange={e => setArgs(e.target.value)} placeholder={t('settings.mcp.args')} />
+          <Button variant="primary" data-testid="mcp-add" onClick={() => void add()}>+</Button>
+        </div>
+        <div data-testid="mcp-agents" className="checkbox-group">
+          {agents.map(a => (
+            <label key={a.id} className="checkbox-label">
+              <input type="checkbox" checked={agentIds.includes(a.id)} onChange={() => toggleAgent(a.id)} />
+              {a.name}
+            </label>
+          ))}
+        </div>
+      </Panel>
+      <ul className="settings-card-list">
         {servers.map(s => (
-          <li key={s.id} data-testid={`mcp-server-${s.id}`}>
-            <span>{s.name} ({s.transport})</span>
-            <button data-testid={`mcp-test-${s.id}`} onClick={() => void test(s)}>{t('settings.mcp.test')}</button>
-            {testResult[s.id] && <span data-testid={`mcp-test-result-${s.id}`}> {testResult[s.id]}</span>}
+          <li key={s.id}>
+            <Panel className="settings-card" data-testid={`mcp-server-${s.id}`}>
+              <div className="settings-card__header">
+                <span className="settings-card__title">{s.name} <span className="settings-card__meta">({s.transport})</span></span>
+                <Button variant="ghost" size="sm" data-testid={`mcp-test-${s.id}`} onClick={() => void test(s)}>{t('settings.mcp.test')}</Button>
+              </div>
+              {testResult[s.id] && <div data-testid={`mcp-test-result-${s.id}`} className="settings-card__meta">{testResult[s.id]}</div>}
+            </Panel>
           </li>
         ))}
       </ul>

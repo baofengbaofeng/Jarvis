@@ -1,21 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { subscribeSquadEvents, type SquadEvent } from '../../stores/squad-store';
+import { useState } from 'react';
+import { StepCard } from '@jarvis/ui';
 
-// K5 (M6 Task 10): the squad execution timeline / log stream. Subscribes to the
-// module-level squad event log (fed by main's 'squad:event' push) and renders
-// each event as a time-stamped line — the S5 acceptance surface for the
-// Leader → delegate_agent → member → bus → summary → in_review journey.
+const KIND_STATUS: Record<string, 'pending' | 'running' | 'success' | 'warning'> = {
+  delegate: 'running',
+  response: 'success',
+  complete: 'success',
+  request: 'warning',
+  log: 'pending',
+  start: 'running',
+};
+
 export function TimelineView() {
   const [events, setEvents] = useState<SquadEvent[]>([]);
   useEffect(() => subscribeSquadEvents(setEvents), []);
   return (
-    <ul data-testid="timeline" className="timeline">
+    <div data-testid="timeline" className="timeline">
       {events.map((e, i) => (
-        <li key={i} data-testid={`timeline-${e.kind}`} className="timeline__item">
-          <span className="timeline__time">{new Date(e.ts).toLocaleTimeString()}</span>
-          <span className="timeline__agent">{e.agent}</span> {e.detail}
-        </li>
+        <StepCard
+          key={`${e.ts}-${i}`}
+          title={`${e.agent} · ${e.kind}`}
+          status={KIND_STATUS[e.kind] ?? 'pending'}
+          defaultOpen={e.kind === 'request'}
+        >
+          <div className="timeline__item" data-testid={`timeline-${e.kind}`}>
+            <span className="timeline__time">{new Date(e.ts).toLocaleTimeString()}</span>
+            <span className="timeline__body">{e.detail}</span>
+          </div>
+        </StepCard>
       ))}
-    </ul>
+    </div>
   );
 }

@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Panel } from '@jarvis/ui';
 import { DEFAULT_SHORTCUTS, normalizeCombo, type ShortcutAction, type ShortcutBindings } from '@jarvis/core/renderer';
 
-// C5 (M8 Task 7): in-app shortcut editor. Loads the persisted bindings from
-// main (shortcuts.get, merged over defaults), lets the user click a row and
-// press a key to re-record that action's combo, then persists via shortcuts.set.
-// The combo string is produced by the same core normalizeCombo the useShortcuts
-// hook matches on, so what you see is what fires.
 const ACTION_LABEL_KEY: Record<ShortcutAction, string> = {
   'chat.send': 'shortcuts.action.chatSend',
   'chat.new': 'shortcuts.action.chatNew',
@@ -33,24 +29,26 @@ export function ShortcutsSettingsView() {
     setRecording(null);
   };
   return (
-    <div data-testid="shortcuts-view">
-      <h3>{t('shortcuts.title')}</h3>
-      {(Object.keys(bindings) as ShortcutAction[]).map(a => (
-        <div key={a} data-testid="shortcut-row">
-          <span>{t(ACTION_LABEL_KEY[a])}</span>
-          <button data-testid={`record-${a}`} onClick={() => setRecording(a)}>
-            {recording === a ? t('shortcuts.press_key') : bindings[a]}
-          </button>
-          {recording === a && (
-            <button data-testid={`capture-${a}`} onKeyDown={capture(a)} autoFocus>
-              {t('shortcuts.capture')}
-            </button>
-          )}
-        </div>
-      ))}
-      <button data-testid="shortcuts-save" onClick={() => void save()}>
+    <div data-testid="shortcuts-view" className="form-stack">
+      <h3 className="page__title">{t('shortcuts.title')}</h3>
+      <Panel>
+        {(Object.keys(bindings) as ShortcutAction[]).map(a => (
+          <div key={a} data-testid="shortcut-row" className="shortcut-row">
+            <span>{t(ACTION_LABEL_KEY[a])}</span>
+            <Button variant="ghost" size="sm" data-testid={`record-${a}`} onClick={() => setRecording(a)}>
+              {recording === a ? t('shortcuts.press_key') : bindings[a]}
+            </Button>
+            {recording === a && (
+              <button data-testid={`capture-${a}`} onKeyDown={capture(a)} autoFocus>
+                {t('shortcuts.capture')}
+              </button>
+            )}
+          </div>
+        ))}
+      </Panel>
+      <Button variant="primary" data-testid="shortcuts-save" onClick={() => void save()}>
         {t('shortcuts.save')}
-      </button>
+      </Button>
     </div>
   );
 }

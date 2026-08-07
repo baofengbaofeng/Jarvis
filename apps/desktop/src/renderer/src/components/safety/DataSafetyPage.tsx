@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tabs, TabPanel } from '@jarvis/ui';
 import { BackupPane } from './BackupPane';
 import { WipePane } from './WipePane';
 
-// L18 (M8 Task 4) + L20/J4 (M8 Task 5): data safety page. Two tabs — Backup
-// (Task 4) and Wipe (L20). At the bottom, the J4 local-only toggle persists
-// `settings.data_policy.local_only` through the existing settings.set channel.
 export function DataSafetyPage() {
   const { t } = useTranslation('common');
   const [tab, setTab] = useState<'backup' | 'wipe'>('backup');
@@ -15,13 +13,18 @@ export function DataSafetyPage() {
     await window.jarvis.settingsSet('data_policy', { local_only: checked });
   };
   return (
-    <div data-testid="data-safety-page">
-      <div>
-        <button data-testid="safety-tab-backup" onClick={() => setTab('backup')}>{t('safety.tab.backup')}</button>
-        <button data-testid="safety-tab-wipe" onClick={() => setTab('wipe')}>{t('safety.tab.wipe')}</button>
-      </div>
-      {tab === 'backup' ? <BackupPane /> : <WipePane />}
-      <label>
+    <div data-testid="data-safety-page" className="form-stack">
+      <Tabs
+        tabs={[
+          { id: 'backup', label: t('safety.tab.backup'), testId: 'safety-tab-backup' },
+          { id: 'wipe', label: t('safety.tab.wipe'), testId: 'safety-tab-wipe' },
+        ]}
+        active={tab}
+        onChange={(id) => setTab(id as 'backup' | 'wipe')}
+      />
+      <TabPanel active={tab === 'backup'}><BackupPane /></TabPanel>
+      <TabPanel active={tab === 'wipe'}><WipePane /></TabPanel>
+      <label className="checkbox-label">
         <input
           type="checkbox"
           data-testid="local-only"

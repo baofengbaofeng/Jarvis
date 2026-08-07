@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel } from '@jarvis/ui';
 
 // D9 renderer entry: video link summary. URL → office.video.summarize. With
 // getTranscript being a stub (Whisper/API out of scope for M5), the channel
@@ -29,19 +30,21 @@ export function VideoSummary() {
   };
 
   return (
-    <div data-testid="video-summary">
-      <input
-        data-testid="video-url"
-        value={url}
-        onChange={e => setUrl(e.target.value)}
-        placeholder={t('officeTools.videoUrlPlaceholder')}
-        style={{ minWidth: 320 }}
-      />
-      <button data-testid="video-summarize" onClick={() => void summarize()} disabled={busy}>
-        {t('officeTools.summarize')}
-      </button>
-      {error && <div data-testid="video-error" role="alert">{error}</div>}
-      {result && <div data-testid="video-result" style={{ whiteSpace: 'pre-wrap' }}>{result}</div>}
-    </div>
+    <Panel data-testid="video-summary" className="office-tool">
+      <div className="office-tool__row">
+        <Input
+          data-testid="video-url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder={t('officeTools.videoUrlPlaceholder')}
+          className="office-tool__input"
+        />
+        <Button data-testid="video-summarize" onClick={() => void summarize()} disabled={busy}>
+          {t('officeTools.summarize')}
+        </Button>
+      </div>
+      {error && <div data-testid="video-error" role="alert" className="error-text">{error}</div>}
+      {result && <div data-testid="video-result" className="office-tool__result">{result}</div>}
+    </Panel>
   );
 }

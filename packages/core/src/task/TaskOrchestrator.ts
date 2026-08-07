@@ -1,6 +1,7 @@
 import type { AgentConfig } from '@jarvis/protocol';
 import type { AgentEngine, EngineRunInput } from '../agent/AgentEngine';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
+import type { ToolCall, ToolResult } from '../agent/types';
 import type { Usage } from '../model/types';
 import { transition, type TaskState } from './TaskStateMachine';
 
@@ -29,6 +30,7 @@ export interface SubmitInput {
 export interface TaskOrchestratorCallbacks {
   onStateChange?: (id: string, state: TaskState) => void;
   onLog?: (id: string, line: string) => void;
+  onTool?: (id: string, call: ToolCall, result: ToolResult) => void;
   // B9: `usage` carries the run's aggregated token usage on the completion path
   // (undefined on the failure path). Optional so existing `onDone: () => ...`
   // callers stay backward compatible.
@@ -126,7 +128,12 @@ export class TaskOrchestrator {
       this.cb.onStateChange?.(input.id, 'running');
 
       try {
-        const result = await this.engine.run({ ...input, signal: controller.signal, onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); } });
+        const result = await this.engine.run({
+          ...input,
+          signal: controller.signal,
+          onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); },
+          onTool: (call, toolResult) => { this.cb.onTool?.(input.id, call, toolResult); },
+        });
         // A paused task that nevertheless finishes must still transition to a
         // terminal state and fire onDone, or it would hang forever.
         if (this.states.get(input.id) === 'running' || this.states.get(input.id) === 'paused') {

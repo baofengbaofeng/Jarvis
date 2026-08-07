@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel } from '@jarvis/ui';
 import type { SearchProviderType } from '@jarvis/core/renderer';
 
 const PROVIDER_TYPES: SearchProviderType[] = ['bing', 'brave', 'tavily', 'serper'];
@@ -67,35 +68,44 @@ export function SearchProvidersPage() {
   };
 
   return (
-    <div data-testid="search-providers">
-      <h2>{t('searchProviders.title')}</h2>
-      {PROVIDER_TYPES.map(type => {
-        const cfg = find(type);
-        return (
-          <div key={type} data-testid={`search-provider-${type}`} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ minWidth: 70 }}>{type}</span>
-            <input
-              data-testid={`search-provider-key-${type}`}
-              type="password"
-              value={cfg.apiKey}
-              placeholder={cfg.hasKey ? '••••••••' : t('searchProviders.apiKeyPlaceholder')}
-              onChange={e => patch(type, { apiKey: e.target.value })}
-            />
-            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <input
-                data-testid={`search-provider-enabled-${type}`}
-                type="checkbox"
-                checked={cfg.enabled}
-                onChange={e => patch(type, { enabled: e.target.checked })}
-              />
-              {t('searchProviders.enabled')}
-            </label>
-          </div>
-        );
-      })}
-      <button data-testid="search-providers-save" onClick={() => void save()}>{t('common.save')}</button>
-      {saved && <div data-testid="search-providers-saved">{t('searchProviders.saved')}</div>}
-      {error && <div data-testid="search-providers-error" role="alert">{error}</div>}
+    <div data-testid="search-providers" className="page">
+      <h2 className="page__title">{t('searchProviders.title')}</h2>
+      <ul className="settings-card-list">
+        {PROVIDER_TYPES.map(type => {
+          const cfg = find(type);
+          return (
+            <li key={type}>
+              <Panel data-testid={`search-provider-${type}`} className="settings-card">
+                <div className="settings-inline-row">
+                  <span className="settings-card__title search-provider-type">{type}</span>
+                  <Input
+                    data-testid={`search-provider-key-${type}`}
+                    type="password"
+                    value={cfg.apiKey}
+                    placeholder={cfg.hasKey ? '••••••••' : t('searchProviders.apiKeyPlaceholder')}
+                    onChange={e => patch(type, { apiKey: e.target.value })}
+                    className="office-tool__input"
+                  />
+                  <label className="checkbox-label">
+                    <input
+                      data-testid={`search-provider-enabled-${type}`}
+                      type="checkbox"
+                      checked={cfg.enabled}
+                      onChange={e => patch(type, { enabled: e.target.checked })}
+                    />
+                    {t('searchProviders.enabled')}
+                  </label>
+                </div>
+              </Panel>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="page__actions">
+        <Button variant="primary" data-testid="search-providers-save" onClick={() => void save()}>{t('common.save')}</Button>
+      </div>
+      {saved && <div data-testid="search-providers-saved" className="empty-text">{t('searchProviders.saved')}</div>}
+      {error && <div data-testid="search-providers-error" role="alert" className="error-text">{error}</div>}
     </div>
   );
 }

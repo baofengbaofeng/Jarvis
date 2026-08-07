@@ -1,22 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel, Select, Textarea } from '@jarvis/ui';
 import type { AgentConfig } from '@jarvis/protocol';
 import { TimelineView } from '../components/squad/TimelineView';
 import { CallGraphView } from '../components/squad/CallGraphView';
 import { ApprovalPanel } from '../components/squad/ApprovalPanel';
 
-// M6 Task 10 (K5/L14): the squad view drives the ApprovalPanel with FULL data
-// (summary/members) via squad.current — the Task 8 gap where squad:status only
-// carried { id, state }. The page polls squad.current every 3s so a squad run
-// that reaches in_review from a background start surfaces the panel without a
-// reload. Invokes are wrapped in try/catch (Task 1 convention) so a bridge
-// failure shows an inline error instead of an unhandled rejection.
-//
-// M6 final review (finding 5): the S5 scenario was not launchable — no renderer
-// invoked squad.create/squad.start. This page now carries a minimal "New squad"
-// launch control: a leader select, member checkboxes and a task input that call
-// the existing squad.create/squad.start IPC, so the whole flow (leader routes to
-// members -> in_review -> approve/reject) is runnable from the product.
 interface SquadState { id: string; leaderAgentId: string; memberAgentIds: string[]; status: string; summary?: string; members?: Array<{ agent: string; result: string }>; graphRows?: Array<{ from: string; to: string; label: string }> }
 
 export function SquadViewPage() {
@@ -58,13 +47,9 @@ export function SquadViewPage() {
 
   const changeLeader = (id: string) => {
     setLeaderId(id);
-    // A member cannot be the leader; drop it from the member set.
     setMemberIds(ids => ids.filter(x => x !== id));
   };
 
-  // S5 launch control: squad.create -> squad.start. Both channels already exist
-  // in main (./squad IPC); this is the missing renderer surface that invokes
-  // them with the selected leader/members/task.
   const handleCreate = async () => {
     setCreateError(null);
     try {
@@ -81,52 +66,45 @@ export function SquadViewPage() {
     }
   };
 
-  // Empty state still surfaces a load error (a failed squad.current invoke
-  // leaves squad null, so the full view below would hide it otherwise).
+  const createForm = showCreate ? (
+    <SquadCreateForm
+      agents={agents}
+      leaderId={leaderId}
+      memberIds={memberIds}
+      task={task}
+      createError={createError}
+      onLeaderChange={changeLeader}
+      onToggleMember={toggleMember}
+      onTaskChange={setTask}
+      onCreate={() => void handleCreate()}
+      onCancel={() => setShowCreate(false)}
+    />
+  ) : null;
+
   if (!squad) {
     return (
-      <div data-testid="squad-view">
-        {error ? <p data-testid="squad-view-error" role="alert">{error}</p> : null}
-        <button data-testid="squad-new" onClick={() => setShowCreate(v => !v)}>{t('squadView.newSquad')}</button>
-        {showCreate ? (
-          <SquadCreateForm
-            agents={agents}
-            leaderId={leaderId}
-            memberIds={memberIds}
-            task={task}
-            createError={createError}
-            onLeaderChange={changeLeader}
-            onToggleMember={toggleMember}
-            onTaskChange={setTask}
-            onCreate={() => void handleCreate()}
-            onCancel={() => setShowCreate(false)}
-          />
-        ) : null}
+      <div data-testid="squad-view" className="squad-page page">
+        {error ? <p data-testid="squad-view-error" className="error-text" role="alert">{error}</p> : null}
+        <Button variant="primary" data-testid="squad-new" onClick={() => setShowCreate(v => !v)}>{t('squadView.newSquad')}</Button>
+        {createForm}
       </div>
     );
   }
   return (
-    <div data-testid="squad-view">
-      <h2>{t('squadView.title', { id: squad.id, status: squad.status })}</h2>
-      <div>{t('squadView.leader')}: {squad.leaderAgentId} / {t('squadView.members')}: {squad.memberAgentIds.join(', ')}</div>
-      {error ? <p data-testid="squad-view-error" role="alert">{error}</p> : null}
-      <button data-testid="squad-new" onClick={() => setShowCreate(v => !v)}>{t('squadView.newSquad')}</button>
-      {showCreate ? (
-        <SquadCreateForm
-          agents={agents}
-          leaderId={leaderId}
-          memberIds={memberIds}
-          task={task}
-          createError={createError}
-          onLeaderChange={changeLeader}
-          onToggleMember={toggleMember}
-          onTaskChange={setTask}
-          onCreate={() => void handleCreate()}
-          onCancel={() => setShowCreate(false)}
-        />
-      ) : null}
-      <CallGraphView rows={squad.graphRows ?? []} />
-      <TimelineView />
+    <div data-testid="squad-view" className="squad-page page">
+      <div className="page__header">
+        <h2 className="page__title">{t('squadView.title', { id: squad.id, status: squad.status })}</h2>
+        <div className="settings-card__meta">{t('squadView.leader')}: {squad.leaderAgentId} / {t('squadView.members')}: {squad.memberAgentIds.join(', ')}</div>
+      </div>
+      {error ? <p data-testid="squad-view-error" className="error-text" role="alert">{error}</p> : null}
+      <div className="page__actions">
+        <Button variant="ghost" data-testid="squad-new" onClick={() => setShowCreate(v => !v)}>{t('squadView.newSquad')}</Button>
+      </div>
+      {createForm}
+      <div className="squad-page__grid">
+        <Panel className="squad-page__panel"><CallGraphView rows={squad.graphRows ?? []} /></Panel>
+        <Panel className="squad-page__panel"><TimelineView /></Panel>
+      </div>
       {squad.status === 'in_review' && squad.summary != null && squad.members != null && (
         <ApprovalPanel squadId={squad.id} summary={squad.summary} members={squad.members} onDone={() => void refresh()} />
       )}
@@ -149,17 +127,17 @@ function SquadCreateForm(props: {
   const { t } = useTranslation('common');
   const { agents, leaderId, memberIds, task, createError, onLeaderChange, onToggleMember, onTaskChange, onCreate, onCancel } = props;
   return (
-    <div data-testid="squad-create-form">
-      <div>
-        <label>{t('squadView.leader')}</label>
-        <select data-testid="squad-leader-select" value={leaderId} onChange={e => onLeaderChange(e.target.value)}>
+    <Panel data-testid="squad-create-form" className="form-stack">
+      <div className="form-field">
+        <label htmlFor="squad-leader">{t('squadView.leader')}</label>
+        <Select id="squad-leader" data-testid="squad-leader-select" value={leaderId} onChange={e => onLeaderChange(e.target.value)}>
           {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
+        </Select>
       </div>
-      <div>
-        <label>{t('squadView.members')}</label>
+      <div className="checkbox-group">
+        <span className="settings-card__meta">{t('squadView.members')}</span>
         {agents.filter(a => a.id !== leaderId).map(a => (
-          <label key={a.id}>
+          <label key={a.id} className="checkbox-label">
             <input
               type="checkbox"
               data-testid={`squad-member-${a.id}`}
@@ -170,13 +148,15 @@ function SquadCreateForm(props: {
           </label>
         ))}
       </div>
-      <div>
-        <label>{t('squadView.task')}</label>
-        <input data-testid="squad-task-input" value={task} onChange={e => onTaskChange(e.target.value)} />
+      <div className="form-field">
+        <label htmlFor="squad-task">{t('squadView.task')}</label>
+        <Input id="squad-task" data-testid="squad-task-input" value={task} onChange={e => onTaskChange(e.target.value)} />
       </div>
-      <button data-testid="squad-create-submit" onClick={onCreate}>{t('squadView.create')}</button>
-      <button onClick={onCancel}>{t('common.cancel')}</button>
-      {createError ? <p data-testid="squad-create-error" role="alert">{createError}</p> : null}
-    </div>
+      <div className="page__actions">
+        <Button variant="primary" data-testid="squad-create-submit" onClick={onCreate}>{t('squadView.create')}</Button>
+        <Button variant="ghost" onClick={onCancel}>{t('common.cancel')}</Button>
+      </div>
+      {createError ? <p data-testid="squad-create-error" className="error-text" role="alert">{createError}</p> : null}
+    </Panel>
   );
 }

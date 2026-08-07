@@ -2,20 +2,30 @@ import { create } from 'zustand';
 import type { ChatMessage, ChatSession } from '@jarvis/protocol';
 import { IpcChannel } from '@jarvis/protocol';
 import { toContentArray } from '@jarvis/core/renderer';
+import type { StepCardStatus } from '@jarvis/ui';
 import { useAgentStore } from './agent-store';
 import { useTaskStore } from './task-store';
+
+export type ChatStep = {
+  id: string;
+  title: string;
+  status: StepCardStatus;
+  detail?: string;
+};
 
 interface ChatState {
   sessionId: string | null;
   sessions: ChatSession[];
   messages: ChatMessage[];
+  steps: ChatStep[];
   streaming: boolean;
   streamingText: string;
-  /** Session that launched the in-flight task stream (guarded by `streaming`). */
   streamingTaskSessionId: string | null;
   pendingImages: string[];
   addImages: (urls: string[]) => void;
   removeImage: (url: string) => void;
+  upsertStep: (step: ChatStep) => void;
+  clearSteps: () => void;
   init: () => Promise<void>;
   newSession: () => Promise<void>;
   loadSession: (sessionId: string) => Promise<void>;
@@ -29,12 +39,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sessionId: null,
   sessions: [],
   messages: [],
+  steps: [],
   streaming: false,
   streamingText: '',
   streamingTaskSessionId: null,
   pendingImages: [],
   addImages(urls) { set(s => ({ pendingImages: [...s.pendingImages, ...urls.filter(u => !s.pendingImages.includes(u))] })); },
   removeImage(url) { set(s => ({ pendingImages: s.pendingImages.filter(u => u !== url) })); },
+  upsertStep(step) {
+    set((s) => {
+      const idx = s.steps.findIndex((x) => x.id === step.id);
+      const steps = [...s.steps];
+      if (idx >= 0) steps[idx] = step;
+      else steps.push(step);
+      return { steps };
+    });
+  },
+  clearSteps() { set({ steps: [] }); },
 
   async init() {
     await get().loadSessions();
@@ -49,13 +70,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   async newSession() {
     const s = (await window.jarvis.invoke(IpcChannel.chatCreateSession)) as { id: string };
-    set({ sessionId: s.id, messages: [], streaming: false, streamingText: '', streamingTaskSessionId: null });
+    set({ sessionId: s.id, messages: [], steps: [], streaming: false, streamingText: '', streamingTaskSessionId: null });
     await get().loadSessions();
   },
 
   async loadSession(sessionId: string) {
     const msgs = (await window.jarvis.invoke(IpcChannel.chatLoadMessages, sessionId)) as ChatMessage[];
-    set({ sessionId, messages: msgs, streaming: false, streamingText: '', streamingTaskSessionId: null });
+    set({ sessionId, messages: msgs, steps: [], streaming: false, streamingText: '', streamingTaskSessionId: null });
     await get().loadSessions();
   },
 
@@ -66,7 +87,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!agentId) return;
     const content = pendingImages.length ? toContentArray(text, pendingImages) : text;
     const userMsg: ChatMessage = { id: crypto.randomUUID(), sessionId, role: 'user', content, createdAt: new Date().toISOString() };
-    set({ streaming: true, streamingText: '', streamingTaskSessionId: sessionId, messages: [...get().messages, userMsg] });
+    set({ streaming: true, streamingText: '', steps: [], streamingTaskSessionId: sessionId, messages: [...get().messages, userMsg] });
     try {
       if (typeof content === 'string') {
         await useTaskStore.getState().createTask(agentId, content, sessionId);
@@ -86,7 +107,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const finalText = error ?? text ?? s.streamingText;
       const msg: ChatMessage = { id: crypto.randomUUID(), sessionId: s.sessionId!, role: 'assistant', content: finalText, createdAt: new Date().toISOString() };
-      return { streaming: false, streamingText: '', streamingTaskSessionId: null, messages: [...s.messages, msg] };
+      return { streaming: false, streamingText: '', streamingTaskSessionId: null, steps: [], messages: [...s.messages, msg] };
     });
   }
 }));

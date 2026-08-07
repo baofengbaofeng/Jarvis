@@ -1,12 +1,29 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { NavItem } from '@jarvis/ui';
 import { ThemeSwitcher } from '../components/theme/ThemeSwitcher';
 
 export function SettingsLayout() {
   const { t } = useTranslation('common');
-  const link = (to: string, label: string) => (
-    <NavLink key={to} to={to}>{label}</NavLink>
-  );
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const link = (to: string, label: string) => {
+    const active = pathname === to || pathname.startsWith(`${to}/`);
+    return (
+      <NavItem
+        key={to}
+        href={to}
+        active={active}
+        onClick={(e) => {
+          e.preventDefault();
+          void navigate(to);
+        }}
+      >
+        {label}
+      </NavItem>
+    );
+  };
 
   return (
     <div data-testid="settings-layout" className="settings-layout">

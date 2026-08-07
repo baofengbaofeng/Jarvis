@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Panel } from '@jarvis/ui';
 import { FileTree } from '../components/coding/FileTree';
 import { CodePreview } from '../components/coding/CodePreview';
 import { SplitLayout } from '../components/coding/SplitLayout';
@@ -17,8 +18,6 @@ export function CodingPanelPage() {
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const refresh = useCallback(async () => setTree((await window.jarvis.invoke('workspace.tree')) as TreeNode[]), []);
   useEffect(() => { void refresh(); }, [refresh]);
-  // The DiffPanel dispatches `jarvis:refresh-tree` after applying hunks; refresh
-  // the tree (and, transitively, any preview) so the applied change shows up.
   useEffect(() => {
     const h = () => { void refresh(); };
     window.addEventListener('jarvis:refresh-tree', h);
@@ -39,19 +38,17 @@ export function CodingPanelPage() {
     }
   };
   return (
-    <div data-testid="coding-panel">
-      <h2>{t('menu.coding')}</h2>
+    <div data-testid="coding-panel" className="page page--wide">
+      <h2 className="page__title">{t('menu.coding')}</h2>
       <SplitLayout
         left={<FileTree nodes={tree} onSelect={(p) => void open(p)} />}
-        right={preview ? <CodePreview path={preview.path} code={preview.code} /> : <div>{t('coding.selectFile')}</div>}
+        right={preview ? <CodePreview path={preview.path} code={preview.code} /> : <div className="empty-text">{t('coding.selectFile')}</div>}
       />
       {diff && (
-        <section data-testid="diff-section">
-          <h3>{t('diff.title')}</h3>
-          {/* keyed by path so switching files remounts a fresh DiffPanel whose
-              decisions start undecided (review fix). */}
+        <Panel elevated data-testid="diff-section" className="form-stack form-stack--spaced-lg">
+          <h3 className="page__title">{t('diff.title')}</h3>
           <DiffPanel key={diff.path} taskId={diff.taskId} path={diff.path} base={diff.base} modified={diff.modified} />
-        </section>
+        </Panel>
       )}
     </div>
   );

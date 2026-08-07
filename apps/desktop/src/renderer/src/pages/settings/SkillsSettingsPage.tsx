@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel } from '@jarvis/ui';
 
 const SKILL_ERROR_KEYS: Record<string, string> = {
   SKILL_NAME_INVALID: 'settings.skills.errors.nameInvalid',
@@ -45,20 +46,31 @@ export function SkillsSettingsPage() {
     await refresh();
   };
   return (
-    <div data-testid="skills-settings">
-      <h2>{t('menu.skills')}</h2>
-      <button data-testid="skills-import" onClick={() => void pickImport()}>{t('settings.skills.importLocal')}</button>
-      <div>
-        <input
+    <div data-testid="skills-settings" className="page form-stack">
+      <h2 className="page__title">{t('menu.skills')}</h2>
+      <div className="page__actions">
+        <Button variant="primary" data-testid="skills-import" onClick={() => void pickImport()}>{t('settings.skills.importLocal')}</Button>
+      </div>
+      <Panel className="settings-inline-row">
+        <Input
           data-testid="skills-url-input"
           value={url}
           onChange={e => setUrl(e.target.value)}
           placeholder={t('settings.skills.urlPlaceholder')}
         />
-        <button data-testid="skills-import-url" onClick={() => void importUrl()}>{t('settings.skills.importUrl')}</button>
-      </div>
-      {error ? <p data-testid="skills-import-error">{error}</p> : null}
-      <ul>{skills.map(s => <li key={s.id}>{s.name} — {s.description}</li>)}</ul>
+        <Button variant="ghost" data-testid="skills-import-url" onClick={() => void importUrl()}>{t('settings.skills.importUrl')}</Button>
+      </Panel>
+      {error ? <p data-testid="skills-import-error" className="error-text">{error}</p> : null}
+      <ul className="settings-card-list">
+        {skills.map(s => (
+          <li key={s.id}>
+            <Panel className="settings-card">
+              <div className="settings-card__title">{s.name}</div>
+              <div className="settings-card__meta">{s.description}</div>
+            </Panel>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

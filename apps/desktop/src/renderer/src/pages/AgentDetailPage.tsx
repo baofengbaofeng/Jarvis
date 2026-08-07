@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel, Select, Textarea } from '@jarvis/ui';
 import { useAgentStore } from '../stores/agent-store';
 
 export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; onClose: () => void }) {
@@ -38,12 +39,23 @@ export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; 
   };
 
   return (
-    <div data-testid="agent-detail">
-      <input data-testid="agent-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('settings.provider.name')} />
-      <textarea data-testid="agent-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} placeholder={t('agent.systemPrompt')} />
-      <input data-testid="agent-model" value={modelId ?? ''} onChange={e => setModelId(e.target.value || null)} placeholder={t('agent.modelId')} />
-      <button data-testid="agent-bind-workspace" onClick={() => void pickWorkspace()}>{workspaceLabel ?? t('agent.bindWorkspace')}</button>
-      <button data-testid="agent-save" onClick={() => void save()}>{t('common.save')}</button>
-    </div>
+    <Panel elevated data-testid="agent-detail" className="form-stack">
+      <div className="form-field">
+        <label htmlFor="agent-name">{t('settings.provider.name')}</label>
+        <Input id="agent-name" data-testid="agent-name" value={name} onChange={e => setName(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="agent-prompt">{t('agent.systemPrompt')}</label>
+        <Textarea id="agent-prompt" data-testid="agent-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={6} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="agent-model">{t('agent.modelId')}</label>
+        <Input id="agent-model" data-testid="agent-model" value={modelId ?? ''} onChange={e => setModelId(e.target.value || null)} />
+      </div>
+      <div className="page__actions">
+        <Button variant="ghost" data-testid="agent-bind-workspace" onClick={() => void pickWorkspace()}>{workspaceLabel ?? t('agent.bindWorkspace')}</Button>
+        <Button variant="primary" data-testid="agent-save" onClick={() => void save()}>{t('common.save')}</Button>
+      </div>
+    </Panel>
   );
 }

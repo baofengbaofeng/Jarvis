@@ -104,6 +104,20 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const leaderId = squadRunner.getActiveLeaderId();
       if (leaderId) getWindow()?.webContents.send(IpcEvent.squadEvent, { agent: leaderId, ts: Date.now(), kind: 'log', detail: line });
     },
+    onTool: (id, call, result) => {
+      const sessionId = taskSessions.get(id);
+      if (!sessionId) return;
+      getWindow()?.webContents.send(IpcEvent.chatDelta, {
+        sessionId,
+        chunk: {
+          kind: 'tool_done',
+          name: call.name,
+          ok: result.ok,
+          output: result.output,
+          arguments: call.arguments,
+        },
+      });
+    },
     onDone: (id, ok, text, usage) => {
       db.prepare('UPDATE tasks SET status = ?, result_json = ?, completed_at = ? WHERE id = ?').run(ok ? 'completed' : 'failed', JSON.stringify({ text }), new Date().toISOString(), id);
       getWindow()?.webContents.send(ok ? IpcEvent.taskComplete : IpcEvent.taskFailed, { id, text });

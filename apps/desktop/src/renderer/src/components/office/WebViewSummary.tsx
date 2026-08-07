@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel } from '@jarvis/ui';
 
 // D8/I8 renderer entry: one-click web page summary. URL → office.webview.summarize
 // (main opens the session-isolated WebView, extracts the page, drains it through
@@ -30,19 +31,21 @@ export function WebViewSummary() {
   };
 
   return (
-    <div data-testid="webview-summary">
-      <input
-        data-testid="webview-url"
-        value={url}
-        onChange={e => setUrl(e.target.value)}
-        placeholder={t('officeTools.urlPlaceholder')}
-        style={{ minWidth: 320 }}
-      />
-      <button data-testid="webview-summarize" onClick={() => void summarize()} disabled={busy}>
-        {t('officeTools.summarize')}
-      </button>
-      {error && <div data-testid="webview-error" role="alert">{error}</div>}
-      {result && <div data-testid="webview-result" style={{ whiteSpace: 'pre-wrap' }}>{result}</div>}
-    </div>
+    <Panel data-testid="webview-summary" className="office-tool">
+      <div className="office-tool__row">
+        <Input
+          data-testid="webview-url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder={t('officeTools.urlPlaceholder')}
+          className="office-tool__input"
+        />
+        <Button data-testid="webview-summarize" onClick={() => void summarize()} disabled={busy}>
+          {t('officeTools.summarize')}
+        </Button>
+      </div>
+      {error && <div data-testid="webview-error" role="alert" className="error-text">{error}</div>}
+      {result && <div data-testid="webview-result" className="office-tool__result">{result}</div>}
+    </Panel>
   );
 }

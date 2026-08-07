@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Panel } from '@jarvis/ui';
 import * as pdfjs from 'pdfjs-dist';
 import type { PickedCapability } from '../components/office/DropZone';
 
@@ -111,28 +112,28 @@ export function PdfReaderPage() {
   const summarizeAll = useCallback(() => void summarize(1, pages || 9999), [summarize, pages]);
 
   return (
-    <div data-testid="pdf-reader">
-      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-        <button data-testid="pdf-pick" type="button" onClick={() => void pickFile()} disabled={loading}>
+    <Panel data-testid="pdf-reader" className="pdf-reader">
+      <div className="pdf-reader__toolbar">
+        <Button data-testid="pdf-pick" type="button" variant="secondary" onClick={() => void pickFile()} disabled={loading}>
           {picked?.name ?? t('pdf.pickFile')}
-        </button>
-        <button data-testid="pdf-open" onClick={() => void load()} disabled={!hasFile || loading}>{t('pdf.open')}</button>
+        </Button>
+        <Button data-testid="pdf-open" variant="secondary" onClick={() => void load()} disabled={!hasFile || loading}>{t('pdf.open')}</Button>
       </div>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-        <button data-testid="pdf-summarize-page" onClick={summarizePage} disabled={!hasFile || loading || !pages}>{t('pdf.summarizePage')}</button>
-        <button data-testid="pdf-summarize" onClick={summarizeAll} disabled={!hasFile || loading || !pages}>{t('pdf.summarize')}</button>
+      <div className="pdf-reader__toolbar">
+        <Button data-testid="pdf-summarize-page" variant="secondary" onClick={summarizePage} disabled={!hasFile || loading || !pages}>{t('pdf.summarizePage')}</Button>
+        <Button data-testid="pdf-summarize" variant="secondary" onClick={summarizeAll} disabled={!hasFile || loading || !pages}>{t('pdf.summarize')}</Button>
       </div>
-      <canvas ref={canvasRef} data-testid="pdf-canvas" />
+      <canvas ref={canvasRef} data-testid="pdf-canvas" className="pdf-reader__canvas" />
       {pages > 0 && (
-        <div data-testid="pdf-pager" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-          <button data-testid="pdf-prev" onClick={() => void renderPage(page - 1).then(() => setPage((p) => Math.max(1, p - 1)))} disabled={page <= 1 || loading} aria-label={t('pdf.prevPage')}>‹</button>
+        <div data-testid="pdf-pager" className="pdf-reader__pager">
+          <Button data-testid="pdf-prev" size="sm" variant="ghost" onClick={() => void renderPage(page - 1).then(() => setPage((p) => Math.max(1, p - 1)))} disabled={page <= 1 || loading} aria-label={t('pdf.prevPage')}>‹</Button>
           <span data-testid="pdf-page">{t('pdf.page', { page, total: pages })}</span>
-          <button data-testid="pdf-next" onClick={() => void renderPage(page + 1).then(() => setPage((p) => Math.min(pages, p + 1)))} disabled={page >= pages || loading} aria-label={t('pdf.nextPage')}>›</button>
+          <Button data-testid="pdf-next" size="sm" variant="ghost" onClick={() => void renderPage(page + 1).then(() => setPage((p) => Math.min(pages, p + 1)))} disabled={page >= pages || loading} aria-label={t('pdf.nextPage')}>›</Button>
         </div>
       )}
-      {error && <div data-testid="pdf-error" role="alert" style={{ color: 'var(--danger, #c00)' }}>{error}</div>}
-      {loading && <div data-testid="pdf-loading">{t('pdf.loading')}</div>}
-      {summary && <div data-testid="pdf-summary" style={{ whiteSpace: 'pre-wrap' }}>{summary}</div>}
-    </div>
+      {error && <div data-testid="pdf-error" role="alert" className="error-text">{error}</div>}
+      {loading && <div data-testid="pdf-loading" className="empty-text">{t('pdf.loading')}</div>}
+      {summary && <div data-testid="pdf-summary" className="office-tool__result">{summary}</div>}
+    </Panel>
   );
 }

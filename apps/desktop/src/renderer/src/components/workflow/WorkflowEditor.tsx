@@ -1,40 +1,34 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Panel, Select } from '@jarvis/ui';
 import { useWorkflowStore } from '../../stores/workflow-store';
 
-// F10 (M8 Task 9): lightweight DAG workflow editor — node cards + an explicit
-// outgoing-edge list, NOT a react-flow drag canvas (full drag-and-drop is an
-// enhancement; toWorkflow/store stay unchanged either way).
 export function WorkflowEditor() {
   const { t } = useTranslation('common');
   const { nodes, edges, agents, outputs, loadAgents, addNode, removeNode, connect, setInput, run } = useWorkflowStore();
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   return (
-    <div data-testid="workflow-editor">
-      <h2 data-testid="workflow-title">{t('workflow.title')}</h2>
+    <div data-testid="workflow-editor" className="page page--wide">
+      <h2 data-testid="workflow-title" className="page__title">{t('workflow.title')}</h2>
       <div className="workflow-toolbar">
         {agents.map(a => (
-          <button key={a.id} data-testid={`add-${a.id}`} onClick={() => addNode(a.id)}>
+          <Button key={a.id} variant="ghost" size="sm" data-testid={`add-${a.id}`} onClick={() => addNode(a.id)}>
             {t('workflow.add', { name: a.name })}
-          </button>
+          </Button>
         ))}
-        <button data-testid="workflow-run" onClick={() => void run()}>{t('workflow.run')}</button>
+        <Button variant="primary" data-testid="workflow-run" onClick={() => void run()}>{t('workflow.run')}</Button>
       </div>
       <div className="workflow-canvas" data-testid="workflow-canvas">
         {nodes.map(n => (
-          <div key={n.id} className="wf-node" data-testid={`wf-node-${n.id}`}>
-            <span>{n.agentId}</span>
-            <input
+          <Panel key={n.id} className="wf-node" data-testid={`wf-node-${n.id}`}>
+            <div className="settings-card__title">{n.agentId}</div>
+            <Input
               data-testid={`wf-input-${n.id}`}
               value={n.input}
               onChange={e => setInput(n.id, e.target.value)}
               placeholder={t('workflow.inputPlaceholder')}
             />
-            {/* M8 final review: the F10 "编辑节点/连线" acceptance needed a UI to
-                CREATE edges — the store's connect() was only exercised by specs.
-                A per-node downstream select (over the OTHER nodes) calls connect
-                when a target is chosen; the controlled value="" resets it after. */}
-            <select
+            <Select
               data-testid={`wf-connect-${n.id}`}
               value=""
               onChange={e => { if (e.target.value) connect(n.id, e.target.value); }}
@@ -43,19 +37,15 @@ export function WorkflowEditor() {
               {nodes.filter(o => o.id !== n.id).map(o => (
                 <option key={o.id} value={o.id}>{o.agentId}</option>
               ))}
-            </select>
-            <button
-              data-testid={`wf-remove-${n.id}`}
-              aria-label={t('workflow.remove')}
-              onClick={() => removeNode(n.id)}
-            >✕</button>
+            </Select>
+            <Button variant="ghost" size="sm" data-testid={`wf-remove-${n.id}`} aria-label={t('workflow.remove')} onClick={() => removeNode(n.id)}>✕</Button>
             {edges.filter(e => e.from === n.id).map(e => (
               <div key={e.id} className="wf-edge" data-testid="wf-edge">{t('workflow.edge', { to: e.to })}</div>
             ))}
-          </div>
+          </Panel>
         ))}
       </div>
-      {outputs && <pre data-testid="wf-outputs">{JSON.stringify(outputs, null, 2)}</pre>}
+      {outputs && <Panel data-testid="wf-outputs"><pre>{JSON.stringify(outputs, null, 2)}</pre></Panel>}
     </div>
   );
 }
