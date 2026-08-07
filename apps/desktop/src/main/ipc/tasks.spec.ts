@@ -201,20 +201,26 @@ describe('task handlers', () => {
     settings.set(`permissions.${agentId}`, { level: 'readonly', allowCommands: [], allowDomains: [] });
 
     // The model emits one write_file call; the readonly policy must make the
-    // file tool's sandbox reject the write and fail the task.
+    // file tool's sandbox reject the write. CORE-06: the denial is returned as
+    // ok:false to the model so the task completes (it does not kill the run).
     let step = 0;
-    const fn: EngineChatFn = async (_req, opts) => {
+    let toolOutput = '';
+    const fn: EngineChatFn = async (req, opts) => {
       step++;
       if (step === 1) opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: '1', name: 'write_file', arguments: { path: 'x.txt', content: 'hi' } }] });
-      else opts.onChunk?.({ kind: 'done' });
+      else {
+        const last = [...req.messages].reverse().find(m => m.role === 'tool');
+        toolOutput = typeof last?.content === 'string' ? last.content : '';
+        opts.onChunk?.({ kind: 'done' });
+      }
       return { text: '', usage: null };
     };
     const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn, settings });
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => {
-      const row = db.prepare('SELECT status, result_json FROM tasks').all() as Array<{ status: string; result_json: string }>;
-      expect(row[0].status).toBe('failed');
-      expect(JSON.parse(row[0].result_json).text).toContain('readonly sandbox');
+      const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
+      expect(row[0].status).toBe('completed');
+      expect(toolOutput).toContain('readonly sandbox');
     });
   });
 
@@ -685,12 +691,12 @@ describe('approval gate wiring (M3 Task 7)', () => {
     const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
     const agentId = seedAgent();
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
-    // The tool is unregistered in this test, so execution throws and the task
-    // fails — but it must fail WITHOUT any approval:request (the grant short-
-    // circuits the gate straight to execution).
+    // The tool is unregistered in this test. CORE-06: unknown tools return
+    // ok:false to the model (task completes) — but it must do so WITHOUT any
+    // approval:request (the grant short-circuits the gate straight to execution).
     await vi.waitFor(() => {
       const row = db.prepare('SELECT status FROM tasks').all() as Array<{ status: string }>;
-      expect(row[0].status).toBe('failed');
+      expect(row[0].status).toBe('completed');
     });
     expect(approvals.length).toBe(0);
   });
