@@ -83,14 +83,14 @@ items:
 
   - id: DAEM-01
     severity: critical
-    status: open
+    status: fixed
     files: [packages/core/package.json, daemon/cmd/jarvis-agent/run.go, apps/desktop/src/main/daemon/DaemonSupervisor.ts]
     red: ["headless entry exists", "JARVIS_CORE_ENTRY absolute in supervisor env"]
     validation: ["test -f packages/core/dist/headless.mjs", "cd daemon && go test ./cmd/jarvis-agent/..."]
 
   - id: DAEM-02
     severity: critical
-    status: open
+    status: fixed
     files: [daemon/internal/multica/client/handler.go, daemon/internal/runtime/queue.go]
     red: ["claim persisted before Ack", "Ack error drops job"]
     validation: ["cd daemon && go test -race ./internal/multica/client ./internal/runtime"]
