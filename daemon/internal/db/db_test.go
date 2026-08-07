@@ -253,3 +253,32 @@ func TestListRecoverableClaims(t *testing.T) {
 		t.Fatalf("unexpected: %+v", list)
 	}
 }
+
+func TestOpenSetsBusyTimeout(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/jarvis.db"
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	var ms int
+	if err := d.QueryRow(`PRAGMA busy_timeout`).Scan(&ms); err != nil {
+		t.Fatal(err)
+	}
+	if ms < 1000 {
+		t.Fatalf("busy_timeout too low: %d", ms)
+	}
+}
+
+func TestOpenSingleConnection(t *testing.T) {
+	d, err := Open(t.TempDir() + "/one.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	// SetMaxOpenConns(1) is the single-handle contract; Stats().MaxOpenConnections reflects it.
+	if got := d.Stats().MaxOpenConnections; got != 1 {
+		t.Fatalf("MaxOpenConnections=%d want 1", got)
+	}
+}

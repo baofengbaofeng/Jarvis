@@ -21,6 +21,12 @@ func Open(path string) (*sql.DB, error) {
 		_ = d.Close()
 		return nil, err
 	}
+	// DAEM-11: wait on SQLITE_BUSY instead of failing immediately when Electron
+	// main holds a write lock on the shared jarvis.db.
+	if _, err := d.Exec(`PRAGMA busy_timeout=5000;`); err != nil {
+		_ = d.Close()
+		return nil, err
+	}
 	if err := ensureSchema(d); err != nil {
 		_ = d.Close()
 		return nil, err

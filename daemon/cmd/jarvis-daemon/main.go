@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -29,6 +31,15 @@ func main() {
 	q := runtime.NewQueue(perAgent, machine)
 	st := &runtimeState{q: q, serverURL: multicaURL}
 
+	// DAEM-11: one shared SQLite handle for the daemon process (busy_timeout set in db.Open).
+	var sharedDB *sql.DB
+	if d, err := db.Open(defaultDBPath()); err != nil {
+		log.Printf("warn: open db %s: %v", defaultDBPath(), err)
+	} else {
+		sharedDB = d
+		defer d.Close()
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -48,12 +59,12 @@ func main() {
 			ClientID:  func() string { return cl.RegisteredID() },
 			AgentID:   "jarvis",
 			Exec:      agentExec(&client.SubprocessAgentInvoker{}, st, pool, client.DefaultSkillFS(), cs, acp.Injection{}),
-			Recorder:  &sqliteRecorder{},
-			Claims:    &sqliteClaimStore{},
+			Recorder:  &sqliteRecorder{d: sharedDB},
+			Claims:    &sqliteClaimStore{d: sharedDB},
 			Conflicts: cs,
 		}
 		// DAEM-02: re-queue Multica tasks that survived a previous crash as queued/running.
-		go recoverMulticaClaims(ctx, handler)
+		go recoverMulticaClaims(ctx, handler, sharedDB)
 		go func() {
 			defer func() {
 				// I1: once the Serve loop exits, the client is no longer registered
@@ -242,54 +253,45 @@ func defaultDBPath() string {
 	return filepath.Join(home, ".jarvis", "jarvis.db")
 }
 
-type sqliteRecorder struct{}
+type sqliteRecorder struct{ d *sql.DB }
 
 // Record persists the L36 mapping for a Multica-claimed task. §13.3 makes the
 // M7+ Multica path daemon-written: ensure the local `tasks` row exists before
 // MapTaskIDs' UPDATE so the mapping is not lost on a nonexistent row (C1).
 func (s *sqliteRecorder) Record(ctx context.Context, local, multica string) error {
-	d, err := db.Open(defaultDBPath())
-	if err != nil {
+	if s.d == nil {
+		return fmt.Errorf("sqlite recorder: no db handle")
+	}
+	if err := db.EnsureTaskRow(ctx, s.d, local, "jarvis", "{}"); err != nil {
 		return err
 	}
-	defer d.Close()
-	if err := db.EnsureTaskRow(ctx, d, local, "jarvis", "{}"); err != nil {
-		return err
-	}
-	return db.MapTaskIDs(ctx, d, local, multica)
+	return db.MapTaskIDs(ctx, s.d, local, multica)
 }
 
-// sqliteClaimStore persists claims before Multica Ack (DAEM-02).
-type sqliteClaimStore struct{}
+// sqliteClaimStore persists claims before Multica Ack (DAEM-02) on the shared handle (DAEM-11).
+type sqliteClaimStore struct{ d *sql.DB }
 
 func (s *sqliteClaimStore) PersistClaim(ctx context.Context, localID, multicaID, agentID string, payload []byte) error {
-	d, err := db.Open(defaultDBPath())
-	if err != nil {
-		return err
+	if s.d == nil {
+		return fmt.Errorf("claim store: no db handle")
 	}
-	defer d.Close()
-	return db.PersistClaim(ctx, d, localID, multicaID, agentID, string(payload))
+	return db.PersistClaim(ctx, s.d, localID, multicaID, agentID, string(payload))
 }
 
 func (s *sqliteClaimStore) AbandonClaim(ctx context.Context, localID string) error {
-	d, err := db.Open(defaultDBPath())
-	if err != nil {
-		return err
+	if s.d == nil {
+		return fmt.Errorf("claim store: no db handle")
 	}
-	defer d.Close()
-	return db.AbandonClaim(ctx, d, localID)
+	return db.AbandonClaim(ctx, s.d, localID)
 }
 
 // recoverMulticaClaims re-submits durable queued/running Multica tasks after a
 // daemon restart (DAEM-02). Already-Ack'd claims must not be lost when the
 // in-memory queue is empty on boot.
-func recoverMulticaClaims(ctx context.Context, h *client.ClaimHandler) {
-	d, err := db.Open(defaultDBPath())
-	if err != nil {
-		log.Printf("recover claims: open db: %v", err)
+func recoverMulticaClaims(ctx context.Context, h *client.ClaimHandler, d *sql.DB) {
+	if d == nil {
 		return
 	}
-	defer d.Close()
 	claims, err := db.ListRecoverableClaims(ctx, d)
 	if err != nil {
 		log.Printf("recover claims: list: %v", err)
