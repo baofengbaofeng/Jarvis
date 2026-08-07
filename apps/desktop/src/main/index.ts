@@ -13,19 +13,22 @@ import { IdeBridge, parseFileArg, openInExternalIde, resolveFileInWorkspace } fr
 import { TrayManager } from './tray/TrayManager';
 import { WindowManager } from './window/WindowManager';
 import { openMainWindow } from './mainWindowLifecycle';
-import { DaemonSupervisor, defaultDaemonBinaryPath } from './daemon/DaemonSupervisor';
+import { DaemonSupervisor, defaultDaemonBinaryPath, defaultCoreEntryPath } from './daemon/DaemonSupervisor';
 import { SecureStorage } from './secrets/SecureStorage';
 import { SearchSecretMigration } from './search/SearchSecretMigration';
 import { pluginRunner } from './plugins/PluginRunnerHost';
 
 // Cold-start bootstrap for M0. db (Task 5), ipc (Task 6), windows (Task 10),
 // tray (Task 11) and daemon (Task 12) are wired here.
-const daemon = new DaemonSupervisor(defaultDaemonBinaryPath(
-  import.meta.dirname,
-  process.platform,
-  app.isPackaged,
-  process.resourcesPath,
-));
+const daemon = new DaemonSupervisor(
+  defaultDaemonBinaryPath(
+    import.meta.dirname,
+    process.platform,
+    app.isPackaged,
+    process.resourcesPath,
+  ),
+  defaultCoreEntryPath(import.meta.dirname, app.isPackaged, process.resourcesPath),
+);
 
 // M4 Task 9 (E12) / DESK-05: localhost IDE bridge with Bearer + Host checks.
 // Started at app ready and closed on will-quit.

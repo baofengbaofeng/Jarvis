@@ -92,3 +92,23 @@ describe('defaultDaemonBinaryPath (BUILD-04)', () => {
     expect(pathFor('/x', 'linux', true, '/Resources')).toBe('/Resources/daemon/jarvis-daemon');
   });
 });
+
+describe('defaultCoreEntryPath / buildDaemonEnv (DAEM-01)', () => {
+  it('resolves an absolute headless.mjs path in dev', async () => {
+    const { defaultCoreEntryPath } = await import('./DaemonSupervisor');
+    const p = defaultCoreEntryPath('/app/out/main', false, '');
+    expect(p.startsWith('/')).toBe(true);
+    expect(p.endsWith('packages/core/dist/headless.mjs') || p.endsWith('core/headless.mjs')).toBe(true);
+  });
+
+  it('uses process.resourcesPath when packaged', async () => {
+    const { defaultCoreEntryPath } = await import('./DaemonSupervisor');
+    expect(defaultCoreEntryPath('/x', true, '/Resources')).toBe('/Resources/core/headless.mjs');
+  });
+
+  it('injects absolute JARVIS_CORE_ENTRY into daemon env', async () => {
+    const { buildDaemonEnv } = await import('./DaemonSupervisor');
+    const env = buildDaemonEnv({ PATH: '/usr/bin' }, 17890, {}, 'tok', '/abs/packages/core/dist/headless.mjs');
+    expect(env.JARVIS_CORE_ENTRY).toBe('/abs/packages/core/dist/headless.mjs');
+  });
+});

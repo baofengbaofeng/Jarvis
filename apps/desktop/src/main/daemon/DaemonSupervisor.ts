@@ -30,14 +30,19 @@ export function buildDaemonEnv(
   port: number,
   concurrency: ConcurrencyConfig,
   token: string,
+  coreEntry?: string,
 ): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...base,
     JARVIS_DAEMON_PORT: String(port),
     JARVIS_CONCURRENCY_PER_AGENT: String(concurrency.perAgent ?? DEFAULT_CONCURRENCY_PER_AGENT),
     JARVIS_CONCURRENCY_MACHINE: String(concurrency.machine ?? DEFAULT_CONCURRENCY_MACHINE),
     JARVIS_DAEMON_TOKEN: token,
   };
+  if (coreEntry) {
+    env.JARVIS_CORE_ENTRY = coreEntry;
+  }
+  return env;
 }
 
 export function daemonAuthHeaders(token: string): Record<string, string> {
@@ -170,6 +175,19 @@ export function defaultDaemonBinaryPath(
   return join(dirname, '../../../resources/daemon', name);
 }
 
+/** Absolute path to packages/core/dist/headless.mjs (DAEM-01). */
+export function defaultCoreEntryPath(
+  dirname = import.meta.dirname,
+  packaged = false,
+  resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '',
+): string {
+  if (packaged && resourcesPath) {
+    return join(resourcesPath, 'core', 'headless.mjs');
+  }
+  // apps/desktop/src/main/daemon -> repo root packages/core/dist/headless.mjs
+  return join(dirname, '../../../../../packages/core/dist/headless.mjs');
+}
+
 export class DaemonSupervisor {
   private child: ChildProcess | null = null;
   private poller: ReturnType<typeof createHealthPoller> | null = null;
@@ -181,8 +199,14 @@ export class DaemonSupervisor {
   private conflictsCache: ConflictItem[] = [];
   /** Shared with the spawned daemon via JARVIS_DAEMON_TOKEN (SEC-09). */
   private readonly authToken: string = resolveDaemonAuthToken();
+  private readonly coreEntryPath: string;
 
-  constructor(private binaryPath = defaultDaemonBinaryPath()) {}
+  constructor(
+    private binaryPath = defaultDaemonBinaryPath(),
+    coreEntryPath = defaultCoreEntryPath(),
+  ) {
+    this.coreEntryPath = coreEntryPath;
+  }
 
   // C10: lets the main process hand the supervisor a live reader for the saved
   // settings.concurrency value, so every spawn/restart injects the current
@@ -194,7 +218,13 @@ export class DaemonSupervisor {
   start(onReady?: () => void, onExit?: () => void): void {
     if (this.child && !this.child.killed) return;
     this.child = spawn(this.binaryPath, [], {
-      env: buildDaemonEnv(process.env, this.port, this.concurrencyProvider?.() ?? {}, this.authToken),
+      env: buildDaemonEnv(
+        process.env,
+        this.port,
+        this.concurrencyProvider?.() ?? {},
+        this.authToken,
+        this.coreEntryPath,
+      ),
     });
     this.child.on('error', () => { this.healthy = false; this.resetRuntimeCache(); this.child = null; });
     this.poller = createHealthPoller({ port: this.port, intervalMs: 1000 });

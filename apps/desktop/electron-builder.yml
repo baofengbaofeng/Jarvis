@@ -13,6 +13,10 @@ extraResources:
     to: daemon
     filter:
       - '**/*'
+  - from: ../../packages/core/dist
+    to: core
+    filter:
+      - headless.mjs
 
 win:
   target:
