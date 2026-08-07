@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import { PassThrough } from 'node:stream';
 import { ToolRegistry } from '@jarvis/core';
 import { applyMigrations } from '../db/migrations';
-import { createMcpStore, testMcpServer, testMcpServerById, registerAgentMcpTools, closeAllMcpClients } from './mcp';
+import { assertMcpCommand, createMcpStore, testMcpServer, testMcpServerById, registerAgentMcpTools, closeAllMcpClients } from './mcp';
 
 describe('mcp store', () => {
   let db: Database.Database;
@@ -55,13 +55,23 @@ describe('mcp.test', () => {
 
   it('loads the executable from the persisted server id', async () => {
     const store = createMcpStore(db);
-    const saved = store.create({ name: 'fs', transport: 'stdio', command: 'approved-bin', args: ['--stdio'] });
+    const saved = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: ['--stdio'] });
     const commands: string[] = [];
     const result = await testMcpServerById(db, saved.id, {
       spawnImpl: (cmd) => { commands.push(cmd); return new FakeProc() as never; },
     });
     expect(result.ok).toBe(true);
-    expect(commands).toEqual(['approved-bin']);
+    expect(commands).toEqual(['npx']);
+  });
+
+  it('rejects unsafe or non-allowlisted commands (DESK-12)', async () => {
+    expect(() => assertMcpCommand('bash', ['-c', 'id'])).toThrow('MCP_COMMAND_NOT_ALLOWED');
+    expect(() => assertMcpCommand('npx; rm -rf /')).toThrow('MCP_COMMAND_UNSAFE');
+    const store = createMcpStore(db);
+    expect(() => store.create({ name: 'evil', transport: 'stdio', command: 'bash', args: ['-c', 'id'] })).toThrow('MCP_COMMAND_NOT_ALLOWED');
+    const r = await testMcpServer({ name: 'evil', transport: 'stdio', command: 'curl', args: ['http://x'] });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe('MCP_COMMAND_NOT_ALLOWED');
   });
 
   it('rejects an unknown id without spawning', async () => {

@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { basename, isAbsolute } from 'node:path';
 import { createMcpClient, registerMcpTools, type McpClient, type SpawnImpl, type ToolRegistry } from '@jarvis/core';
 
 export interface McpServerInput {
@@ -10,6 +11,25 @@ export interface McpServerInput {
   configJson?: string;
   // G6: agents this server is bound to; persisted into config_json.agentIds.
   agentIds?: string[];
+}
+
+/** Basename allowlist for MCP stdio launchers (DESK-12). Absolute paths also OK. */
+const MCP_COMMAND_ALLOWLIST = new Set([
+  'npx', 'npm', 'node', 'nodejs', 'uvx', 'uv', 'python', 'python3', 'bun', 'deno', 'docker',
+]);
+
+const MCP_UNSAFE = /[;&|`$<>\n\r]/;
+
+export function assertMcpCommand(command: string, args: string[] = []): void {
+  const cmd = command.trim();
+  if (!cmd) throw new Error('MCP_COMMAND_REQUIRED');
+  if (MCP_UNSAFE.test(cmd) || args.some(a => MCP_UNSAFE.test(a))) {
+    throw new Error('MCP_COMMAND_UNSAFE');
+  }
+  const base = basename(cmd);
+  if (!MCP_COMMAND_ALLOWLIST.has(base) && !isAbsolute(cmd)) {
+    throw new Error('MCP_COMMAND_NOT_ALLOWED');
+  }
 }
 
 // MCP client cache: createStdioTransport spawns the OS process eagerly at
@@ -40,6 +60,7 @@ export function createMcpStore(db: Database.Database) {
       }));
     },
     create(input: McpServerInput) {
+      if (input.transport === 'stdio') assertMcpCommand(input.command ?? '', input.args ?? []);
       const id = randomUUID();
       db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
         .run(id, input.name, input.transport, JSON.stringify({ command: input.command, args: input.args, config: input.configJson, agentIds: input.agentIds ?? [] }), new Date().toISOString());
@@ -60,6 +81,11 @@ export type McpTestResult = { ok: boolean; tools: string[]; error?: string };
 // discovered tool names (or an error) without persisting anything.
 export async function testMcpServer(input: McpServerInput, deps: { spawnImpl?: SpawnImpl } = {}): Promise<McpTestResult> {
   if (input.transport !== 'stdio') return { ok: false, tools: [], error: `transport ${input.transport} not supported for test` };
+  try {
+    assertMcpCommand(input.command ?? '', input.args ?? []);
+  } catch (e) {
+    return { ok: false, tools: [], error: e instanceof Error ? e.message : String(e) };
+  }
   const client = createMcpClient(input.command ?? '', input.args ?? [], input.name, deps);
   try {
     await client.initialize();
@@ -100,6 +126,7 @@ export async function registerAgentMcpTools(db: Database.Database, toolRegistry:
     if (mcpClientCache.has(s.id)) continue; // already spawned + registered
     let client: McpClient | undefined;
     try {
+      assertMcpCommand(cfg.command, cfg.args ?? []);
       client = createMcpClient(cfg.command, cfg.args ?? [], s.name, deps);
       await client.initialize();
       await registerMcpTools(toolRegistry, client, s.name);
