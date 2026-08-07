@@ -30,6 +30,29 @@ func TestQueueRunsJobs(t *testing.T) {
 	}
 }
 
+func TestQueueRecoversPanickingJobAndContinues(t *testing.T) {
+	q := NewQueue(2, 2)
+	done := make(chan struct{}, 2)
+	q.Submit("a", func() {
+		defer func() { done <- struct{}{} }()
+		panic("boom")
+	})
+	q.Submit("b", func() {
+		done <- struct{}{}
+	})
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for jobs")
+		}
+	}
+	st := q.Status()
+	if st.ActiveTasks != 0 {
+		t.Fatalf("expected no active tasks after panic recovery, got %d", st.ActiveTasks)
+	}
+}
+
 func TestQueueRespectsPerAgentCap(t *testing.T) {
 	q := NewQueue(2, 10)
 	var active, peak int

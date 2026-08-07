@@ -25,6 +25,12 @@ type Queue struct {
 
 // NewQueue creates a Queue with per-agent and machine-wide concurrency caps.
 func NewQueue(perAgent, machine int) *Queue {
+	if perAgent < 1 {
+		perAgent = 1
+	}
+	if machine < 1 {
+		machine = 1
+	}
 	return &Queue{perAgent: perAgent, machine: machine, active: map[string]int{}}
 }
 
@@ -84,8 +90,15 @@ func (q *Queue) pump() {
 
 		go func(j Job) {
 			defer func() {
+				if r := recover(); r != nil {
+					// Keep the daemon alive; counters restored below.
+					_ = r
+				}
 				q.mu.Lock()
 				q.active[j.AgentID]--
+				if q.active[j.AgentID] <= 0 {
+					delete(q.active, j.AgentID)
+				}
 				q.runningTotal--
 				q.mu.Unlock()
 				q.pump()
