@@ -47,35 +47,35 @@ waves:
 items:
   - id: TEST-01
     severity: critical
-    status: open
+    status: fixed
     files: [apps/desktop/src/renderer/src/components/chat/MarkdownView.tsx, turbo.json]
     red: ["pnpm --dir apps/desktop build fails on oneDark named import"]
     validation: ["pnpm --dir apps/desktop build", "pnpm --dir apps/desktop vitest run"]
 
   - id: DESK-01
     severity: critical
-    status: open
+    status: fixed
     files: [packages/core/src/approval/ApprovalGate.ts, apps/desktop/src/main/ipc/task-engine-factory.ts]
     red: ["write_file reaches ApprovalCenter.request", "run_shell echo hi reaches approval"]
     validation: ["cd packages/core && pnpm vitest run src/approval", "pnpm --dir apps/desktop vitest run src/main/ipc"]
 
   - id: DESK-02
     severity: critical
-    status: open
+    status: fixed
     files: [apps/desktop/src/main/ipc/IpcRouter.ts, apps/desktop/src/main/ipc/tasks.ts]
     red: ["settings.set permissions.*.level=system rejected or requires approval"]
     validation: ["pnpm --dir apps/desktop vitest run src/main/ipc"]
 
   - id: CORE-01
     severity: critical
-    status: open
+    status: fixed
     files: [packages/core/src/model/types.ts, packages/core/src/agent/AgentEngine.ts, packages/core/src/model/adapters/openai.ts, packages/core/src/model/adapters/anthropic.ts]
     red: ["second-round fetch body has tool_call_id / tool_use linkage"]
     validation: ["cd packages/core && pnpm vitest run src/model src/agent"]
 
   - id: CORE-02
     severity: critical
-    status: open
+    status: fixed
     depends_on: [CORE-01]
     files: [packages/core/src/model/adapters/anthropic.ts]
     red: ["tool_use + input_json_delta emit tool_call chunk"]
@@ -97,35 +97,35 @@ items:
 
   - id: BUILD-01
     severity: critical
-    status: open
+    status: fixed
     files: [.github/workflows/ci.yml]
     red: ["workflow runs typecheck build test i18n go-race"]
     validation: ["test -f .github/workflows/ci.yml"]
 
   - id: BUILD-02
     severity: high
-    status: open
+    status: fixed
     files: [apps/desktop/electron-builder.yml, apps/desktop/src/main/daemon/DaemonSupervisor.ts]
     red: ["daemon binary via extraResources / process.resourcesPath"]
     validation: ["rg -n extraResources apps/desktop/electron-builder.yml"]
 
   - id: BUILD-04
     severity: high
-    status: open
+    status: fixed
     files: [apps/desktop/src/main/daemon/DaemonSupervisor.ts]
     red: ["win32 path ends with .exe"]
     validation: ["pnpm --dir apps/desktop vitest run src/main/daemon"]
 
   - id: BUILD-06
     severity: high
-    status: open
+    status: fixed
     files: [apps/desktop/package.json, apps/desktop/src/main/ipc/office.ts]
     red: ["pnpm why xlsx empty", "parser bounds in utility process"]
     validation: ["pnpm why xlsx", "pnpm audit --prod"]
 
   - id: CORE-18
     severity: high
-    status: open
+    status: fixed
     files: [packages/core/src/network/SafeHttpClient.ts, packages/core/src/model/adapters/openai.ts, packages/core/src/model/adapters/anthropic.ts]
     red: ["redirect to 169.254.169.254 rejected on chat path"]
     validation: ["cd packages/core && pnpm vitest run src/network src/model"]
@@ -146,14 +146,14 @@ items:
 
   - id: DESK-05
     severity: high
-    status: open
+    status: fixed
     files: [apps/desktop/src/main/external/IdeBridge.ts]
     red: ["unauthenticated /diff returns 401", "Host not 127.0.0.1 rejected"]
     validation: ["pnpm --dir apps/desktop vitest run src/main/external"]
 
   - id: DESK-09
     severity: high
-    status: open
+    status: fixed
     files: [apps/desktop/src/main/ipc/IpcRouter.ts]
     red: ["approval request sent when window unfocused"]
     validation: ["pnpm --dir apps/desktop vitest run src/main/approval src/main/ipc"]
