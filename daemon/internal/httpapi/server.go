@@ -220,3 +220,18 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 func (s *Server) Handler() http.Handler { return authMiddleware(s.authToken, s.mux) }
+
+// NewHTTPServer builds a loopback http.Server with timeouts (DAEM-05).
+// ReadHeaderTimeout is required to mitigate Slowloris-style hangs on the
+// daemon's local API; the other timeouts bound full request/response lifetimes.
+func NewHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+}
+
