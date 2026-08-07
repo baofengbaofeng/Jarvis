@@ -233,19 +233,11 @@ describe('office.file.analyze', () => {
   });
 });
 
-// M5 final review — xlsx/jszip ESM/CJS interop regression. The office.file.analyze
-// xlsx/pptx extractors used to call `mod.readFile` / `mod.loadAsync` directly on
-// the ESM namespace returned by `await import('xlsx'/'jszip')`. Those packages
-// are CommonJS; under Node's ESM/CJS interop the real functions live on
-// `mod.default`, and the named exports may NOT be hoisted onto the namespace (the
-// old code silently failed at runtime in the Electron main process). These tests
-// exercise the exact `resolveCjsDefault` resolution the extractors use and assert
-// the property is a callable — no file parsing, just the interop shape. They fail
-// if the resolution ever yields a namespace without the member.
-describe('xlsx/jszip ESM/CJS interop (regression)', () => {
-  it('xlsx: resolveCjsDefault exposes readFile as a function', async () => {
-    const XLSX = resolveCjsDefault(await import('xlsx'));
-    expect(typeof XLSX.readFile).toBe('function');
+// BUILD-06 / M5: exceljs + jszip interop shape used by office.file.analyze.
+describe('exceljs/jszip ESM/CJS interop (regression)', () => {
+  it('exceljs: resolveCjsDefault exposes Workbook', async () => {
+    const ExcelJS = resolveCjsDefault(await import('exceljs'));
+    expect(typeof ExcelJS.Workbook).toBe('function');
   });
 
   it('jszip: resolveCjsDefault exposes loadAsync as a function', async () => {
