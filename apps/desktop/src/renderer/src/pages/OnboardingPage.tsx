@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@jarvis/ui';
 import { useSettings } from '../stores/settings-store';
 
 export function OnboardingPage({ onDone }: { onDone?: () => void }) {
@@ -17,13 +18,17 @@ export function OnboardingPage({ onDone }: { onDone?: () => void }) {
   };
 
   return (
-    <div data-testid="onboarding">
+    <div data-testid="onboarding" className="onboarding">
       <h1>{t('onboarding.title')}</h1>
-      {step === 1 && <div data-testid="onboarding-step-1">{t('onboarding.step1')}</div>}
-      {step === 2 && <div data-testid="onboarding-step-2">{t('onboarding.step2')}</div>}
-      {step === 3 && <div data-testid="onboarding-step-3">{t('onboarding.step3')}</div>}
-      {step < 3 && <button data-testid="onboarding-next" onClick={next}>{t('common.ok')}</button>}
-      {step === 3 && <button data-testid="onboarding-finish" onClick={() => void finish()}>{t('onboarding.start')}</button>}
+      {step === 1 && <div data-testid="onboarding-step-1" className="onboarding-step">{t('onboarding.step1')}</div>}
+      {step === 2 && <div data-testid="onboarding-step-2" className="onboarding-step">{t('onboarding.step2')}</div>}
+      {step === 3 && <div data-testid="onboarding-step-3" className="onboarding-step">{t('onboarding.step3')}</div>}
+      {step < 3 && (
+        <Button variant="primary" data-testid="onboarding-next" onClick={next}>{t('common.ok')}</Button>
+      )}
+      {step === 3 && (
+        <Button variant="primary" data-testid="onboarding-finish" onClick={() => void finish()}>{t('onboarding.start')}</Button>
+      )}
     </div>
   );
 }

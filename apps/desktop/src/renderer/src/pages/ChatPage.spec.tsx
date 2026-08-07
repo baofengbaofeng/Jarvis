@@ -5,6 +5,9 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { ChatPage } from './ChatPage';
 import { useChatStore } from '../stores/chat-store';
+import { useAgentStore } from '../stores/agent-store';
+
+const AGENT = { id: 'a1', name: 'Coder', slug: 'coder', description: '', systemPrompt: '', modelId: null, workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' };
 
 const SESSIONS = [
   { id: 's1', title: 'Session 1', createdAt: '', updatedAt: '' },
@@ -36,6 +39,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   useChatStore.setState({ sessionId: null, sessions: [], messages: [], streaming: false, streamingText: '' });
+  useAgentStore.setState({ agents: [AGENT], current: AGENT });
 });
 
 afterEach(() => {
@@ -45,18 +49,16 @@ afterEach(() => {
 describe('ChatPage', () => {
   it('renders and accepts input with an optimistic user message', async () => {
     render(<ChatPage />);
-    await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('chat-session-s1')).toBeTruthy());
     fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
     fireEvent.click(screen.getByTestId('chat-send'));
-    // The user prompt is appended to the live view immediately (before the task is created).
     await waitFor(() => expect(screen.getByText('hello')).toBeTruthy());
   });
 
   it('routes the chat send through the task execution path', async () => {
     taskCreateSpy.mockClear();
     render(<ChatPage />);
-    await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
-    // init() loads s1, so the current session is s1 and the current agent is a1.
+    await waitFor(() => expect(screen.getByTestId('chat-session-s1')).toBeTruthy());
     fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
     fireEvent.click(screen.getByTestId('chat-send'));
     await waitFor(() => expect(taskCreateSpy).toHaveBeenCalledWith({ agentId: 'a1', prompt: 'hello', sessionId: 's1' }));

@@ -6,6 +6,7 @@ import { getResources } from '@jarvis/i18n';
 import App from './App';
 import '@jarvis/ui/tokens.css';
 import './styles/globals.css';
+import './styles/desktop.css';
 import { initRendererState } from './stores/init-store';
 
 void i18n.use(initReactI18next).init({

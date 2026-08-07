@@ -1,30 +1,32 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { ThemeSwitcher } from '../components/theme/ThemeSwitcher';
 
 export function SettingsLayout() {
   const { t } = useTranslation('common');
+  const link = (to: string, label: string) => (
+    <NavLink key={to} to={to}>{label}</NavLink>
+  );
+
   return (
-    <div data-testid="settings-layout" style={{ display: 'flex', minHeight: '100%' }}>
-      <nav style={{ width: 200, borderRight: '1px solid var(--border)', padding: 16 }}>
-        <NavLink to="/settings/providers">{t('settings.nav.providers')}</NavLink>
-        <NavLink to="/settings/mcp">{t('settings.nav.mcp')}</NavLink>
-        <NavLink to="/settings/skills">{t('settings.nav.skills')}</NavLink>
-        <NavLink to="/settings/daemon">{t('settings.nav.daemon')}</NavLink>
-        <NavLink to="/settings/logs">{t('settings.nav.logs')}</NavLink>
-        <NavLink to="/settings/permissions">{t('settings.nav.permissions')}</NavLink>
-        <NavLink to="/settings/env">{t('settings.nav.env')}</NavLink>
-        <NavLink to="/settings/concurrency">{t('settings.nav.concurrency')}</NavLink>
-        {/* M8 final review: the M8 settings pages (L18/L20/J4 safety, C12 config,
-            C5 shortcuts, B9 usage, J5 audit) need nav entries to be reachable. */}
-        <NavLink to="/settings/data-safety">{t('settings.nav.dataSafety')}</NavLink>
-        <NavLink to="/settings/config">{t('settings.nav.config')}</NavLink>
-        <NavLink to="/settings/shortcuts">{t('settings.nav.shortcuts')}</NavLink>
-        <NavLink to="/settings/usage">{t('settings.nav.usage')}</NavLink>
-        <NavLink to="/settings/audit">{t('settings.nav.audit')}</NavLink>
-        <LanguageSwitcher />
+    <div data-testid="settings-layout" className="settings-layout">
+      <nav className="settings-layout__nav">
+        {link('/settings/providers', t('settings.nav.providers'))}
+        {link('/settings/mcp', t('settings.nav.mcp'))}
+        {link('/settings/skills', t('settings.nav.skills'))}
+        {link('/settings/daemon', t('settings.nav.daemon'))}
+        {link('/settings/logs', t('settings.nav.logs'))}
+        {link('/settings/permissions', t('settings.nav.permissions'))}
+        {link('/settings/env', t('settings.nav.env'))}
+        {link('/settings/concurrency', t('settings.nav.concurrency'))}
+        {link('/settings/data-safety', t('settings.nav.dataSafety'))}
+        {link('/settings/config', t('settings.nav.config'))}
+        {link('/settings/shortcuts', t('settings.nav.shortcuts'))}
+        {link('/settings/usage', t('settings.nav.usage'))}
+        {link('/settings/audit', t('settings.nav.audit'))}
+        <ThemeSwitcher />
       </nav>
-      <main style={{ flex: 1, padding: 16 }}>
+      <main className="settings-layout__main">
         <Outlet />
       </main>
     </div>

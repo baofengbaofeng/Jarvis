@@ -16,7 +16,7 @@
   },
   "settings": {
     "title": "Settings",
-    "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills", "daemon": "Daemon", "permissions": "Permissions", "env": "Environment", "concurrency": "Concurrency", "dataSafety": "Data Safety", "config": "Config Import/Export", "shortcuts": "Shortcuts", "usage": "Usage", "audit": "Audit Log" },
+    "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills", "daemon": "Daemon", "permissions": "Permissions", "env": "Environment", "concurrency": "Concurrency", "dataSafety": "Data Safety", "config": "Config Import/Export", "shortcuts": "Shortcuts", "usage": "Usage", "audit": "Audit Log", "appearance": "Appearance" },
     "mcp": {
       "title": "MCP Servers",
       "name": "Name",

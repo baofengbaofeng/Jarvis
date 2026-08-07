@@ -1,0 +1,28 @@
+.jui-composer {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.jui-composer__toolbar {
+  margin-bottom: var(--space-2);
+}
+
+.jui-composer__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.jui-composer__row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+.jui-composer__input {
+  flex: 1;
+  min-height: 72px;
+  border-radius: var(--radius-lg);
+}

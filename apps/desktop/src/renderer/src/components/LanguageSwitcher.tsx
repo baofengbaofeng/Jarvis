@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Select } from '@jarvis/ui';
 import { useSettings } from '../stores/settings-store';
 
 export function LanguageSwitcher() {
@@ -7,7 +8,8 @@ export function LanguageSwitcher() {
   const setLanguage = useSettings((s) => s.setLanguage);
 
   return (
-    <select
+    <Select
+      className="jui-select--inline"
       data-testid="language-switcher"
       value={language}
       onChange={async (e) => {
@@ -19,6 +21,6 @@ export function LanguageSwitcher() {
     >
       <option value="zh-CN">简体中文</option>
       <option value="en">English</option>
-    </select>
+    </Select>
   );
 }

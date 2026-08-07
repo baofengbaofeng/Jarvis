@@ -6,9 +6,14 @@ export function AgentSwitcher() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   return (
-    <div data-testid="agent-switcher">
+    <div data-testid="agent-switcher" className="agent-switcher">
       {agents.map(a => (
-        <button key={a.id} data-testid={`agent-${a.slug}`} onClick={() => setCurrent(a)} style={{ fontWeight: current?.id === a.id ? 'bold' : 'normal' }}>
+        <button
+          key={a.id}
+          data-testid={`agent-${a.slug}`}
+          className={`agent-switcher__btn${current?.id === a.id ? ' agent-switcher__btn--active' : ''}`}
+          onClick={() => setCurrent(a)}
+        >
           {a.name}
         </button>
       ))}

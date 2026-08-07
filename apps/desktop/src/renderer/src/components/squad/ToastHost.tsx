@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
-import { subscribeToasts, type Toast } from '../../stores/toast-store';
+import { Toast, ToastHost } from '@jarvis/ui';
+import { subscribeToasts, type Toast as ToastItem } from '../../stores/toast-store';
 
-export function ToastHost() {
-  const [items, setItems] = useState<Toast[]>([]);
+export function ToastHostView() {
+  const [items, setItems] = useState<ToastItem[]>([]);
   useEffect(() => subscribeToasts(setItems), []);
   return (
-    <div data-testid="toast-host">
-      {items.map(t => <div key={t.id} data-testid={`toast-${t.kind}`} className={`toast toast--${t.kind}`}>{t.message}</div>)}
-    </div>
+    <ToastHost>
+      {items.map(t => (
+        <Toast key={t.id} message={t.message} kind={t.kind} testId={`toast-${t.kind}`} />
+      ))}
+    </ToastHost>
   );
 }
+
+// Keep the original export name for App.tsx compatibility
+export { ToastHostView as ToastHost };

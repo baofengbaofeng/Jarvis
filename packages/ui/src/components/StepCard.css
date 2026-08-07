@@ -1,0 +1,55 @@
+.jui-stepcard {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  margin-bottom: var(--space-2);
+}
+
+.jui-stepcard__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  list-style: none;
+}
+
+.jui-stepcard__header::-webkit-details-marker {
+  display: none;
+}
+
+.jui-stepcard__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.jui-stepcard__dot--pending { background: var(--fg-faint); }
+.jui-stepcard__dot--running { background: var(--info); }
+.jui-stepcard__dot--success { background: var(--success); }
+.jui-stepcard__dot--error { background: var(--danger); }
+.jui-stepcard__dot--warning { background: var(--warning); }
+
+.jui-stepcard__title {
+  color: var(--fg);
+}
+
+.jui-stepcard__body {
+  padding: 0 var(--space-3) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.jui-stepcard__body pre {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}

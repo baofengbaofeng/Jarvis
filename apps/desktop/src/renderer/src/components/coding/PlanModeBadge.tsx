@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@jarvis/ui';
 
 export function PlanModeBadge({ active }: { active: boolean }) {
   const { t } = useTranslation('common');
   if (!active) return null;
-  return <span data-testid="plan-badge" className="badge badge--plan">{t('plan.badge')}</span>;
+  return <Badge variant="plan" data-testid="plan-badge">{t('plan.badge')}</Badge>;
 }

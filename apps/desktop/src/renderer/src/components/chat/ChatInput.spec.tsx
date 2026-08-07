@@ -42,6 +42,12 @@ describe('ChatInput', () => {
     expect(useChatStore.getState().pendingImages.length).toBeGreaterThan(0);
   });
 
+  it('updates textarea value on change', () => {
+    render(<ChatInput />);
+    fireEvent.change(screen.getByTestId('chat-input'), { target: { value: 'hello' } });
+    expect((screen.getByTestId('chat-input') as HTMLTextAreaElement).value).toBe('hello');
+  });
+
   it('allows an image-only send without typing text', () => {
     useChatStore.setState({ pendingImages: ['data:image/png;base64,AAA'] });
     const send = vi.fn();

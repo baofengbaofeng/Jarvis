@@ -24,7 +24,7 @@ export function AuditLogView() {
         </select>
         <button onClick={() => void onExport('csv')}>{t('audit.export')} CSV</button>
       </div>
-      <table className="audit-log__table">
+      <table className="data-table audit-log__table">
         <thead><tr><th>{t('audit.col.ts')}</th><th>{t('audit.col.kind')}</th><th>{t('audit.col.action')}</th><th>{t('audit.col.result')}</th></tr></thead>
         <tbody>{entries.map((e, i) => (
           <tr key={i} data-testid="audit-row"><td>{e.ts}</td><td>{e.kind}</td><td>{e.action}</td><td>{e.result}</td></tr>

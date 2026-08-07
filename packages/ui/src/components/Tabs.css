@@ -1,0 +1,33 @@
+.jui-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.jui-tabs__tab {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.jui-tabs__tab:hover {
+  color: var(--fg);
+}
+
+.jui-tabs__tab--active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.jui-tabs__panel {
+  padding: var(--space-2) 0;
+}

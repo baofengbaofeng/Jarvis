@@ -14,7 +14,7 @@ export function UsageDashboard() {
       <div className="usage-dashboard__total">
         <span data-testid="usage-total-tokens">{summary.total.totalTokens}</span> {t('usage.totalTokens')} / {summary.total.calls} {t('usage.col.calls')}
       </div>
-      <table className="usage-dashboard__table">
+      <table className="data-table usage-dashboard__table">
         <thead>
           <tr>
             <th>{t('usage.col.agent')}</th>
