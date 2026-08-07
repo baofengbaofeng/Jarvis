@@ -10,6 +10,7 @@ import {
   type ImportStrategy,
   type ProviderExport,
 } from '@jarvis/core';
+import { isAllowedSettingsKey, requiresSystemConfirm, validateSettingsValue } from './settings-schema';
 
 // Only persist settings whose value round-trips through JSON.stringify. Values
 // exported from the settings table already came from JSON.parse, so in practice
@@ -117,7 +118,20 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
 
         const insS = db.prepare('INSERT OR REPLACE INTO settings (key, value_json) VALUES (?,?)');
         for (const [k, v] of Object.entries(payload.settings ?? {})) {
-          const json = toJson(v);
+          if (!isAllowedSettingsKey(k)) {
+            skipped.push(`settings:${k}`);
+            continue;
+          }
+          if (requiresSystemConfirm(k, v)) {
+            skipped.push(`settings:${k}`);
+            continue;
+          }
+          const chk = validateSettingsValue(k, v);
+          if (!chk.ok) {
+            skipped.push(`settings:${k}`);
+            continue;
+          }
+          const json = toJson(chk.value);
           if (json !== null) insS.run(k, json);
         }
       })();

@@ -105,7 +105,12 @@ export function createTaskEngineRuntime(
       const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(req.agent.id, '') as Array<{ server_id: string; tool_name: string }>;
       const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
       const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] });
-      if (decision === 'allow' && req.toolName !== 'git_commit') return true;
+      if (decision === 'allow') return true;
+      if (decision === 'deny') {
+        appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok: false, reason: 'denied_by_policy' } });
+        auditSink.write({ ts: new Date().toISOString(), kind: 'tool_call', actor: 'agent', action: req.toolName, target: String(req.args).slice(0, 200), result: 'denied' });
+        return false;
+      }
       const ok = await approval.request(req);
       appendAudit(db, { agentId: req.agent.id, kind: 'approval', detail: { toolName: req.toolName, ok } });
       if (!ok) {

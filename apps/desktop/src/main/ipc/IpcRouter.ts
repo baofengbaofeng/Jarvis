@@ -6,6 +6,7 @@ import { exportSessionMarkdown, IndexStore, hashEmbedding, substituteTemplate, t
 import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile, createSnapshotStore } from './coding';
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
+import { validateSettingsValue, requiresSystemConfirm } from './settings-schema';
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
 import { createAgentTemplatesIpc } from './agent-templates';
@@ -413,9 +414,23 @@ export class IpcRouter {
     // is enforced inside registerSquadIpc, so no ipcMain rejection leaks.
     registerSquadIpc((ch, h) => this.register(ch, h), { db: this.db, getWindow: () => BrowserWindow.getFocusedWindow(), runner: tasks.squad });
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
-    this.register(IpcChannel.settingsSet, (_e, key, value) => { settings.set(key as string, value); });
+    this.register(IpcChannel.settingsSet, (_e, key, value) => {
+      const k = key as string;
+      if (requiresSystemConfirm(k, value)) {
+        return { ok: false as const, error: 'SETTINGS_SYSTEM_CONFIRM_REQUIRED' };
+      }
+      const chk = validateSettingsValue(k, value);
+      if (!chk.ok) return { ok: false as const, error: chk.error };
+      settings.set(k, chk.value);
+      return { ok: true as const };
+    });
     this.register('proxy.get', () => settings.getAll().proxy_json ?? { mode: 'none' });
-    this.register('proxy.set', (_e, cfg: unknown) => { settings.set('proxy_json', cfg); return { ok: true }; });
+    this.register('proxy.set', (_e, cfg: unknown) => {
+      const chk = validateSettingsValue('proxy_json', cfg);
+      if (!chk.ok) return { ok: false as const, error: chk.error };
+      settings.set('proxy_json', chk.value);
+      return { ok: true };
+    });
     // C12 (M8 Task 6): config import/export. Export serializes the providers/
     // models/agents/settings tables (apiKeyRef only, never plaintext keys);
     // import applies a skip/overwrite/merge strategy over the same tables.
