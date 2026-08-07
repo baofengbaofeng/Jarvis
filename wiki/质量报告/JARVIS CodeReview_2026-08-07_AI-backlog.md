@@ -171,6 +171,27 @@ items:
     files: [package.json]
     red: ["test:functional without --pass-with-no-tests"]
     validation: ["rg -n pass-with-no-tests package.json && exit 1 || true"]
+
+  - id: DESK-11
+    severity: high
+    status: fixed
+    files: [apps/desktop/src/main/db/migrations.ts]
+    red: ["failed migration version leaves no partial_table and no version row"]
+    validation: ["pnpm --dir apps/desktop vitest run src/main/db/migrations.spec.ts"]
+
+  - id: DESK-13
+    severity: high
+    status: fixed
+    files: [apps/desktop/src/main/wipe/WipeService.ts, apps/desktop/src/main/ipc/IpcRouter.ts]
+    red: ["live root outside fence not deleted", "workspace path resolved at wipe time"]
+    validation: ["pnpm --dir apps/desktop vitest run src/main/wipe/WipeService.spec.ts"]
+
+  - id: CORE-16
+    severity: medium
+    status: fixed
+    files: [packages/core/src/util/sse.ts]
+    red: ["early break releases reader", "multi-line data: merged"]
+    validation: ["cd packages/core && pnpm vitest run src/util/sse.spec.ts src/model/adapters"]
 ```
 
 ## Protocol
