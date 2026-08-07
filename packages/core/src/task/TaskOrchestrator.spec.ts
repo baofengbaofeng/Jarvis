@@ -62,6 +62,52 @@ describe('TaskOrchestrator', () => {
     expect(states).toContain('completed');
   });
 
+  it('stops further model/tool calls while paused until resume (CORE-22)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    let chatCalls = 0;
+    let toolCalls = 0;
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((res) => { releaseFirst = res; });
+    const engine = new AgentEngine({
+      modelRouter: {
+        chat: async (_r, o) => {
+          chatCalls++;
+          if (chatCalls === 1) {
+            await firstGate;
+            o.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 't1', name: 'echo', arguments: {} }] });
+            o.onChunk?.({ kind: 'done' });
+            return { text: '', usage: null };
+          }
+          o.onChunk?.({ kind: 'delta', delta: 'done' });
+          o.onChunk?.({ kind: 'done' });
+          return { text: 'done', usage: null };
+        }
+      },
+      toolRegistry: reg,
+      maxSteps: 3,
+    });
+    // Count tool executions via a wrapping registry execute — register already did.
+    const orig = reg.execute.bind(reg);
+    reg.execute = async (call, ctx) => { toolCalls++; return orig(call, ctx); };
+    const { store } = makeStore();
+    let doneRes!: () => void;
+    const done = new Promise<void>((res) => { doneRes = res; });
+    const orb = new TaskOrchestrator(engine, store, { onDone: () => doneRes() }, 1);
+    orb.submit({ id: 't1', agent, messages: [{ role: 'user', content: 'x' }], cwd: '/', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    await new Promise(r => setTimeout(r, 0));
+    await orb.pause('t1');
+    releaseFirst();
+    // While paused, the first chat may finish but tool + next model must wait.
+    await new Promise(r => setTimeout(r, 30));
+    expect(toolCalls).toBe(0);
+    expect(chatCalls).toBe(1);
+    orb.resume('t1');
+    await done;
+    expect(toolCalls).toBe(1);
+    expect(chatCalls).toBe(2);
+  });
+
   it('cancel applies the store write to a paused task', async () => {
     const reg = new ToolRegistry();
     // A never-resolving chat keeps the task in 'running' so pause is observed.

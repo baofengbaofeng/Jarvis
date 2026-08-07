@@ -36,6 +36,9 @@ export interface EngineRunInput {
   // CORE-19: per-run tool visibility (plan-only filter, etc.). Must not live on
   // the shared engine instance — concurrent tasks would race a mutable field.
   visibleTools?: string[];
+  // CORE-22: cooperative pause — resolves when the run is not paused (or when
+  // resumed). Awaited before each model step and each tool execution.
+  waitIfPaused?: () => Promise<void>;
 }
 
 export class AgentEngine {
@@ -43,13 +46,16 @@ export class AgentEngine {
   constructor(private cfg: AgentEngineConfig) { this.maxSteps = cfg.maxSteps ?? 10; }
 
   async run(input: EngineRunInput): Promise<TaskResult> {
-    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy, visibleTools } = input;
+    const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy, visibleTools, waitIfPaused } = input;
     const working: ModelMessage[] = [...messages];
     let toolCalls = 0;
     const usageParts: Usage[] = [];
     let finalText = '';
 
     for (let step = 0; step < this.maxSteps; step++) {
+      // CORE-22: do not start another model call while the task is paused.
+      await waitIfPaused?.();
+      if (signal?.aborted) throw new Error('aborted');
       const allTools = this.cfg.toolRegistry.list();
       // CORE-19: filter from this run's input, not shared engine state.
       const visible = visibleTools
@@ -99,6 +105,9 @@ export class AgentEngine {
       working.push(assistantTurn);
 
       for (const call of calls) {
+        // CORE-22: do not execute tools while the task is paused.
+        await waitIfPaused?.();
+        if (signal?.aborted) throw new Error('aborted');
         toolCalls++;
         // CORE-03: truncated/invalid tool JSON must not execute as `{}`. Feed
         // the parse error back to the model as a tool result and skip execute.
