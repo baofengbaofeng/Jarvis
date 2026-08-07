@@ -114,6 +114,10 @@ export class McpClient {
 
 export function createMcpClient(command: string, args: string[], serverName: string, deps: McpClientDeps = {}): McpClient {
   const client = new McpClient(deps, serverName);
-  client.attach(createStdioTransport(command, args, deps.spawnImpl));
+  // CORE-09: child error/exit must not crash main; CORE-08: reject pending on exit.
+  client.attach(createStdioTransport(command, args, deps.spawnImpl, {
+    onError: (err) => { client.rejectAllPending(`McpClient(${serverName}): ${err.message}`); },
+    onClose: () => { client.rejectAllPending(`McpClient(${serverName}): child exited`); },
+  }));
   return client;
 }
