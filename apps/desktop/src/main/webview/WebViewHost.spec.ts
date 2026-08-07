@@ -47,10 +47,12 @@ function fakeWindowFactory() {
   };
 }
 
+const allowAll = async () => {};
+
 describe('WebViewHost', () => {
   it('closes the previous window before opening a new one', async () => {
     const { windows, createWindow } = fakeWindowFactory();
-    const host = new WebViewHost({ createWindow });
+    const host = new WebViewHost({ createWindow, assertAllowedUrl: allowAll });
 
     await host.open('https://a.example');
     await host.open('https://b.example');
@@ -62,7 +64,7 @@ describe('WebViewHost', () => {
 
   it('the first window is closed by the second open, not orphaned', async () => {
     const { windows, createWindow } = fakeWindowFactory();
-    const host = new WebViewHost({ createWindow });
+    const host = new WebViewHost({ createWindow, assertAllowedUrl: allowAll });
 
     await host.open('https://a.example');
     const first = windows[0];
@@ -79,7 +81,7 @@ describe('WebViewHost', () => {
 
   it('a stale window close event does not null the reference to the current window', async () => {
     const { windows, createWindow } = fakeWindowFactory();
-    const host = new WebViewHost({ createWindow });
+    const host = new WebViewHost({ createWindow, assertAllowedUrl: allowAll });
 
     await host.open('https://a.example');
     await host.open('https://b.example');
@@ -119,5 +121,10 @@ describe('WebViewHost', () => {
     await expect(host.open('https://internal.example')).rejects.toThrow('URL_PRIVATE_ADDRESS');
     expect(windows).toHaveLength(0);
     expect(host.isOpen()).toBe(false);
+  });
+
+  it('requires assertAllowedUrl (DESK-10 fail-closed)', () => {
+    const { createWindow } = fakeWindowFactory();
+    expect(() => new WebViewHost({ createWindow } as never)).toThrow('WEBVIEW_POLICY_REQUIRED');
   });
 });
