@@ -160,14 +160,14 @@ items:
 
   - id: TEST-02
     severity: high
-    status: open
+    status: fixed
     files: [test/1.0.0-Preview/suites]
     red: ["no test.skip(true) on feature-failure paths"]
     validation: ["rg -n 'test.skip\\(true' test/1.0.0-Preview/suites && exit 1 || true"]
 
   - id: TEST-03
     severity: high
-    status: open
+    status: fixed
     files: [package.json]
     red: ["test:functional without --pass-with-no-tests"]
     validation: ["rg -n pass-with-no-tests package.json && exit 1 || true"]
