@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { CONFIG_SCHEMA_VERSION } from '@jarvis/protocol';
 import {
   buildExport,
   validateSchema,
   planImport,
   mergeEntity,
   redactExportSettings,
-  CURRENT_SCHEMA,
+  LEGACY_CONFIG_SCHEMA_VERSION,
   type ExportPayload,
   type ProviderExport,
   type AgentExport,
@@ -13,7 +14,7 @@ import {
 
 describe('transfer', () => {
   const payload: ExportPayload = {
-    schemaVersion: CURRENT_SCHEMA,
+    schemaVersion: CONFIG_SCHEMA_VERSION,
     exportedAt: '2026-08-03T00:00:00Z',
     providers: [{ id: 'p1', name: 'Provider 1', type: 'openai-compatible', baseUrl: 'https://x.example', apiKeyRef: 'keychain:p1' }],
     models: [],
@@ -30,12 +31,15 @@ describe('transfer', () => {
     );
     expect(e.providers[0].apiKeyRef).toBe('keychain:p1');
     expect(e.providers[0].name).toBe('Provider 1');
+    expect(e.schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
     expect(JSON.stringify(e)).not.toContain('sk-');
   });
 
-  it('validateSchema rejects future versions', () => {
-    expect(validateSchema({ ...payload, schemaVersion: CURRENT_SCHEMA + 1 }).ok).toBe(false);
+  it('validateSchema rejects future versions and accepts legacy numeric schema', () => {
+    expect(validateSchema({ ...payload, schemaVersion: '2.0.0' }).ok).toBe(false);
+    expect(validateSchema({ ...payload, schemaVersion: LEGACY_CONFIG_SCHEMA_VERSION + 1 }).ok).toBe(false);
     expect(validateSchema(payload).ok).toBe(true);
+    expect(validateSchema({ ...payload, schemaVersion: LEGACY_CONFIG_SCHEMA_VERSION }).ok).toBe(true);
   });
 
   it('validateSchema rejects non-object payloads instead of throwing', () => {

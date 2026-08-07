@@ -1,0 +1,31 @@
+appId: com.jarvis.app
+productName: Jarvis
+directories:
+  output: ../../dist
+  buildResources: resources
+files:
+  - out/**
+  - resources/**
+  - package.json
+asar: true
+npmRebuild: true
+
+win:
+  target:
+    - target: msi
+      arch: [x64]
+  artifactName: Jarvis_${version}_x86.${ext}
+
+msi:
+  oneClick: false
+  perMachine: true
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: Jarvis_${version}_${arch}.${ext}
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null

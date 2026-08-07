@@ -14,6 +14,12 @@
     "e2e:electron:ci": "electron-vite build && electron-rebuild -f -w better-sqlite3 && playwright test --project=electron",
     "typecheck": "tsc --noEmit",
     "build:daemon": "cd ../../daemon && go build -o ../apps/desktop/resources/daemon/jarvis-daemon ./cmd/jarvis-daemon",
+    "build:daemon:win": "cd ../../daemon && GOOS=windows GOARCH=amd64 go build -trimpath -o ../apps/desktop/resources/daemon/jarvis-daemon.exe ./cmd/jarvis-daemon",
+    "build:daemon:darwin:x64": "cd ../../daemon && GOOS=darwin GOARCH=amd64 go build -trimpath -o ../apps/desktop/resources/daemon/jarvis-daemon ./cmd/jarvis-daemon",
+    "build:daemon:darwin:arm64": "cd ../../daemon && GOOS=darwin GOARCH=arm64 go build -trimpath -o ../apps/desktop/resources/daemon/jarvis-daemon ./cmd/jarvis-daemon",
+    "package:win": "electron-builder --win msi --x64",
+    "package:mac:x64": "electron-builder --mac dmg --x64",
+    "package:mac:arm64": "electron-builder --mac dmg --arm64",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3"
   },

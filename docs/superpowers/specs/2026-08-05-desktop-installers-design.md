@@ -9,9 +9,9 @@
 
 | 平台 | 架构 | 安装包文件 | 指纹文件 |
 |---|---|---|---|
-| Windows | x64（文件名写作 `x86`） | `Jarvis_1.0.0_Preview_x86.msi` | `Jarvis_1.0.0_Preview_x86.msi.sha256` |
-| macOS | x64（Intel） | `Jarvis_1.0.0_Preview_x64.dmg` | `Jarvis_1.0.0_Preview_x64.dmg.sha256` |
-| macOS | arm64（Apple Silicon） | `Jarvis_1.0.0_Preview_arm64.dmg` | `Jarvis_1.0.0_Preview_arm64.dmg.sha256` |
+| Windows | x64（文件名写作 `x86`） | `Jarvis_1.0.0-Preview_x86.msi` | `Jarvis_1.0.0-Preview_x86.msi.sha256` |
+| macOS | x64（Intel） | `Jarvis_1.0.0-Preview_x64.dmg` | `Jarvis_1.0.0-Preview_x64.dmg.sha256` |
+| macOS | arm64（Apple Silicon） | `Jarvis_1.0.0-Preview_arm64.dmg` | `Jarvis_1.0.0-Preview_arm64.dmg.sha256` |
 
 指纹内容统一为 `<64位SHA256哈希>  <文件名>`（GNU `sha256sum` 兼容格式），算法为 SHA-256。
 
@@ -22,7 +22,7 @@
 3. **指纹算法**：SHA-256，指纹文件为 `.sha256`。
 4. **macOS 产物形态**：按架构拆分为两个 dmg（不做 universal 单文件）。
 5. **方案范围**：Windows MSI 与 macOS 双 dmg 在同一方案中一次完成。
-6. **版本号**：仓库中 `apps/desktop/package.json` 统一为 `1.0.0-Preview`；`1.0.0-Preview` 仅在打包时通过 `-c.extraMetadata.version` 注入，文件名保留 `1.0.0_Preview` 字样。MSI 的 ProductVersion 由 electron-builder 从注入版本派生，正常会取数字部分 `1.0.0`（Windows 安装器元数据不允许预发布后缀）；若实现时发现 electron-builder 对 `1.0.0-Preview` 的 MSI 目标报错，则 MSI job 改为注入 `1.0.0`，`_Preview` 只体现在文件名——文件名与 `.sha256` 文件名不受影响。
+6. **版本号**：仓库与各 workspace `package.json` 统一为 `1.0.0-Preview`。electron-builder 的 `${version}` 直接展开为 `1.0.0-Preview`，**产物文件名不再做下划线替换**（统一为 `Jarvis_1.0.0-Preview_x86.msi` 等）。MSI 的 ProductVersion 由 electron-builder 从 semver 派生，正常取数字部分 `1.0.0`（Windows 安装器元数据不允许预发布后缀）；若 MSI 目标对 `1.0.0-Preview` 报错，则 MSI job 改为注入 `1.0.0`，`-Preview` 仍保留在文件名中。
 
 ## 3. 关键约束与事实
 
@@ -73,7 +73,7 @@ mac:
 
 说明：
 - `files` 白名单只打包 `out/`、`resources/`、`package.json` 及生产依赖 node_modules，避免把 `src/`、测试文件带进安装包。
-- `${version}` 展开为 `1.0.0-Preview`（CI 注入），最终文件名里的 `_` 由 CI 重命名步骤完成（见 4.4）。
+- `${version}` 来自 `apps/desktop/package.json`（`1.0.0-Preview`），`artifactName` 直接产出最终文件名，无需 CI 重命名步骤。
 
 ### 4.2 `apps/desktop/src/main/daemon/DaemonSupervisor.ts`（改一行）
 
@@ -109,20 +109,20 @@ constructor(private binaryPath = join(import.meta.dirname, '../../../resources/d
 3. `pnpm build`（turbo 构建所有包）
 4. `cd apps/desktop && pnpm build:daemon:win`
 5. `cd apps/desktop && npx electron-builder install-app-deps`（按 Electron ABI + x64 重建 better-sqlite3；pnpm monorepo 下的可靠路径）
-6. `cd apps/desktop && npx electron-builder --win msi --x64 -c.extraMetadata.version=1.0.0-Preview`
-7. 重命名 + 生成指纹（pwsh；**无 `working-directory`，从仓库根目录运行**，用 `$env:GITHUB_WORKSPACE` 绝对定位 `dist/`）：
+6. `cd apps/desktop && npx electron-builder --win msi --x64`
+7. 生成指纹（pwsh；**无 `working-directory`，从仓库根目录运行**）：
 
    ```powershell
    $dist = "$env:GITHUB_WORKSPACE\dist"
-   $src = Get-ChildItem "$dist\*.msi" | Select-Object -First 1
-   Rename-Item $src.FullName "$dist\Jarvis_1.0.0_Preview_x86.msi"
-   $h = (Get-FileHash -Algorithm SHA256 "$dist\Jarvis_1.0.0_Preview_x86.msi").Hash.ToLower()
-   "$h  Jarvis_1.0.0_Preview_x86.msi" | Set-Content -Encoding ascii "$dist\Jarvis_1.0.0_Preview_x86.msi.sha256"
+   $msi = Join-Path $dist "Jarvis_1.0.0-Preview_x86.msi"
+   $h = (Get-FileHash -Algorithm SHA256 $msi).Hash.ToLower()
+   "$h  Jarvis_1.0.0-Preview_x86.msi" | Set-Content -Encoding ascii "$dist\Jarvis_1.0.0-Preview_x86.msi.sha256"
+   node scripts/release/verify-artifacts.mjs
    ```
 
 8. `actions/upload-artifact@v4` 上传 msi + sha256
 
-> 注：electron-builder 在 `apps/desktop` 下执行，`directories.output: ../../dist` 使产物落到**仓库根目录 `dist/`**；CI 全新 checkout 中该目录由 electron-builder 自动创建。产物重命名/指纹/上传步骤均在仓库根目录执行，统一用 `$env:GITHUB_WORKSPACE`（win）/ `$GITHUB_WORKSPACE`（mac）定位，不依赖隐式工作目录。
+> 注：electron-builder 在 `apps/desktop` 下执行，`directories.output: ../../dist` 使产物落到**仓库根目录 `dist/`**。指纹与 `verify-artifacts` 在仓库根目录执行，统一用 `$GITHUB_WORKSPACE` 定位。
 
 **job `macos-dmg`（一个 macOS runner，顺序构建两个架构）：**
 
@@ -132,25 +132,24 @@ constructor(private binaryPath = join(import.meta.dirname, '../../../resources/d
 4. **x64 构建**：
    - `cd apps/desktop && pnpm build:daemon:darwin:x64`
    - `cd apps/desktop && npx electron-builder install-app-deps`
-   - `cd apps/desktop && npx electron-builder --mac dmg --x64 -c.extraMetadata.version=1.0.0-Preview`
-   - 重命名 + 指纹（bash；从仓库根目录运行，`$GITHUB_WORKSPACE` 定位）：
+   - `cd apps/desktop && npx electron-builder --mac dmg --x64`
+   - 指纹（bash；从仓库根目录运行）：
 
      ```bash
      cd "$GITHUB_WORKSPACE/dist"
-     mv Jarvis_1.0.0-Preview_x64.dmg Jarvis_1.0.0_Preview_x64.dmg
-     shasum -a 256 Jarvis_1.0.0_Preview_x64.dmg > Jarvis_1.0.0_Preview_x64.dmg.sha256
+     shasum -a 256 Jarvis_1.0.0-Preview_x64.dmg > Jarvis_1.0.0-Preview_x64.dmg.sha256
      ```
 
 5. **arm64 构建（重新编译 daemon！）**：
    - `cd apps/desktop && pnpm build:daemon:darwin:arm64`
    - `cd apps/desktop && npx electron-builder install-app-deps`
-   - `cd apps/desktop && npx electron-builder --mac dmg --arm64 -c.extraMetadata.version=1.0.0-Preview`
-   - 重命名 + 指纹：
+   - `cd apps/desktop && npx electron-builder --mac dmg --arm64`
+   - 指纹：
 
      ```bash
      cd "$GITHUB_WORKSPACE/dist"
-     mv Jarvis_1.0.0-Preview_arm64.dmg Jarvis_1.0.0_Preview_arm64.dmg
-     shasum -a 256 Jarvis_1.0.0_Preview_arm64.dmg > Jarvis_1.0.0_Preview_arm64.dmg.sha256
+     shasum -a 256 Jarvis_1.0.0-Preview_arm64.dmg > Jarvis_1.0.0-Preview_arm64.dmg.sha256
+     node "$GITHUB_WORKSPACE/scripts/release/verify-artifacts.mjs"
      ```
 
 6. `actions/upload-artifact@v4` 上传两个 dmg + 两个 sha256
@@ -169,14 +168,14 @@ CI 上传的 6 个文件（msi + 2 dmg + 3 sha256）从 GitHub Actions 页面手
 
 - **版本号未传**：workflow 输入默认 `1.0.0-Preview`。
 - **原生模块预编译缺失**：better-sqlite3 若缺某架构 prebuild，electron-builder 会退回本机编译——Windows runner 自带 MSVC、macOS runner 自带 clang，可编译；但**跨架构本机编译不可行**，此时对应架构构建会报错失败，属于预期内硬失败，会在 CI 日志中明确暴露。
-- **重命名冲突**：Windows job 用 `Get-ChildItem | Select-Object -First 1` 防止产物命名不确定导致脚本出错。
+- **重命名冲突**：产物文件名由 `electron-builder.yml` 的 `artifactName` 固定，不再依赖 `Get-ChildItem` 重命名。
 - **daemon 二进制未编译就打包**：会静默打进旧/错误架构二进制。CI 步骤顺序保证每次打包前都重编译 daemon（见 4.4），不得重排。
 - **本地 `resources/daemon/jarvis-daemon` 是 gitignore 的**：本地开发机器上的二进制不会污染 CI（CI 全新 checkout）。
 
 ## 6. 验证方式
 
 1. **构建层**：CI 三个产物（msi + 2 dmg）与三个 `.sha256` 全部产出并成功上传。
-2. **指纹校验**：下载后本地执行 `shasum -a 256 -c Jarvis_1.0.0_Preview_x64.dmg.sha256`（Windows 用 `Get-FileHash` 对比），哈希一致。
+2. **指纹校验**：下载后本地执行 `shasum -a 256 -c Jarvis_1.0.0-Preview_x64.dmg.sha256`（Windows 用 `Get-FileHash` 对比），哈希一致；或运行 `node scripts/release/verify-artifacts.mjs`（读取 `dist/`）。
 3. **安装层（Windows）**：在一台 Windows 机器上安装 msi，确认应用启动、daemon 进程拉起（健康检查端口 17890），确认 `resources/daemon/jarvis-daemon.exe` 存在于安装目录。
 4. **安装层（macOS）**：挂载 dmg 拷贝 App，右键→打开（未签名预览包），确认 daemon 拉起。
 5. **架构校验**：对每个包内 daemon 执行 `file` 确认 Mach-O 架构（`x86_64` / `arm64`）与包名匹配——用于捕获 4.4 中"打进错误架构 daemon"的问题。

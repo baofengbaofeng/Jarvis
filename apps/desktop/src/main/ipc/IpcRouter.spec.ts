@@ -17,7 +17,12 @@ vi.mock('electron', () => ({
   app: { relaunch: vi.fn(), quit: vi.fn() },
   ipcMain: { handle: vi.fn() },
   BrowserWindow: { getFocusedWindow: () => null },
-  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() }
+  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: vi.fn(),
+    decryptString: vi.fn(),
+  },
 }));
 
 // M6 Task 1 (L12) review fix: IpcRouter.registerAll subscribes the SHARED bus
@@ -487,7 +492,7 @@ describe('IpcRouter config channels (C12)', () => {
     db.prepare("INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES ('p1', 'P1', 'openai-compatible', 'https://old.example', 'keychain:p1', '2026-08-01', '2026-08-01')").run();
   };
 
-  it('config.export serializes providers with schemaVersion 12 and no plaintext keys', async () => {
+  it('config.export serializes providers with schemaVersion 1.0.0-Preview and no plaintext keys', async () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
@@ -495,11 +500,11 @@ describe('IpcRouter config channels (C12)', () => {
     const exportCfg = handlers.get('config.export')!;
     seed();
     const out = await exportCfg({}, 'json') as string;
-    expect(out).toContain('"schemaVersion": 12');
+    expect(out).toContain('"schemaVersion": "1.0.0-Preview"');
     expect(out).toContain('"apiKeyRef": "keychain:p1"');
     expect(out).not.toContain('sk-');
     const yaml = await exportCfg({}, 'yaml') as string;
-    expect(yaml).toContain('schemaVersion: 12');
+    expect(yaml).toContain('schemaVersion: 1.0.0-Preview');
   });
 
   it('rejects config.export when search migration is blocked', async () => {
@@ -524,7 +529,7 @@ describe('IpcRouter config channels (C12)', () => {
     // baseUrl; a brand-new provider and a settings row are created.
     seed();
     const payload = JSON.stringify({
-      schemaVersion: 12, exportedAt: '2026-08-05T00:00:00Z',
+      schemaVersion: '1.0.0-Preview', exportedAt: '2026-08-05T00:00:00Z',
       providers: [
         { id: 'p1', name: 'P1', type: 'openai-compatible', baseUrl: 'https://new.example', apiKeyRef: '' },
         { id: 'p2', name: 'P2', type: 'anthropic-compatible', baseUrl: 'https://p2.example', apiKeyRef: 'keychain:p2' },
@@ -573,7 +578,7 @@ describe('IpcRouter config channels (C12)', () => {
     db.prepare("INSERT INTO models (id, provider_id, model_id, name, created_at) VALUES ('m1', 'p1', 'gpt-test', 'M1', '2026-08-01')").run();
     db.prepare("INSERT INTO agents (id, name, slug, model_id, created_at, updated_at) VALUES ('a1', 'A1', 'a-1', 'm1', '2026-08-01', '2026-08-01')").run();
     const payload = JSON.stringify({
-      schemaVersion: 12, exportedAt: '2026-08-05T00:00:00Z',
+      schemaVersion: '1.0.0-Preview', exportedAt: '2026-08-05T00:00:00Z',
       providers: [], models: [],
       agents: [{ id: 'a1', name: 'A1 renamed', slug: 'a-1' }],
       settings: {},
@@ -594,7 +599,7 @@ describe('IpcRouter config channels (C12)', () => {
     const importCfg = handlers.get('config.import')!;
     seed();
     const payload = JSON.stringify({
-      schemaVersion: 12, exportedAt: '2026-08-05T00:00:00Z',
+      schemaVersion: '1.0.0-Preview', exportedAt: '2026-08-05T00:00:00Z',
       providers: [{ id: 'p1', name: 'Changed', type: 'openai-compatible', baseUrl: 'https://new.example', apiKeyRef: '' }],
       models: [], agents: [], settings: {},
     });
