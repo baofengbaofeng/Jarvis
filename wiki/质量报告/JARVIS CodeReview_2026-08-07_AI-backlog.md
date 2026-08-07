@@ -132,14 +132,14 @@ items:
 
   - id: CORE-19
     severity: high
-    status: open
+    status: fixed
     files: [packages/core/src/agent/AgentEngine.ts, apps/desktop/src/main/ipc/tasks.ts]
     red: ["two concurrent runs keep distinct visibleTools"]
     validation: ["cd packages/core && pnpm vitest run src/agent"]
 
   - id: CORE-22
     severity: medium
-    status: open
+    status: fixed
     files: [packages/core/src/task/TaskOrchestrator.ts, packages/core/src/agent/AgentEngine.ts]
     red: ["pause stops further model/tool calls"]
     validation: ["cd packages/core && pnpm vitest run src/task"]
