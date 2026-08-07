@@ -184,4 +184,63 @@ describe('anthropic adapter', () => {
     expect(capturedBody!.messages![1].content).toEqual([{ type: 'tool_use', id: 'toolu_1', name: 'ls', input: {} }]);
   });
 
+  it('parses a streamed tool_use block with input_json_delta fragments into a tool_call chunk', async () => {
+    const adapter = createAdapter('anthropic-compatible', { fetchImpl: mockFetch([
+      'event: content_block_start',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me check"}}',
+      '',
+      'event: content_block_stop',
+      'data: {"type":"content_block_stop","index":0}',
+      '',
+      'event: content_block_start',
+      'data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{}}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"city\\":"}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\"SF\\"}"}}',
+      '',
+      'event: content_block_stop',
+      'data: {"type":"content_block_stop","index":1}',
+      '',
+      'event: message_delta',
+      'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}',
+      '',
+      'event: message_stop',
+      'data: {"type":"message_stop"}'
+    ]) });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'anthropic-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true
+    };
+    const text: string[] = [];
+    const calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
+    await adapter.chat(req, { apiKey: 'sk-ant-test', onChunk: (c) => {
+      if (c.kind === 'delta') text.push(c.delta);
+      if (c.kind === 'tool_call') calls.push(...c.toolCalls);
+    } });
+    expect(text.join('')).toBe('Let me check');
+    expect(calls).toEqual([{ id: 'toolu_1', name: 'get_weather', arguments: { city: 'SF' } }]);
+  });
+
+  it('emits a tool_use call whose content_block_stop never arrives', async () => {
+    const adapter = createAdapter('anthropic-compatible', { fetchImpl: mockFetch([
+      'event: content_block_start',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_9","name":"ls","input":{}}}',
+      '',
+      'event: message_stop',
+      'data: {"type":"message_stop"}'
+    ]) });
+    const req: ChatRequest = {
+      provider: { id: 'p1', name: 'p', type: 'anthropic-compatible', baseUrl: 'https://api.example.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' },
+      modelId: 'my-model', messages: [{ role: 'user', content: 'hi' }], stream: true
+    };
+    const calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
+    await adapter.chat(req, { apiKey: 'sk-ant-test', onChunk: (c) => { if (c.kind === 'tool_call') calls.push(...c.toolCalls); } });
+    expect(calls).toEqual([{ id: 'toolu_9', name: 'ls', arguments: {} }]);
+  });
 });

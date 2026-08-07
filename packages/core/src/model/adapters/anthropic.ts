@@ -35,13 +35,39 @@ export class AnthropicAdapter implements ProviderAdapter {
     });
     if (!res.ok) throw new Error(`anthropic http ${res.status}: ${await res.text()}`);
     let inputTokens = 0;
+    // CORE-02: tool_use arrives as its own content block — the id/name land in
+    // content_block_start and the arguments stream in as input_json_delta
+    // fragments, keyed by block index.
+    const toolBlocks = new Map<number, { id: string; name: string; json: string }>();
+    const emitToolCall = (acc: { id: string; name: string; json: string }) => {
+      ctx.onChunk({ kind: 'tool_call', toolCalls: [{ id: acc.id, name: acc.name, arguments: safeParseJson(acc.json) }] });
+    };
     for await (const data of parseSSE(res.body)) {
-      const parsed = JSON.parse(data) as { type?: string; delta?: { type?: string; text?: string }; message?: { usage?: { input_tokens?: number } }; usage?: { output_tokens?: number } };
+      const parsed = JSON.parse(data) as {
+        type?: string;
+        index?: number;
+        content_block?: { type?: string; id?: string; name?: string };
+        delta?: { type?: string; text?: string; partial_json?: string };
+        message?: { usage?: { input_tokens?: number } };
+        usage?: { output_tokens?: number };
+      };
       if (parsed.type === 'message_start' && parsed.message?.usage?.input_tokens !== undefined) {
         inputTokens = parsed.message.usage.input_tokens;
       }
+      if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+        toolBlocks.set(parsed.index ?? 0, { id: parsed.content_block.id ?? '', name: parsed.content_block.name ?? '', json: '' });
+      }
       if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta' && parsed.delta.text) {
         ctx.onChunk({ kind: 'delta', delta: parsed.delta.text });
+      }
+      if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta' && parsed.delta.partial_json) {
+        const acc = toolBlocks.get(parsed.index ?? 0);
+        if (acc) acc.json += parsed.delta.partial_json;
+      }
+      if (parsed.type === 'content_block_stop') {
+        const idx = parsed.index ?? 0;
+        const acc = toolBlocks.get(idx);
+        if (acc) { toolBlocks.delete(idx); emitToolCall(acc); }
       }
       if (parsed.type === 'message_stop') break;
       if (parsed.type === 'message_delta' && parsed.usage?.output_tokens !== undefined) {
@@ -49,6 +75,9 @@ export class AnthropicAdapter implements ProviderAdapter {
         ctx.onChunk({ kind: 'usage', usage: { promptTokens: inputTokens, completionTokens: outputTokens, totalTokens: inputTokens + outputTokens } });
       }
     }
+    // A stream cut short after message_stop (or without the block's stop event)
+    // must not swallow the call the model already fully described.
+    for (const acc of toolBlocks.values()) emitToolCall(acc);
     ctx.onChunk({ kind: 'done' });
   }
 }
@@ -97,4 +126,8 @@ function toolResultContent(content: ModelMessage['content']): unknown {
   if (typeof content === 'string') return content || '(no output)';
   const normalized = normalizeContent(content, 'anthropic');
   return Array.isArray(normalized) && normalized.length > 0 ? normalized : '(no output)';
+}
+
+function safeParseJson(s: string): Record<string, unknown> {
+  try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
 }

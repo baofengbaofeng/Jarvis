@@ -5,8 +5,8 @@ import { ModelRouter } from '../model/router';
 import { createAdapter } from '../model/adapters/index';
 import type { AgentConfig } from '@jarvis/protocol';
 
-// CORE-01: the REACT loop's second request is built by the REAL adapters here
-// (no fake chat), so these specs fail if the tool round trip is not
+// CORE-01/CORE-02: the REACT loop's second request is built by the REAL adapters
+// here (no fake chat), so these specs fail if the tool round trip is not
 // representable on the wire — the exact shape a live provider validates.
 
 const agent: AgentConfig = { id: 'a1', name: 'A', slug: 'a', description: '', systemPrompt: '', modelId: 'm1', workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' };
@@ -66,6 +66,44 @@ describe('REACT tool round trip on the OpenAI wire format', () => {
       { role: 'user', content: 'weather in SF?' },
       { role: 'assistant', content: null, tool_calls: [{ id: 'call_abc', type: 'function', function: { name: 'get_weather', arguments: '{"city":"SF"}' } }] },
       { role: 'tool', content: '18C in SF', name: 'get_weather', tool_call_id: 'call_abc' }
+    ]);
+  });
+});
+
+describe('REACT tool round trip on the Anthropic wire format', () => {
+  it('parses the streamed tool_use block and replies with a linked tool_result', async () => {
+    const { fetchImpl, bodies } = scriptedFetch([
+      [
+        'event: content_block_start',
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_abc","name":"get_weather","input":{}}}',
+        '',
+        'event: content_block_delta',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"city\\":\\"SF\\"}"}}',
+        '',
+        'event: content_block_stop',
+        'data: {"type":"content_block_stop","index":0}',
+        '',
+        'event: message_stop',
+        'data: {"type":"message_stop"}'
+      ],
+      [
+        'event: content_block_delta',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"It is 18C."}}',
+        '',
+        'event: message_stop',
+        'data: {"type":"message_stop"}'
+      ]
+    ]);
+    const result = await run(buildEngine(fetchImpl), 'anthropic-compatible');
+
+    expect(result.text).toBe('It is 18C.');
+    expect(result.toolCalls).toBe(1);
+    expect(bodies).toHaveLength(2);
+    const second = bodies[1] as { messages: Array<{ role: string; content: unknown }> };
+    expect(second.messages).toEqual([
+      { role: 'user', content: 'weather in SF?' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_abc', name: 'get_weather', input: { city: 'SF' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_abc', content: '18C in SF' }] }
     ]);
   });
 });
