@@ -393,9 +393,11 @@ export class IpcRouter {
     // L18: `app.relaunch` does not exist on the preload surface — the renderer's
     // BackupPane invokes it after a restore, so expose it here (relaunch then quit).
     this.register('app.relaunch', () => { app.relaunch(); app.quit(); return { ok: true }; });
-    // L20 (M8 Task 5): sensitive-data wipe. The WipeService deletes the
-    // DEFAULT_WIPE_TABLES rows, then the Keychain API keys and the single-active
-    // workspace root when the scope asks for them. deleteAllApiKeys enumerates
+    // L20 (M8 Task 5) / DESK-13: sensitive-data wipe. The WipeService deletes
+    // the DEFAULT_WIPE_TABLES rows, then the Keychain API keys. Workspace
+    // removal uses a real-time getWorkspaceRoot (not a path captured at
+    // registerAll) and is fenced to ~/.jarvis/workspaces so live project roots
+    // bound as agent workspaces are never rmSync'd. deleteAllApiKeys enumerates
     // every persisted api_key_ref (providers + the settings image.api_key_ref)
     // and best-effort deletes each — a missing keychain item must not abort the
     // wipe (SecureStorage.delete throws when the item is absent).
@@ -411,7 +413,10 @@ export class IpcRouter {
         }
         return n;
       },
-    }, getWorkspace() ?? undefined);
+    }, {
+      getWorkspaceRoot: () => getWorkspace() ?? undefined,
+      workspaceFence: join(jarvisDataDir(), 'workspaces'),
+    });
     const wipeIpc = createWipeIpc(wipeSvc);
     this.register('wipe.run', (_e, scope, phrase) => wipeIpc.run(_e, scope as WipeScope, phrase as string));
     // M6 Task 3 (F8/F9): squad IPC. The runner from registerTaskHandlers drives
