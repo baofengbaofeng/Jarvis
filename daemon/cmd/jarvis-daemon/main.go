@@ -49,8 +49,11 @@ func main() {
 			AgentID:   "jarvis",
 			Exec:      agentExec(&client.SubprocessAgentInvoker{}, st, pool, client.DefaultSkillFS(), cs, acp.Injection{}),
 			Recorder:  &sqliteRecorder{},
+			Claims:    &sqliteClaimStore{},
 			Conflicts: cs,
 		}
+		// DAEM-02: re-queue Multica tasks that survived a previous crash as queued/running.
+		go recoverMulticaClaims(ctx, handler)
 		go func() {
 			defer func() {
 				// I1: once the Serve loop exits, the client is no longer registered
@@ -248,6 +251,56 @@ func (s *sqliteRecorder) Record(ctx context.Context, local, multica string) erro
 		return err
 	}
 	return db.MapTaskIDs(ctx, d, local, multica)
+}
+
+// sqliteClaimStore persists claims before Multica Ack (DAEM-02).
+type sqliteClaimStore struct{}
+
+func (s *sqliteClaimStore) PersistClaim(ctx context.Context, localID, multicaID, agentID string, payload []byte) error {
+	d, err := db.Open(defaultDBPath())
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return db.PersistClaim(ctx, d, localID, multicaID, agentID, string(payload))
+}
+
+func (s *sqliteClaimStore) AbandonClaim(ctx context.Context, localID string) error {
+	d, err := db.Open(defaultDBPath())
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return db.AbandonClaim(ctx, d, localID)
+}
+
+// recoverMulticaClaims re-submits durable queued/running Multica tasks after a
+// daemon restart (DAEM-02). Already-Ack'd claims must not be lost when the
+// in-memory queue is empty on boot.
+func recoverMulticaClaims(ctx context.Context, h *client.ClaimHandler) {
+	d, err := db.Open(defaultDBPath())
+	if err != nil {
+		log.Printf("recover claims: open db: %v", err)
+		return
+	}
+	defer d.Close()
+	claims, err := db.ListRecoverableClaims(ctx, d)
+	if err != nil {
+		log.Printf("recover claims: list: %v", err)
+		return
+	}
+	if len(claims) == 0 {
+		return
+	}
+	tasks := make([]client.ClaimedTask, 0, len(claims))
+	for _, c := range claims {
+		tasks = append(tasks, client.ClaimedTask{
+			TaskID:        c.LocalID,
+			MulticaTaskID: c.MulticaTaskID,
+			Payload:       []byte(c.PayloadJSON),
+		})
+	}
+	h.HandleClaimsRecovered(ctx, tasks)
 }
 
 func getenv(k, def string) string {

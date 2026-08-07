@@ -198,3 +198,58 @@ func TestMulticaTaskIDByLocalNullColumn(t *testing.T) {
 		t.Fatalf("expected empty multica id for NULL column, got %q", got)
 	}
 }
+
+func TestPersistClaimBeforeAckShape(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if err := PersistClaim(context.Background(), d, "c1", "mt-c1", "jarvis", `{"taskId":"c1"}`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := MulticaTaskIDByLocal(context.Background(), d, "c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "mt-c1" {
+		t.Fatalf("mapping missing: %q", got)
+	}
+	var status string
+	if err := d.QueryRow(`SELECT status FROM tasks WHERE id = 'c1'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "queued" {
+		t.Fatalf("want queued, got %s", status)
+	}
+}
+
+func TestAbandonClaimRemovesQueued(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if err := PersistClaim(context.Background(), d, "c2", "mt-c2", "jarvis", `{}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := AbandonClaim(context.Background(), d, "c2"); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM tasks WHERE id = 'c2'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("abandoned row still present")
+	}
+}
+
+func TestListRecoverableClaims(t *testing.T) {
+	d := mustOpen(t)
+	mustTasksTable(t, d)
+	if err := PersistClaim(context.Background(), d, "r1", "mt-r1", "jarvis", `{"a":1}`); err != nil {
+		t.Fatal(err)
+	}
+	list, err := ListRecoverableClaims(context.Background(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].LocalID != "r1" || list[0].MulticaTaskID != "mt-r1" {
+		t.Fatalf("unexpected: %+v", list)
+	}
+}
