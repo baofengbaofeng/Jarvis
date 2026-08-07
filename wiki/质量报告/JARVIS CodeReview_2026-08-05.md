@@ -2,11 +2,11 @@
 
 | 项目 | 内容 |
 |------|------|
-| **产品** | JARVIS V1.0（本地优先 AI 桌面助手） |
+| **产品** | JARVIS 1.0.0-Preview（本地优先 AI 桌面助手） |
 | **审查日期** | 2026-08-05 |
 | **最后更新** | 2026-08-06（Phase 4 续：SEC-07 / ROB-07 / store 单测） |
 | **审查范围** | 全栈：Electron 主进程 / 渲染层 / `packages/core` 引擎 / Go daemon / `packages/protocol` |
-| **参考文档** | `CLAUDE.md`、M0–M8 实现计划（`docs/superpowers/plans/`）、`wiki/技术文档/JARVIS技术方案_V1.0_20260802.html` |
+| **参考文档** | `CLAUDE.md`、M0–M8 实现计划（`docs/superpowers/plans/`）、`wiki/技术文档/JARVIS技术方案_1.0.0-Preview_20260802.html` |
 | **审查方式** | 静态代码走查 + 架构约束对照 + 安全边界分析 + 测试覆盖抽样 |
 
 ---
@@ -28,7 +28,7 @@
 
 ## 1. 执行摘要
 
-JARVIS 在 V1.0 冻结阶段已建立起较清晰的 **五层架构**（SQLite → Go daemon → Electron Main/IPC → `packages/core` 引擎 → React 渲染层），核心设计决策（决策 A：引擎唯一实现在 TS、`@jarvis/core/renderer` 分包、IPC 值返回约定、Keychain 存密钥）在多数模块中得到贯彻，**`packages/core` 业务逻辑测试覆盖较好**，沙箱、审批门、审计日志等安全基础设施已具备雏形。
+JARVIS 在 1.0.0-Preview 冻结阶段已建立起较清晰的 **五层架构**（SQLite → Go daemon → Electron Main/IPC → `packages/core` 引擎 → React 渲染层），核心设计决策（决策 A：引擎唯一实现在 TS、`@jarvis/core/renderer` 分包、IPC 值返回约定、Keychain 存密钥）在多数模块中得到贯彻，**`packages/core` 业务逻辑测试覆盖较好**，沙箱、审批门、审计日志等安全基础设施已具备雏形。
 
 本次审查共识别 **4 项高优先级（P0）**、**12 项中优先级（P1）**、**若干低优先级（P2/P3）** 问题。**截至 2026-08-05，P0 项已全部修复，P1 项大部分已修复，P2 项中 ARCH-02/03、STD-02（部分）、ROB-05（契约层）已完成。**
 
@@ -96,7 +96,7 @@ JARVIS 在 V1.0 冻结阶段已建立起较清晰的 **五层架构**（SQLite �
 **现状**：文档规定 Go daemon 为 `tasks`/`squads` 等表的写者；实际 Electron main 仍直接写 `tasks` 表。
 
 **已做**：
-- `tasks.ts` 顶部补充 §13.3 架构例外说明（V1.0 单用户路径由 main 统一驱动）。
+- `tasks.ts` 顶部补充 §13.3 架构例外说明（1.0.0-Preview 单用户路径由 main 统一驱动）。
 
 **遗留**：
 - 中期仍将 task 写操作收敛到 daemon HTTP API 或 stdio 委托，main 仅做 IPC 转发。
@@ -123,7 +123,7 @@ tasks.ts              # orchestrator + IPC handlers（~170 行）
 
 ---
 
-#### ARCH-04 【低】`packages/ui` / `packages/views` 仍为脚手架 — **未修复（V1.0 可接受）**
+#### ARCH-04 【低】`packages/ui` / `packages/views` 仍为脚手架 — **未修复（1.0.0-Preview 可接受）**
 
 **改进方案**：V1.1+ 将可复用组件逐步下沉至 `packages/ui`。
 
@@ -335,7 +335,7 @@ tasks.ts              # orchestrator + IPC handlers（~170 行）
 | STD-04 | 规范 | 低 | runtime.ts any 参数 | P3 | **未修复** |
 | SEC-10 | 安全 | 低 | sandbox:false 权衡 | 文档化 | **已缓解** |
 
-**统计**：共 25 项 — 已修复 19、部分修复 5、未修复 1（ARCH-04 为 V1.0 可接受项，STD-04 低优先级）。
+**统计**：共 25 项 — 已修复 19、部分修复 5、未修复 1（ARCH-04 为 1.0.0-Preview 可接受项，STD-04 低优先级）。
 
 ---
 
@@ -389,7 +389,7 @@ tasks.ts              # orchestrator + IPC handlers（~170 行）
 
 ## 10. 结论
 
-JARVIS V1.0 在 **架构分层、引擎单点实现、密钥不落盘、沙箱与审批基础设施** 方面达到了里程碑设计预期。经 Phase 1–4 整改后：
+JARVIS 1.0.0-Preview 在 **架构分层、引擎单点实现、密钥不落盘、沙箱与审批基础设施** 方面达到了里程碑设计预期。经 Phase 1–4 整改后：
 
 1. **Electron 安全模型最后一公里**（Preload 白名单 + 高危 IPC 收口）— **已落地**；
 2. **Agent 工具调用端到端闭环** — **已落地**；

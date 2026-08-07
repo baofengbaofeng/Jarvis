@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 项目名称 | JARVIS V1.0（本地优先桌面 AI Agent 平台） |
+| 项目名称 | JARVIS 1.0.0-Preview（本地优先桌面 AI Agent 平台） |
 | 评审日期 | 2026-08-06 |
 | 评审范围 | 当前工作树完整源码：Electron Main/Preload/Renderer、`packages/core`、`packages/protocol`、`packages/i18n`、Go daemon、测试、构建配置与依赖 |
 | 代码基线 | `master`，HEAD `08f60cd60f7bc4b2191f12edda2b38398f427504`，并包含评审时工作树中的未提交修改与新增文件 |
@@ -16,11 +16,11 @@
 
 已优先阅读并作为评审基线：
 
-1. `wiki/需求文档/JARVIS需求文档_V1.0_20260802.html`
-2. `wiki/产品文档/JARVIS产品文档_V1.0_20260802.html`
-3. `wiki/技术文档/JARVIS技术方案_V1.0_20260802.html`
-4. `wiki/产品原型/V1.0/index.html`
-5. `wiki/产品原型/V1.0/manifest.json` 及其 50 个原型页面的深/浅色 SVG
+1. `wiki/需求文档/JARVIS需求文档_1.0.0-Preview_20260802.html`
+2. `wiki/产品文档/JARVIS产品文档_1.0.0-Preview_20260802.html`
+3. `wiki/技术文档/JARVIS技术方案_1.0.0-Preview_20260802.html`
+4. `wiki/产品原型/1.0.0-Preview/index.html`
+5. `wiki/产品原型/1.0.0-Preview/manifest.json` 及其 50 个原型页面的深/浅色 SVG
 6. `docs/superpowers/plans/2026-08-03-m0-skeleton.md`
 7. `docs/superpowers/plans/2026-08-03-m1-chat-model.md`
 8. `docs/superpowers/plans/2026-08-03-m2-agent-basic.md`
@@ -42,9 +42,9 @@
 - AgentEngine/REACT Loop/ModelRouter/MCPClient 应唯一实现在 `packages/core`；Go `jarvis-agent` 仅为调用同一 TS 引擎的协议壳。
 - API Key 只能保存到 Keychain/系统安全存储，数据库和配置导出只保存引用。
 - Renderer 只能导入 `@jarvis/core/renderer`；IPC 应使用协议常量和值形返回。
-- V1.0 必须支持 zh-CN/en，UI 和系统提示不得硬编码单一语言。
+- 1.0.0-Preview 必须支持 zh-CN/en，UI 和系统提示不得硬编码单一语言。
 - SQLite 应遵守每表单写者；技术方案将 `tasks/squads/agent_messages/agent_call_edges/audit_logs/token_usage/runtime_profiles` 分配给 daemon。
-- V1.0 需要覆盖 S1–S6 主旅程，并达到冷启动 `<3s`、daemon 就绪 `<1s` 等性能目标。
+- 1.0.0-Preview 需要覆盖 S1–S6 主旅程，并达到冷启动 `<3s`、daemon 就绪 `<1s` 等性能目标。
 
 ## 2. 总体概览
 
@@ -52,7 +52,7 @@
 
 项目的五层结构、renderer-safe 入口、IPC allowlist、密钥安全存储、沙箱 canonical path、Go 竞态测试等基础方向正确；Core 的纯逻辑测试数量也较充足。
 
-但当前版本仍不具备 V1.0 冻结或发布条件：
+但当前版本仍不具备 1.0.0-Preview 冻结或发布条件：
 
 1. 主窗口允许导航到远程页面，而 preload 会继续暴露高权限 IPC；结合 `mcp.test` 的任意进程启动能力，可形成用户点击链接后的主进程命令执行链。
 2. 多个 IPC 接收 renderer 提供的裸文件路径，可读取、复制或上传本机文件。
@@ -62,7 +62,7 @@
 6. Anthropic 工具流未解析，且 AgentEngine 第二轮 tool message 缺少协议必需关联字段，真实 REACT 工具链不可用。
 7. PluginHost 在主进程上下文使用 Node VM 执行不可信插件，缺少超时与进程隔离。
 8. 类型检查失败，单元测试受原生模块 ABI 阻断，真实 Electron E2E 无法启动。
-9. D9 视频摘要、MCP SSE/HTTP、URL Skills 导入、Canvas 任务产物等 V1.0 能力仍是占位或未接线。
+9. D9 视频摘要、MCP SSE/HTTP、URL Skills 导入、Canvas 任务产物等 1.0.0-Preview 能力仍是占位或未接线。
 
 ### 2.2 风险与问题统计
 
@@ -209,7 +209,7 @@
 - **位置**：`packages/core/src/plugins/PluginHost.ts:9-24`
 - **问题描述**：直接读取插件 `index.js` 并 `vm.runInContext`，无执行超时、签名、资源限制或进程隔离。Node `vm` 不是安全边界，恶意代码还可无限循环阻塞事件线程。
 - **问题影响**：导入恶意插件可能导致主进程拒绝服务、沙箱逃逸或注册危险工具。
-- **修复建议**：V1.0 优先改为声明式 manifest；必须执行代码时放入最小权限子进程/utility process，通过结构化 RPC 暴露有限能力，并增加签名/来源确认、超时和内存限制。
+- **修复建议**：1.0.0-Preview 优先改为声明式 manifest；必须执行代码时放入最小权限子进程/utility process，通过结构化 RPC 暴露有限能力，并增加签名/来源确认、超时和内存限制。
 
 ### SEC-09【高/阻断】Multica 下发的 MCP 命令与环境未经安全策略即进入执行链
 
@@ -304,9 +304,9 @@
 ### REQ-01【中/发布阻断】D9 视频摘要实际不可用
 
 - **位置**：`apps/desktop/src/main/ipc/office.ts:197-204,299-315`、`apps/desktop/src/renderer/src/components/office/VideoSummary.tsx:4-7`
-- **问题描述**：`getTranscript()` 永远返回 undefined，UI 固定得到“未配置 transcript”错误。Wiki 将 D9 纳入 V1.0。
+- **问题描述**：`getTranscript()` 永远返回 undefined，UI 固定得到“未配置 transcript”错误。Wiki 将 D9 纳入 1.0.0-Preview。
 - **问题影响**：存在菜单和页面但没有业务闭环，属于表面实现。
-- **修复建议**：接入明确的字幕/转写 Provider，配置进入 SecureStorage；无字幕时支持本地文件上传转写或明确从 V1.0 范围移除。
+- **修复建议**：接入明确的字幕/转写 Provider，配置进入 SecureStorage；无字幕时支持本地文件上传转写或明确从 1.0.0-Preview 范围移除。
 
 ### REQ-02【中/发布阻断】MCP SSE/HTTP 只存在于数据模型，执行仅支持 stdio
 
@@ -326,7 +326,7 @@
 
 - **位置**：`docs/provider-guide.md`（当前工作树删除）、`resources/provider-templates/openai-compatible.json`
 - **问题描述**：CLAUDE.md 和 B12 将 provider guide 作为第三方接入说明，但文件已删除。
-- **问题影响**：自定义 Provider 的认证、URL、模型和兼容限制缺少交付文档，和 V1.0 文档化要求冲突。
+- **问题影响**：自定义 Provider 的认证、URL、模型和兼容限制缺少交付文档，和 1.0.0-Preview 文档化要求冲突。
 - **修复建议**：恢复并更新 provider guide；将模板字段、无硬编码 model id、API key 引用和兼容差异写入文档，并加入链接有效性检查。
 
 ### REQ-05【中】D10 图像生成没有可用的设置入口

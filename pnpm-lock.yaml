@@ -210,7 +210,7 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@30.0.1)
 
-  test/V1.0:
+  test/1.0.0-Preview:
     dependencies:
       '@playwright/test':
         specifier: ^1.62.1

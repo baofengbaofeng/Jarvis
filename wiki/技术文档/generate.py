@@ -3,17 +3,17 @@
 
 from pathlib import Path
 
-OUTPUT = Path(__file__).parent / "JARVIS技术方案_V1.0_20260802.html"
+OUTPUT = Path(__file__).parent / "JARVIS技术方案_1.0.0-Preview_20260802.html"
 
 HEAD = """<!DOCTYPE html>
-<html lang="zh-CN" data-doc-type="technical" data-doc-version="1.0-mvp" data-doc-date="2026-08-02" data-project="JARVIS">
+<html lang="zh-CN" data-doc-type="technical" data-doc-version="1.0.0-Preview" data-doc-date="2026-08-02" data-project="JARVIS">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="JARVIS 桌面端 AI 助手 V1.0-MVP 技术方案 — 系统架构、模块设计、接口协议与实现细节">
+  <meta name="description" content="JARVIS 桌面端 AI 助手 1.0.0-Preview 技术方案 — 系统架构、模块设计、接口协议与实现细节">
   <meta name="author" content="JARVIS Project">
   <meta name="keywords" content="JARVIS,技术方案,架构设计,Electron,Go,Multica,MCP">
-  <title>JARVIS 技术方案 V1.0-MVP (2026-08-02)</title>
+  <title>JARVIS 技术方案 1.0.0-Preview (2026-08-02)</title>
   <style>
     :root {
       --bg: #f8f9fb; --surface: #fff; --border: #e2e8f0;
@@ -92,10 +92,10 @@ HEAD = """<!DOCTYPE html>
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "name": "JARVIS 技术方案 V1.0-MVP",
-  "version": "1.0-mvp",
+  "name": "JARVIS 技术方案 1.0.0-Preview",
+  "version": "1.0.0-Preview",
   "datePublished": "2026-08-02",
-  "description": "JARVIS 跨平台桌面 AI Agent 平台 V1.0-MVP 技术方案",
+  "description": "JARVIS 跨平台桌面 AI Agent 平台 1.0.0-Preview 技术方案",
   "about": { "@type": "SoftwareApplication", "name": "JARVIS", "applicationCategory": "DesktopApplication", "operatingSystem": "macOS, Windows" },
   "keywords": ["技术方案", "Electron", "Go", "Multica", "MCP", "Agent"]
 }
@@ -105,12 +105,12 @@ HEAD = """<!DOCTYPE html>
   <div class="banner-inner">
     <h1>JARVIS 技术方案文档</h1>
     <p class="banner-desc">
-      基于《JARVIS 需求文档 V1.0-MVP》《JARVIS 产品文档 V1.0-MVP》及《产品原型 V1.0》转化的
+      基于《JARVIS 需求文档 1.0.0-Preview》《JARVIS 产品文档 1.0.0-Preview》及《产品原型 1.0.0-Preview》转化的
       详细技术方案。定义系统架构、模块划分、数据模型、接口协议、核心子系统实现、
-      安全策略与分阶段技术交付计划，作为 V1.0-MVP 阶段研发与 AI 辅助编码的统一技术基线。
+      安全策略与分阶段技术交付计划，作为 1.0.0-Preview 阶段研发与 AI 辅助编码的统一技术基线。
     </p>
     <div class="banner-meta">
-      <span>版本 V1.0-MVP</span>
+      <span>版本 1.0.0-Preview</span>
       <span>日期 2026-08-02</span>
       <span>语言 zh-CN / en</span>
       <span>状态 技术方案</span>
@@ -138,8 +138,8 @@ FOOT = """
 </div>
 
 <footer class="doc-footer">
-  JARVIS Project &copy; 2026 &mdash; 技术方案 V1.0-MVP &mdash; 最后更新 2026-08-02
-  &mdash; 依据：需求文档 / 产品文档 / 产品原型 V1.0
+  JARVIS Project &copy; 2026 &mdash; 技术方案 1.0.0-Preview &mdash; 最后更新 2026-08-02
+  &mdash; 依据：需求文档 / 产品文档 / 产品原型 1.0.0-Preview
 </footer>
 
 <script>
@@ -208,15 +208,15 @@ sec("sec-01-overview", "overview", "1. 文档概述", """
         <li>定义核心数据模型、IPC/API 协议、Task 状态机与 Agent 执行管线</li>
         <li>将 A–L 能力 ID 映射到具体技术组件与实现路径</li>
         <li>将 50 个产品原型界面映射到前端路由与组件树</li>
-        <li>指导 MVP → V1.0 分 Milestone 的技术交付与验收</li>
+        <li>指导 MVP → 1.0.0-Preview 分 Milestone 的技术交付与验收</li>
       </ul>
       <h3 id="sec-01-2-sources">1.2 上游文档关系</h3>
       <table>
         <thead><tr><th>文档</th><th>路径</th><th>本文档引用方式</th></tr></thead>
         <tbody>
-          <tr><td>需求文档 V1.0-MVP</td><td><code>wiki/需求文档/JARVIS需求文档_V1.0_20260802.html</code></td><td>能力 ID、技术栈建议、Multica 参考、MVP 裁剪</td></tr>
-          <tr><td>产品文档 V1.0-MVP</td><td><code>wiki/产品文档/JARVIS产品文档_V1.0_20260802.html</code></td><td>用户旅程、交互规范、信息架构、验收标准</td></tr>
-          <tr><td>产品原型 V1.0</td><td><code>wiki/产品原型/V1.0/index.html</code></td><td>50 界面 → 路由/组件映射（§18）</td></tr>
+          <tr><td>需求文档 1.0.0-Preview</td><td><code>wiki/需求文档/JARVIS需求文档_1.0.0-Preview_20260802.html</code></td><td>能力 ID、技术栈建议、Multica 参考、MVP 裁剪</td></tr>
+          <tr><td>产品文档 1.0.0-Preview</td><td><code>wiki/产品文档/JARVIS产品文档_1.0.0-Preview_20260802.html</code></td><td>用户旅程、交互规范、信息架构、验收标准</td></tr>
+          <tr><td>产品原型 1.0.0-Preview</td><td><code>wiki/产品原型/1.0.0-Preview/index.html</code></td><td>50 界面 → 路由/组件映射（§18）</td></tr>
         </tbody>
       </table>
       <h3 id="sec-01-3-decisions">1.3 已确认技术决策（约束条件）</h3>
@@ -232,7 +232,7 @@ sec("sec-01-overview", "overview", "1. 文档概述", """
       </table>
       <details class="ai-block"><summary>AI 快速摘要 JSON</summary><pre>{
   "doc_type": "technical-design",
-  "version": "1.0-mvp",
+  "version": "1.0.0-Preview",
   "stack": {"daemon": "Go 1.22+", "ui": "TS+React19+Electron", "db": "SQLite", "build": "pnpm+turborepo"},
   "processes": ["electron-main", "electron-renderer", "jarvis-daemon", "jarvis-agent-cli", "mcp-child-processes"],
   "protocols": ["IPC(JSON-RPC)", "ACP(Multica)", "MCP(stdio/SSE/HTTP)", "OpenAI/Anthropic-API"],
@@ -463,12 +463,12 @@ Task End → persist messages, audit log (J5), emit task:complete</div>
 """ + table(["Tool", "能力", "沙箱", "交付"], [
     ["read_file / write_file / list_dir", "E2", "workspace root + jarvisignore", "MVP"],
     ["run_shell", "E3", "cwd 限制、命令白名单 C6", "MVP"],
-    ["git_*", "E4", "repo 须在 workspace 内", "V1.0"],
-    ["search_code", "E1", "embedding index L27", "V1.0"],
+    ["git_*", "E4", "repo 须在 workspace 内", "1.0.0-Preview"],
+    ["search_code", "E1", "embedding index L27", "1.0.0-Preview"],
     ["web_search", "D3/L25", "HTTP 代理 L33", "MVP"],
-    ["mcp:*", "G5", "Per-tool J7 审批", "MVP/V1.0"],
-    ["delegate_agent", "F7/F9", "Squad + L15 深度限制", "V1.0"],
-    ["plan_only", "E10", "写工具 disabled", "V1.0"],
+    ["mcp:*", "G5", "Per-tool J7 审批", "MVP/1.0.0-Preview"],
+    ["delegate_agent", "F7/F9", "Squad + L15 深度限制", "1.0.0-Preview"],
+    ["plan_only", "E10", "写工具 disabled", "1.0.0-Preview"],
 ]) + """
       <h3 id="sec-06-3-context">6.3 上下文管理 (L16/L17)</h3>
       <ul>
@@ -632,7 +632,7 @@ sec("sec-12-office", "office", "12. 对话与办公子系统", """
         <li>导出 D14：Markdown 原生；PDF 经 print-to-pdf 或 puppeteer core</li>
         <li>Prompt 模板库 D15：<code>prompt_templates</code> 表 + 变量 substitution</li>
       </ul>
-      <h3 id="sec-12-2-office">12.2 办公增强 (D4-D12) — V1.0</h3>
+      <h3 id="sec-12-2-office">12.2 办公增强 (D4-D12) — 1.0.0-Preview</h3>
 """ + table(["功能", "技术方案", "原型"], [
     ["D4 划词", "Renderer Selection API + ContextMenu", "25-划词菜单"],
     ["D5 写作", "专用 system prompt + 模板", "14-AI写作助手"],
@@ -779,34 +779,34 @@ sec("sec-17-i18n", "i18n", "17. 国际化与主题", """
 
 # §18 Prototype mapping
 sec("sec-18-prototype", "prototype-map", "18. 产品原型 → 技术映射", """
-      <p>产品原型 V1.0 共 50 界面，以下映射到 <code>packages/views</code> 组件与路由。</p>
+      <p>产品原型 1.0.0-Preview 共 50 界面，以下映射到 <code>packages/views</code> 组件与路由。</p>
 """ + table(["原型 ID", "View 组件", "核心依赖", "Tier"], [
     ["01 主聊天", "ChatView", "core/chat, K1", "MVP"],
     ["02-04 首次引导", "OnboardingWizard", "L1-L3, B, F", "MVP"],
     ["05 Agent列表", "AgentListView", "C2", "MVP"],
     ["06 Provider", "ProviderSettingsView", "B1-B13", "MVP"],
-    ["07 Diff面板", "CodePanelView", "E9,K3", "V1.0"],
-    ["08 Task看板", "TaskBoardView", "K4,L4", "V1.0"],
-    ["09 Squad", "SquadView", "F8,F9,L12", "V1.0"],
-    ["10 设置页", "SettingsLayout", "C1-C12", "MVP/V1.0"],
-    ["11 Skills", "SkillsSettingsView", "G1-G3", "MVP/V1.0"],
-    ["12 MCP", "McpSettingsView", "G4-G8", "MVP/V1.0"],
-    ["13 Multica状态", "RuntimeStatusView", "H1,L35,L39", "V1.0"],
-    ["14-16 办公", "WritingView, PdfReader, BrowserView", "D5,D7,D8,I8", "V1.0"],
+    ["07 Diff面板", "CodePanelView", "E9,K3", "1.0.0-Preview"],
+    ["08 Task看板", "TaskBoardView", "K4,L4", "1.0.0-Preview"],
+    ["09 Squad", "SquadView", "F8,F9,L12", "1.0.0-Preview"],
+    ["10 设置页", "SettingsLayout", "C1-C12", "MVP/1.0.0-Preview"],
+    ["11 Skills", "SkillsSettingsView", "G1-G3", "MVP/1.0.0-Preview"],
+    ["12 MCP", "McpSettingsView", "G4-G8", "MVP/1.0.0-Preview"],
+    ["13 Multica状态", "RuntimeStatusView", "H1,L35,L39", "1.0.0-Preview"],
+    ["14-16 办公", "WritingView, PdfReader, BrowserView", "D5,D7,D8,I8", "1.0.0-Preview"],
     ["17 窗口吸附", "WindowManager", "A4", "MVP"],
     ["18 托盘", "TrayManager", "A2,L7", "MVP"],
     ["19 敏感确认", "ApprovalModal", "J2,F15", "MVP"],
-    ["20 Canvas", "CanvasView", "K6", "V1.0"],
-    ["21 全局搜索", "GlobalSearchView", "L21", "V1.0"],
-    ["22-23 分屏/Plan", "SplitLayout, PlanModeBadge", "K7,E10", "V1.0"],
-    ["24-25 Task日志/划词", "TaskLogView, SelectionMenu", "L5,D4", "V1.0"],
-    ["26-35 办公增强", "各 Feature 组件", "D6-D15", "MVP/V1.0"],
-    ["36 Token统计", "UsageDashboard", "B9", "V1.0"],
-    ["37-45 设置扩展", "Settings 子页", "C5,C6,C12,L18", "V1.0"],
+    ["20 Canvas", "CanvasView", "K6", "1.0.0-Preview"],
+    ["21 全局搜索", "GlobalSearchView", "L21", "1.0.0-Preview"],
+    ["22-23 分屏/Plan", "SplitLayout, PlanModeBadge", "K7,E10", "1.0.0-Preview"],
+    ["24-25 Task日志/划词", "TaskLogView, SelectionMenu", "L5,D4", "1.0.0-Preview"],
+    ["26-35 办公增强", "各 Feature 组件", "D6-D15", "MVP/1.0.0-Preview"],
+    ["36 Token统计", "UsageDashboard", "B9", "1.0.0-Preview"],
+    ["37-45 设置扩展", "Settings 子页", "C5,C6,C12,L18", "1.0.0-Preview"],
     ["46 Task取消", "TaskControlBar", "L4", "MVP"],
-    ["47 @引用", "MentionPicker", "E6", "V1.0"],
-    ["48 运行模式", "ModeIndicator", "L39,A8", "V1.0"],
-    ["49 多模态", "ImageAttachment", "L23", "V1.0"],
+    ["47 @引用", "MentionPicker", "E6", "1.0.0-Preview"],
+    ["48 运行模式", "ModeIndicator", "L39,A8", "1.0.0-Preview"],
+    ["49 多模态", "ImageAttachment", "L23", "1.0.0-Preview"],
     ["50 浅色主题", "ThemeProvider", "A10", "MVP"],
 ]) + """
 """)
@@ -867,7 +867,7 @@ sec("sec-21-milestones", "milestones", "21. 技术 Milestone 交付清单", """
     ["M5 办公", "划词/PDF/WebView/语音/识图", "D4-D12"],
     ["M6 多Agent", "Squad、消息总线、审批、通知", "S5 场景"],
     ["M7 Runtime", "jarvis-agent CLI、ACP、Multica 联调", "S6 场景"],
-    ["M8 完善", "看板、Canvas、备份迁移、Token 统计、配置导入导出", "V1.0 封版"],
+    ["M8 完善", "看板、Canvas、备份迁移、Token 统计、配置导入导出", "1.0.0-Preview 封版"],
 ]) + """
       <div class="callout"><strong>MVP 范围</strong> = M0 + M1 + M2 + M3<sub>核心</sub>；与需求文档 §10.1 一致。</div>
 """)
@@ -977,7 +977,7 @@ sec("sec-25-l-module", "platform-l", "25. L 模块平台体验技术规格", """
 # §26 DAG & triggers
 sec("sec-26-workflow", "workflow", "26. 工作流与触发器", """
       <h3 id="sec-26-1-dag">26.1 Agent 编排 DAG (F10)</h3>
-      <p>工作流定义 JSON：<code>{ nodes: AgentNode[], edges: Edge[] }</code>。调度器按拓扑序执行；每节点输出写入下一节点 context。UI 可选可视化编辑器 (V1.0 M8)。</p>
+      <p>工作流定义 JSON：<code>{ nodes: AgentNode[], edges: Edge[] }</code>。调度器按拓扑序执行；每节点输出写入下一节点 context。UI 可选可视化编辑器 (1.0.0-Preview M8)。</p>
       <h3 id="sec-26-2-triggers">26.2 触发方式 (F12)</h3>
 """ + table(["类型", "实现"], [
     ["manual", "UI chat / task.create"],
@@ -995,7 +995,7 @@ sec("sec-27-ide", "external-ide", "27. 外部 IDE 对接 (E12)", """
       <ul>
         <li>协议层：HTTP localhost server 暴露 <code>/open?file=</code>、<code>/diff?task=</code></li>
         <li>CLI：<code>jarvis open --file path:line</code> 调用 VS Code <code>code -g</code></li>
-        <li>VS Code 插件：V1.0 可后置；MVP 不依赖</li>
+        <li>VS Code 插件：1.0.0-Preview 可后置；MVP 不依赖</li>
       </ul>
 """)
 
@@ -1059,7 +1059,7 @@ sec("sec-31-b-module", "b-module", "31. B 模块模型管理技术规格", """
 """)
 
 # §32 Excluded
-sec("sec-32-excluded", "excluded", "32. V1.0 排除项技术说明", """
+sec("sec-32-excluded", "excluded", "32. 1.0.0-Preview 排除项技术说明", """
       <p>以下能力在 V1 架构中<strong>不预留扩展点</strong>，避免过度设计 (Q2/Q3/Q5)：</p>
 """ + table(["ID", "排除原因", "V1 替代"], [
     ["A3 全局快捷键", "需 OS 级 Hook", "托盘/吸附打开 App"],
@@ -1114,7 +1114,7 @@ sec("sec-34-glossary", "glossary", "34. 术语表", """
       <table>
         <thead><tr><th>版本</th><th>日期</th><th>变更</th></tr></thead>
         <tbody>
-          <tr><td>V1.0-MVP</td><td>2026-08-02</td><td>初版：基于需求/产品/原型三份文档生成完整技术方案</td></tr>
+          <tr><td>1.0.0-Preview</td><td>2026-08-02</td><td>初版：基于需求/产品/原型三份文档生成完整技术方案</td></tr>
         </tbody>
       </table>
 """)

@@ -19,7 +19,7 @@
 - API Key 只进入 SecureStorage；SQLite、WAL、备份、导出和日志只能保存 `apiKeyRef`。
 - migration 只能追加 v13+，不得修改 v1-v12。
 - 新增用户可见错误必须同时提供 zh-CN/en；main 返回稳定 code 和安全 detail，renderer 决定文案。
-- 不引入本地模型、Whisper、本地转写或其他 V1.0 排除能力。
+- 不引入本地模型、Whisper、本地转写或其他 1.0.0-Preview 排除能力。
 - parser 硬限制：原文件 `50 MiB`；PDF `500` 页；XLSX `1,000,000` 个已访问单元格；ZIP `10,000` entries、解压后 `100 MiB`、单 entry `20 MiB`、压缩比 `100:1`；输出 UTF-8 `10 MiB`；RPC 单帧 `256 KiB`；解析超时 `30 s`；utility process V8 old-space `256 MiB`。
 - transcript 上传硬限制：`.txt/.srt/.vtt`，UTF-8 文件 `2 MiB`，归一化文本 `1,000,000` 字符；HTTP timeout `20 s`，响应 `2 MiB`。
 - 所有新依赖在修改 manifest 前必须通过 Sonatype Developer Trust、许可证和 CVE 检查；拒绝 Critical/High CVE、GPL/AGPL/未知许可证，Developer Trust 目标 `>80`。

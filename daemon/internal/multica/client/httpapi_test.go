@@ -41,7 +41,7 @@ func TestHTTPClientAPIRoundTrip(t *testing.T) {
 	defer srv.Close()
 
 	api := &HTTPClientAPI{BaseURL: srv.URL, HTTP: &http.Client{Timeout: 2 * time.Second}}
-	c := NewClient(api, ClientOptions{Name: "mac", Version: "0.1.0", Concurrency: 6})
+	c := NewClient(api, ClientOptions{Name: "mac", Version: "1.0.0-Preview", Concurrency: 6})
 	tasks, err := c.RunOnce(context.Background(), HeartbeatStatus{Status: "idle"})
 	if err != nil {
 		t.Fatal(err)

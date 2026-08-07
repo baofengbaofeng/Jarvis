@@ -35,7 +35,7 @@ func (f fakeConflicts) Conflicts() []ConflictItem { return f.items }
 
 func TestRuntimeStatusEndpoint(t *testing.T) {
 	q := runtime.NewQueue(6, 20)
-	srv := NewServer("0.1.1", q, fakeRuntime{registered: true, busy: false, serverURL: "https://multica.example"})
+	srv := NewServer("1.0.0-Preview", q, fakeRuntime{registered: true, busy: false, serverURL: "https://multica.example"})
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/runtime/status", nil))
 	if rec.Code != http.StatusOK {
@@ -53,7 +53,7 @@ func TestRuntimeStatusEndpoint(t *testing.T) {
 func TestRuntimeConflictsEndpoint(t *testing.T) {
 	q := runtime.NewQueue(6, 20)
 	cs := fakeConflicts{items: []ConflictItem{{TaskID: "t1", Skill: &acp.SkillConflict{Name: "review", LocalPath: "/l", MulticaPath: "/m"}}}}
-	srv := NewServer("0.1.1", q, cs)
+	srv := NewServer("1.0.0-Preview", q, cs)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/runtime/conflicts", nil))
 	if rec.Code != http.StatusOK {

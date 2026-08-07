@@ -108,7 +108,7 @@ apps/desktop/src/renderer/src/
 **Interfaces:**
 - Consumes: 无(M3 daemon 独立 Go module)。
 - Produces:
-  - `const cliVersion = "0.1.0"`。
+  - `const cliVersion = "1.0.0-Preview"`。
   - `VersionProvider { Version() string }`;`staticVersion string`。
   - `HealthReport { OK bool; CLIVersion string; Protocol string; NodeAvailable bool; Daemon string; Errors []string }`(json tags:ok/cliVersion/protocol/nodeAvailable/daemon/errors)。
   - `HealthChecker { Check(ctx) HealthReport }`;`defaultHealth`(探测 `node` 在 PATH,占位 daemon 探测)。
@@ -157,7 +157,7 @@ func TestVersionCmd(t *testing.T) {
 func TestHealthCmdOK(t *testing.T) {
 	var buf bytes.Buffer
 	root := NewRootCmd(&buf)
-	rep := HealthReport{OK: true, CLIVersion: "0.1.0", Protocol: "ACP", NodeAvailable: true, Daemon: "ok"}
+	rep := HealthReport{OK: true, CLIVersion: "1.0.0-Preview", Protocol: "ACP", NodeAvailable: true, Daemon: "ok"}
 	root.AddCommand(NewHealthCmd(fakeHealth{rep}, &buf))
 	root.SetArgs([]string{"health"})
 	if err := root.Execute(); err != nil {
@@ -175,7 +175,7 @@ func TestHealthCmdOK(t *testing.T) {
 func TestHealthCmdFailsWhenNotOK(t *testing.T) {
 	var buf bytes.Buffer
 	root := NewRootCmd(&buf)
-	rep := HealthReport{OK: false, CLIVersion: "0.1.0", Protocol: "ACP", NodeAvailable: false, Errors: []string{"node not found"}}
+	rep := HealthReport{OK: false, CLIVersion: "1.0.0-Preview", Protocol: "ACP", NodeAvailable: false, Errors: []string{"node not found"}}
 	root.AddCommand(NewHealthCmd(fakeHealth{rep}, &buf))
 	root.SetArgs([]string{"health"})
 	if err := root.Execute(); err == nil {
@@ -206,7 +206,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const cliVersion = "0.1.0"
+const cliVersion = "1.0.0-Preview"
 
 // VersionProvider returns the CLI version string (H1.1/L35 --version).
 type VersionProvider interface{ Version() string }
@@ -1927,7 +1927,7 @@ func (f *fakeAPI) Ack(_ context.Context, _, _ string, _ bool) error             
 
 func TestRegister(t *testing.T) {
 	f := &fakeAPI{}
-	c := NewClient(f, ClientOptions{Name: "mac-mini", Version: "0.1.0", Concurrency: 6, Models: []string{"m1"}})
+	c := NewClient(f, ClientOptions{Name: "mac-mini", Version: "1.0.0-Preview", Concurrency: 6, Models: []string{"m1"}})
 	id, err := c.Register(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -2010,7 +2010,7 @@ func TestHTTPClientAPIRoundTrip(t *testing.T) {
 	defer srv.Close()
 
 	api := &HTTPClientAPI{BaseURL: srv.URL, HTTP: &http.Client{Timeout: 2 * time.Second}}
-	c := NewClient(api, ClientOptions{Name: "mac", Version: "0.1.0", Concurrency: 6})
+	c := NewClient(api, ClientOptions{Name: "mac", Version: "1.0.0-Preview", Concurrency: 6})
 	tasks, err := c.RunOnce(context.Background(), HeartbeatStatus{Status: "idle"})
 	if err != nil {
 		t.Fatal(err)
@@ -2805,7 +2805,7 @@ func main() {
 			Recorder:  &sqliteRecorder{},
 			Conflicts: cs,
 		}
-		cl := client.NewClient(api, client.ClientOptions{Name: "jarvis", Version: "0.1.0", Concurrency: perAgent})
+		cl := client.NewClient(api, client.ClientOptions{Name: "jarvis", Version: "1.0.0-Preview", Concurrency: perAgent})
 		go func() {
 			if err := cl.Serve(ctx, func() client.HeartbeatStatus {
 				st.mu.Lock()
@@ -2818,7 +2818,7 @@ func main() {
 		}()
 	}
 
-	srv := httpapi.NewServer("0.1.1", q, st, cs)
+	srv := httpapi.NewServer("1.0.0-Preview", q, st, cs)
 	log.Printf("jarvis-daemon on 127.0.0.1:%s concurrency %d/%d", port, perAgent, machine)
 	if err := http.ListenAndServe("127.0.0.1:"+port, srv.Handler()); err != nil {
 		log.Fatal(err)
@@ -2959,7 +2959,7 @@ func (f fakeRuntime) CLIProtocol() string  { return "acp" }
 
 func TestRuntimeStatusEndpoint(t *testing.T) {
 	q := runtime.NewQueue(6, 20)
-	srv := NewServer("0.1.1", q, fakeRuntime{registered: true, busy: false, serverURL: "https://multica.example"})
+	srv := NewServer("1.0.0-Preview", q, fakeRuntime{registered: true, busy: false, serverURL: "https://multica.example"})
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/runtime/status", nil))
 	if rec.Code != http.StatusOK {
@@ -2978,7 +2978,7 @@ func TestRuntimeConflictsEndpoint(t *testing.T) {
 	q := runtime.NewQueue(6, 20)
 	cs := client.NewConflictStore()
 	cs.Add(client.ConflictItem{TaskID: "t1", Skill: &acp.SkillConflict{Name: "review", LocalPath: "/l", MulticaPath: "/m"}})
-	srv := NewServer("0.1.1", q, cs)
+	srv := NewServer("1.0.0-Preview", q, cs)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/runtime/conflicts", nil))
 	if rec.Code != http.StatusOK {
@@ -3050,7 +3050,7 @@ type ConflictSource interface {
 	Conflicts() []ConflictItem
 }
 ```
-(server.go 中 `type ConflictItem = client.ConflictItem` 或直接定义;为避免 httpapi 依赖 client 包造成的潜在循环(httpapi 不依赖 client),在 httpapi 内定义 `ConflictItem struct{ TaskID string; Skill *...; MCP *...; Resolved bool }`,并由 client.ConflictStore 通过小适配器满足 `ConflictSource`。为简洁,httpapi 内定义 `ConflictItem` 与 `client.ConflictItem` 同构,Task 8 的 ConflictStore 增加方法或由 main 组装适配。实现:httpapi 定义 `ConflictItem`,`ConflictSource` 返回 `[]ConflictItem`;client.ConflictStore 已有 `Conflicts() []client.ConflictItem`,通过适配 `conflictAdapter`(main 组装)转换。测试用 `srv := NewServer("0.1.1", q, cs)` 其中 cs 为满足 `ConflictSource` 的 fake。)
+(server.go 中 `type ConflictItem = client.ConflictItem` 或直接定义;为避免 httpapi 依赖 client 包造成的潜在循环(httpapi 不依赖 client),在 httpapi 内定义 `ConflictItem struct{ TaskID string; Skill *...; MCP *...; Resolved bool }`,并由 client.ConflictStore 通过小适配器满足 `ConflictSource`。为简洁,httpapi 内定义 `ConflictItem` 与 `client.ConflictItem` 同构,Task 8 的 ConflictStore 增加方法或由 main 组装适配。实现:httpapi 定义 `ConflictItem`,`ConflictSource` 返回 `[]ConflictItem`;client.ConflictStore 已有 `Conflicts() []client.ConflictItem`,通过适配 `conflictAdapter`(main 组装)转换。测试用 `srv := NewServer("1.0.0-Preview", q, cs)` 其中 cs 为满足 `ConflictSource` 的 fake。)
 
 `/runtime/status` 处理:
 ```go
@@ -3077,7 +3077,7 @@ if s.conflicts != nil {
 ```
 (server.go 需 `writeJSON` helper;若 M3 已有则复用。)
 
-为让 httpapi 测试编译:`NewServer("0.1.1", q, fakeRuntime{...})` 与 `NewServer("0.1.1", q, cs)` 均需 `ServerExtra` 断言。定义:
+为让 httpapi 测试编译:`NewServer("1.0.0-Preview", q, fakeRuntime{...})` 与 `NewServer("1.0.0-Preview", q, cs)` 均需 `ServerExtra` 断言。定义:
 ```go
 type ServerExtra interface{}
 

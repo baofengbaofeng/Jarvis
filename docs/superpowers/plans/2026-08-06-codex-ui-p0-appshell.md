@@ -123,7 +123,7 @@ Expected: FAIL（`tokens.css` 不存在或缺变量）
 ```json
 {
   "name": "@jarvis/ui",
-  "version": "0.1.0",
+  "version": "1.0.0-Preview",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -260,7 +260,7 @@ body {
 `packages/ui/src/index.ts`:
 
 ```ts
-export const uiVersion = '0.1.0';
+export const uiVersion = '1.0.0-Preview';
 ```
 
 - [ ] **Step 4: Install and run tests**

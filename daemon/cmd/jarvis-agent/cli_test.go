@@ -34,7 +34,7 @@ func TestVersionCmd(t *testing.T) {
 func TestHealthCmdOK(t *testing.T) {
 	var buf bytes.Buffer
 	root := NewRootCmd(&buf)
-	rep := HealthReport{OK: true, CLIVersion: "0.1.0", Protocol: "ACP", NodeAvailable: true, Daemon: "ok"}
+	rep := HealthReport{OK: true, CLIVersion: "1.0.0-Preview", Protocol: "ACP", NodeAvailable: true, Daemon: "ok"}
 	root.AddCommand(NewHealthCmd(fakeHealth{rep}, &buf))
 	root.SetArgs([]string{"health"})
 	if err := root.Execute(); err != nil {
@@ -52,7 +52,7 @@ func TestHealthCmdOK(t *testing.T) {
 func TestHealthCmdFailsWhenNotOK(t *testing.T) {
 	var buf bytes.Buffer
 	root := NewRootCmd(&buf)
-	rep := HealthReport{OK: false, CLIVersion: "0.1.0", Protocol: "ACP", NodeAvailable: false, Errors: []string{"node not found"}}
+	rep := HealthReport{OK: false, CLIVersion: "1.0.0-Preview", Protocol: "ACP", NodeAvailable: false, Errors: []string{"node not found"}}
 	root.AddCommand(NewHealthCmd(fakeHealth{rep}, &buf))
 	root.SetArgs([]string{"health"})
 	if err := root.Execute(); err == nil {

@@ -52,7 +52,7 @@ export class McpClient {
   }
 
   async initialize(): Promise<void> {
-    await this.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'jarvis', version: '0.1.0' } });
+    await this.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'jarvis', version: '1.0.0-Preview' } });
   }
 
   async listTools(): Promise<MCPTool[]> {

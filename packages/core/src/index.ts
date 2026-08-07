@@ -1,3 +1,5 @@
+export const coreVersion = '1.0.0-Preview';
+
 export * from './model/types';
 export * from './model';
 export * from './model/adapters/index';

@@ -1,4 +1,4 @@
-export const uiVersion = '0.1.0';
+export const uiVersion = '1.0.0-Preview';
 
 export { Button } from './components/Button';
 export type { ButtonProps } from './components/Button';

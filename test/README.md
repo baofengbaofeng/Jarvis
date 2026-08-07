@@ -1,6 +1,6 @@
 # JARVIS functional tests
 
-Versioned Electron + IPC regression suites. Directory names use **uppercase `V`** (e.g. `test/V1.0/`, `test/V1.1/`) — do not rename existing version folders.
+Versioned Electron + IPC regression suites. Directory names match product semver (e.g. `test/1.0.0-Preview/`); do not rename existing version folders without updating root `test:functional`.
 
 ## Run current release suite
 
@@ -18,13 +18,13 @@ Each spec uses a temp `JARVIS_DATA_DIR` under the OS temp directory. Wipe/backup
 
 ## Add a new version
 
-Copy `V1.0/` to `V1.1/`, update the coverage matrix in the new `README.md`, and point `test:functional` (or add `test:functional:V1.1`) at the new Playwright config.
+Copy `1.0.0-Preview/` to a new semver folder (e.g. `1.1.0-Preview/`), update the coverage matrix in the new `README.md`, and point `test:functional` at the new Playwright config.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
 | `test/README.md` | This index |
-| `test/V1.0/README.md` | V1.0 coverage matrix + intentional skips |
-| `test/V1.0/suites/*.spec.ts` | Playwright specs (serial, one worker) |
+| `test/1.0.0-Preview/README.md` | 1.0.0-Preview coverage matrix + intentional skips |
+| `test/1.0.0-Preview/suites/*.spec.ts` | Playwright specs (serial, one worker) |
 | `apps/desktop/e2e/` | Separate lightweight smoke suite (unchanged) |

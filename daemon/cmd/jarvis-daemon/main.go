@@ -41,7 +41,7 @@ func main() {
 		pool := runtime.NewWorkspacePool(defaultWorkspaces())
 		// cl is created before the handler so ClientID() can serve the
 		// server-assigned id from Register (I3) rather than the literal "jarvis".
-		cl := client.NewClient(api, client.ClientOptions{Name: "jarvis", Version: "0.1.0", Concurrency: perAgent})
+		cl := client.NewClient(api, client.ClientOptions{Name: "jarvis", Version: "1.0.0-Preview", Concurrency: perAgent})
 		handler := &client.ClaimHandler{
 			API:       api,
 			Queue:     q,
@@ -89,7 +89,7 @@ func main() {
 	if cs != nil {
 		extras = append(extras, conflictAdapter{cs})
 	}
-	srv := httpapi.NewServerWithAuth("0.1.1", q, getenv("JARVIS_DAEMON_TOKEN", ""), extras...)
+	srv := httpapi.NewServerWithAuth("1.0.0-Preview", q, getenv("JARVIS_DAEMON_TOKEN", ""), extras...)
 	httpSrv := &http.Server{Addr: "127.0.0.1:" + port, Handler: srv.Handler()}
 	// SIGTERM/SIGINT cancels ctx, which stops the Multica Serve goroutine; the
 	// shutdown goroutine then drains the HTTP listener so the daemon terminates.

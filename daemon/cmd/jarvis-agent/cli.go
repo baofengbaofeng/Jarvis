@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const cliVersion = "0.1.0"
+const cliVersion = "1.0.0-Preview"
 
 // VersionProvider returns the CLI version string (H1.1/L35 --version).
 type VersionProvider interface{ Version() string }

@@ -25,8 +25,8 @@ apps/desktop/out/
 apps/desktop/test-results/
 apps/desktop/playwright-report/
 apps/desktop/blob-report/
-test/V1.0/test-results/
-test/V1.0/playwright-report/
+test/1.0.0-Preview/test-results/
+test/1.0.0-Preview/playwright-report/
 test/**/test-results/
 test/**/playwright-report/
 apps/desktop/resources/

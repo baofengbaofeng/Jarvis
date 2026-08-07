@@ -18,7 +18,7 @@ func injectionServer(t *testing.T) (*Server, *policy.PendingStore, *policy.FileA
 	pending := policy.NewPendingStore()
 	approvals := policy.NewFileApprovalStore(filepath.Join(t.TempDir(), "approvals.json"))
 	svc := &InjectionApprovalService{Pending: pending, Approvals: approvals}
-	s := NewServerWithAuth("0.1.0", runtime.NewQueue(1, 1), "secret", svc)
+	s := NewServerWithAuth("1.0.0-Preview", runtime.NewQueue(1, 1), "secret", svc)
 	return s, pending, approvals
 }
 

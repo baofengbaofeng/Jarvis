@@ -1,0 +1,402 @@
+[
+  {
+    "id": "01-主界面-主聊天窗口",
+    "title": "主界面-主聊天窗口",
+    "module": "K1/D1",
+    "tier": "MVP",
+    "file": "images/01-主界面-主聊天窗口.svg",
+    "file_light": "images/01-主界面-主聊天窗口-浅色.svg"
+  },
+  {
+    "id": "02-首次引导-Provider配置",
+    "title": "首次引导-Provider配置",
+    "module": "L1/B",
+    "tier": "MVP",
+    "file": "images/02-首次引导-Provider配置.svg",
+    "file_light": "images/02-首次引导-Provider配置-浅色.svg"
+  },
+  {
+    "id": "03-首次引导-创建Agent",
+    "title": "首次引导-创建Agent",
+    "module": "L1/F1",
+    "tier": "MVP",
+    "file": "images/03-首次引导-创建Agent.svg",
+    "file_light": "images/03-首次引导-创建Agent-浅色.svg"
+  },
+  {
+    "id": "04-首次引导-环境诊断",
+    "title": "首次引导-环境诊断",
+    "module": "L2/L3",
+    "tier": "MVP",
+    "file": "images/04-首次引导-环境诊断.svg",
+    "file_light": "images/04-首次引导-环境诊断-浅色.svg"
+  },
+  {
+    "id": "05-Agent管理-列表",
+    "title": "Agent管理-列表",
+    "module": "C2/F1",
+    "tier": "MVP",
+    "file": "images/05-Agent管理-列表.svg",
+    "file_light": "images/05-Agent管理-列表-浅色.svg"
+  },
+  {
+    "id": "06-Provider管理",
+    "title": "Provider管理",
+    "module": "C1/B",
+    "tier": "MVP",
+    "file": "images/06-Provider管理.svg",
+    "file_light": "images/06-Provider管理-浅色.svg"
+  },
+  {
+    "id": "07-轻量代码面板-Diff",
+    "title": "轻量代码面板-Diff",
+    "module": "K3/E9",
+    "tier": "1.0.0-Preview",
+    "file": "images/07-轻量代码面板-Diff.svg",
+    "file_light": "images/07-轻量代码面板-Diff-浅色.svg"
+  },
+  {
+    "id": "08-Task看板",
+    "title": "Task看板",
+    "module": "K4/L4",
+    "tier": "1.0.0-Preview",
+    "file": "images/08-Task看板.svg",
+    "file_light": "images/08-Task看板-浅色.svg"
+  },
+  {
+    "id": "09-Squad小队协作",
+    "title": "Squad小队协作",
+    "module": "F8/F9",
+    "tier": "1.0.0-Preview",
+    "file": "images/09-Squad小队协作.svg",
+    "file_light": "images/09-Squad小队协作-浅色.svg"
+  },
+  {
+    "id": "10-设置页",
+    "title": "设置页",
+    "module": "C1-C12",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/10-设置页.svg",
+    "file_light": "images/10-设置页-浅色.svg"
+  },
+  {
+    "id": "11-Skills管理",
+    "title": "Skills管理",
+    "module": "G1/C4",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/11-Skills管理.svg",
+    "file_light": "images/11-Skills管理-浅色.svg"
+  },
+  {
+    "id": "12-MCP管理",
+    "title": "MCP管理",
+    "module": "G4/C3",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/12-MCP管理.svg",
+    "file_light": "images/12-MCP管理-浅色.svg"
+  },
+  {
+    "id": "13-Multica-Runtime状态",
+    "title": "Multica-Runtime状态",
+    "module": "H1/L35",
+    "tier": "1.0.0-Preview",
+    "file": "images/13-Multica-Runtime状态.svg",
+    "file_light": "images/13-Multica-Runtime状态-浅色.svg"
+  },
+  {
+    "id": "14-AI写作助手",
+    "title": "AI写作助手",
+    "module": "D5",
+    "tier": "1.0.0-Preview",
+    "file": "images/14-AI写作助手.svg",
+    "file_light": "images/14-AI写作助手-浅色.svg"
+  },
+  {
+    "id": "15-PDF伴读",
+    "title": "PDF伴读",
+    "module": "D7",
+    "tier": "1.0.0-Preview",
+    "file": "images/15-PDF伴读.svg",
+    "file_light": "images/15-PDF伴读-浅色.svg"
+  },
+  {
+    "id": "16-内置浏览器-网页总结",
+    "title": "内置浏览器-网页总结",
+    "module": "I8/D8",
+    "tier": "1.0.0-Preview",
+    "file": "images/16-内置浏览器-网页总结.svg",
+    "file_light": "images/16-内置浏览器-网页总结-浅色.svg"
+  },
+  {
+    "id": "17-窗口吸附模式",
+    "title": "窗口吸附模式",
+    "module": "A4",
+    "tier": "MVP",
+    "file": "images/17-窗口吸附模式.svg",
+    "file_light": "images/17-窗口吸附模式-浅色.svg"
+  },
+  {
+    "id": "18-系统托盘菜单",
+    "title": "系统托盘菜单",
+    "module": "A2/L7",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/18-系统托盘菜单.svg",
+    "file_light": "images/18-系统托盘菜单-浅色.svg"
+  },
+  {
+    "id": "19-敏感操作确认",
+    "title": "敏感操作确认",
+    "module": "J2/F15",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/19-敏感操作确认.svg",
+    "file_light": "images/19-敏感操作确认-浅色.svg"
+  },
+  {
+    "id": "20-Canvas可视化",
+    "title": "Canvas可视化",
+    "module": "K6",
+    "tier": "1.0.0-Preview",
+    "file": "images/20-Canvas可视化.svg",
+    "file_light": "images/20-Canvas可视化-浅色.svg"
+  },
+  {
+    "id": "21-全局搜索",
+    "title": "全局搜索",
+    "module": "L21",
+    "tier": "1.0.0-Preview",
+    "file": "images/21-全局搜索.svg",
+    "file_light": "images/21-全局搜索-浅色.svg"
+  },
+  {
+    "id": "22-分屏-聊天加文件",
+    "title": "分屏-聊天加文件",
+    "module": "K7",
+    "tier": "1.0.0-Preview",
+    "file": "images/22-分屏-聊天加文件.svg",
+    "file_light": "images/22-分屏-聊天加文件-浅色.svg"
+  },
+  {
+    "id": "23-Plan模式",
+    "title": "Plan模式",
+    "module": "E10",
+    "tier": "1.0.0-Preview",
+    "file": "images/23-Plan模式.svg",
+    "file_light": "images/23-Plan模式-浅色.svg"
+  },
+  {
+    "id": "24-Task执行日志",
+    "title": "Task执行日志",
+    "module": "K5/L5",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/24-Task执行日志.svg",
+    "file_light": "images/24-Task执行日志-浅色.svg"
+  },
+  {
+    "id": "25-划词菜单",
+    "title": "划词菜单",
+    "module": "D4",
+    "tier": "1.0.0-Preview",
+    "file": "images/25-划词菜单.svg",
+    "file_light": "images/25-划词菜单-浅色.svg"
+  },
+  {
+    "id": "26-语音输入",
+    "title": "语音输入",
+    "module": "D11",
+    "tier": "1.0.0-Preview",
+    "file": "images/26-语音输入.svg",
+    "file_light": "images/26-语音输入-浅色.svg"
+  },
+  {
+    "id": "27-深色主题-主聊天",
+    "title": "深色主题-主聊天",
+    "module": "A10",
+    "tier": "MVP",
+    "file": "images/27-深色主题-主聊天.svg",
+    "file_light": "images/27-深色主题-主聊天.svg"
+  },
+  {
+    "id": "50-浅色主题-主聊天",
+    "title": "浅色主题-主聊天",
+    "module": "A10",
+    "tier": "MVP",
+    "file": "images/50-浅色主题-主聊天.svg",
+    "file_light": "images/50-浅色主题-主聊天.svg"
+  },
+  {
+    "id": "28-编辑Agent详情",
+    "title": "编辑Agent详情",
+    "module": "F1-F6",
+    "tier": "MVP",
+    "file": "images/28-编辑Agent详情.svg",
+    "file_light": "images/28-编辑Agent详情-浅色.svg"
+  },
+  {
+    "id": "29-联网搜索",
+    "title": "联网搜索",
+    "module": "D3/L25",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/29-联网搜索.svg",
+    "file_light": "images/29-联网搜索-浅色.svg"
+  },
+  {
+    "id": "30-边写边译",
+    "title": "边写边译",
+    "module": "D6",
+    "tier": "1.0.0-Preview",
+    "file": "images/30-边写边译.svg",
+    "file_light": "images/30-边写边译-浅色.svg"
+  },
+  {
+    "id": "31-视频内容摘要",
+    "title": "视频内容摘要",
+    "module": "D9",
+    "tier": "1.0.0-Preview",
+    "file": "images/31-视频内容摘要.svg",
+    "file_light": "images/31-视频内容摘要-浅色.svg"
+  },
+  {
+    "id": "32-文生图",
+    "title": "文生图",
+    "module": "D10",
+    "tier": "1.0.0-Preview",
+    "file": "images/32-文生图.svg",
+    "file_light": "images/32-文生图-浅色.svg"
+  },
+  {
+    "id": "33-文件上传分析",
+    "title": "文件上传分析",
+    "module": "D12/L22",
+    "tier": "1.0.0-Preview",
+    "file": "images/33-文件上传分析.svg",
+    "file_light": "images/33-文件上传分析-浅色.svg"
+  },
+  {
+    "id": "34-Prompt模板库",
+    "title": "Prompt模板库",
+    "module": "D15",
+    "tier": "1.0.0-Preview",
+    "file": "images/34-Prompt模板库.svg",
+    "file_light": "images/34-Prompt模板库-浅色.svg"
+  },
+  {
+    "id": "35-对话导出",
+    "title": "对话导出",
+    "module": "D14",
+    "tier": "MVP",
+    "file": "images/35-对话导出.svg",
+    "file_light": "images/35-对话导出-浅色.svg"
+  },
+  {
+    "id": "36-Token用量统计",
+    "title": "Token用量统计",
+    "module": "B9",
+    "tier": "1.0.0-Preview",
+    "file": "images/36-Token用量统计.svg",
+    "file_light": "images/36-Token用量统计-浅色.svg"
+  },
+  {
+    "id": "37-快捷键配置",
+    "title": "快捷键配置",
+    "module": "C5",
+    "tier": "1.0.0-Preview",
+    "file": "images/37-快捷键配置.svg",
+    "file_light": "images/37-快捷键配置-浅色.svg"
+  },
+  {
+    "id": "38-权限沙箱配置",
+    "title": "权限沙箱配置",
+    "module": "C6/J3/J6",
+    "tier": "1.0.0-Preview",
+    "file": "images/38-权限沙箱配置.svg",
+    "file_light": "images/38-权限沙箱配置-浅色.svg"
+  },
+  {
+    "id": "39-工作区绑定",
+    "title": "工作区绑定",
+    "module": "C7/L10",
+    "tier": "MVP",
+    "file": "images/39-工作区绑定.svg",
+    "file_light": "images/39-工作区绑定-浅色.svg"
+  },
+  {
+    "id": "40-日志调试面板",
+    "title": "日志调试面板",
+    "module": "C11",
+    "tier": "MVP",
+    "file": "images/40-日志调试面板.svg",
+    "file_light": "images/40-日志调试面板-浅色.svg"
+  },
+  {
+    "id": "41-配置导入导出",
+    "title": "配置导入导出",
+    "module": "C12",
+    "tier": "1.0.0-Preview",
+    "file": "images/41-配置导入导出.svg",
+    "file_light": "images/41-配置导入导出-浅色.svg"
+  },
+  {
+    "id": "42-Daemon管理",
+    "title": "Daemon管理",
+    "module": "L7-L9",
+    "tier": "1.0.0-Preview",
+    "file": "images/42-Daemon管理.svg",
+    "file_light": "images/42-Daemon管理-浅色.svg"
+  },
+  {
+    "id": "43-MCP权限审批",
+    "title": "MCP权限审批",
+    "module": "J7/G8",
+    "tier": "1.0.0-Preview",
+    "file": "images/43-MCP权限审批.svg",
+    "file_light": "images/43-MCP权限审批-浅色.svg"
+  },
+  {
+    "id": "44-Agent模板库",
+    "title": "Agent模板库",
+    "module": "L30",
+    "tier": "1.0.0-Preview",
+    "file": "images/44-Agent模板库.svg",
+    "file_light": "images/44-Agent模板库-浅色.svg"
+  },
+  {
+    "id": "45-数据备份恢复",
+    "title": "数据备份恢复",
+    "module": "L18-L20",
+    "tier": "1.0.0-Preview",
+    "file": "images/45-数据备份恢复.svg",
+    "file_light": "images/45-数据备份恢复-浅色.svg"
+  },
+  {
+    "id": "46-Task取消重试",
+    "title": "Task取消重试",
+    "module": "L4-L6",
+    "tier": "MVP",
+    "file": "images/46-Task取消重试.svg",
+    "file_light": "images/46-Task取消重试-浅色.svg"
+  },
+  {
+    "id": "47-At引用文件",
+    "title": "At引用文件",
+    "module": "E6",
+    "tier": "1.0.0-Preview",
+    "file": "images/47-At引用文件.svg",
+    "file_light": "images/47-At引用文件-浅色.svg"
+  },
+  {
+    "id": "48-运行模式指示",
+    "title": "运行模式指示",
+    "module": "L39/A8",
+    "tier": "MVP/1.0.0-Preview",
+    "file": "images/48-运行模式指示.svg",
+    "file_light": "images/48-运行模式指示-浅色.svg"
+  },
+  {
+    "id": "49-多模态图片理解",
+    "title": "多模态图片理解",
+    "module": "L23",
+    "tier": "1.0.0-Preview",
+    "file": "images/49-多模态图片理解.svg",
+    "file_light": "images/49-多模态图片理解-浅色.svg"
+  }
+]

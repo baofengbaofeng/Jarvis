@@ -1,11 +1,11 @@
-# JARVIS V1.0 Code Review 全量整改设计
+# JARVIS 1.0.0-Preview Code Review 全量整改设计
 
 日期：2026-08-06  
 状态：设计已确认，待实施
 
 ## 1. 目标与成功标准
 
-本设计以 `wiki/质量报告/JARVIS CodeReview_2026-08-06.md` 的 44 个唯一问题 ID 为整改基线。目标不是降低需求范围，而是在保留 Wiki V1.0 承诺的前提下，修复全部高、中、低风险问题，并建立可重复的质量与发布证据。
+本设计以 `wiki/质量报告/JARVIS CodeReview_2026-08-06.md` 的 44 个唯一问题 ID 为整改基线。目标不是降低需求范围，而是在保留 Wiki 1.0.0-Preview 承诺的前提下，修复全部高、中、低风险问题，并建立可重复的质量与发布证据。
 
 完成必须同时满足：
 
@@ -18,7 +18,7 @@
 ## 2. 已确认决策
 
 1. **工作基线**：把当前包含大量未提交改动的工作树视为基线，原地修复；不得回退或覆盖用户现有改动。
-2. **需求范围**：D9、MCP SSE/HTTP、URL Skills 等现有 Wiki V1.0 能力全部真实实现，不采用降级出 V1.0 的方式关闭问题。
+2. **需求范围**：D9、MCP SSE/HTTP、URL Skills 等现有 Wiki 1.0.0-Preview 能力全部真实实现，不采用降级出 1.0.0-Preview 的方式关闭问题。
 3. **提交策略**：每个可独立验证的 TDD Task 创建一个 `feat:`、`fix:`、`test:`、`refactor:`、`docs:` 或 `chore:` 提交。只暂存该 Task 的精确改动，不夹带既有工作树修改。
 4. **文档组织**：一份跨切面设计 spec，七份按代码域拆分的 implementation plan，约 20–28 个 Task。
 5. **问题追踪**：CR ID 是唯一追踪键。每项只归属一个主 plan；跨域依赖只引用，不重复计数。
@@ -36,7 +36,7 @@
 - Electron main 负责 IPC、安全存储与接线；纯逻辑放 core；renderer 只负责视图和状态投影。
 - daemon 最终成为 `tasks` 的唯一写者。
 - 新增 UI 和用户可见错误必须同时提供 zh-CN/en。
-- 不引入 V1.0 已排除的本地模型、离线模式、云同步、自动更新、全局快捷键或 Monaco。
+- 不引入 1.0.0-Preview 已排除的本地模型、离线模式、云同步、自动更新、全局快捷键或 Monaco。
 
 ## 4. 七份实施计划与 CR 追踪
 
@@ -96,7 +96,7 @@
 - D10 从用户 Provider/Model 配置选择图像能力与模型，密钥使用 SecureStorage。
 - main 返回稳定错误码，renderer 做双语映射。
 
-### Plan 5：V1.0 产品能力闭环
+### Plan 5：1.0.0-Preview 产品能力闭环
 
 覆盖：REQ-02、REQ-03、REQ-04、REQ-07、REQ-08。
 

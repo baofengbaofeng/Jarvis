@@ -10,7 +10,7 @@ import (
 )
 
 func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
-	srv := NewServerWithAuth("0.1.0", runtime.NewQueue(6, 20), "secret-token")
+	srv := NewServerWithAuth("1.0.0-Preview", runtime.NewQueue(6, 20), "secret-token")
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -20,7 +20,7 @@ func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
 }
 
 func TestAuthMiddlewareAllowsBearerToken(t *testing.T) {
-	srv := NewServerWithAuth("0.1.0", runtime.NewQueue(6, 20), "secret-token")
+	srv := NewServerWithAuth("1.0.0-Preview", runtime.NewQueue(6, 20), "secret-token")
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
 	rec := httptest.NewRecorder()
@@ -31,7 +31,7 @@ func TestAuthMiddlewareAllowsBearerToken(t *testing.T) {
 }
 
 func TestHealthUnauthenticatedEvenWithToken(t *testing.T) {
-	srv := NewServerWithAuth("0.1.0", runtime.NewQueue(6, 20), "secret-token")
+	srv := NewServerWithAuth("1.0.0-Preview", runtime.NewQueue(6, 20), "secret-token")
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)

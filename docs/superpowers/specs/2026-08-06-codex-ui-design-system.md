@@ -15,7 +15,7 @@
 | Design tokens（浅/深）+ ui 组件 API | 新功能、新路由、Monaco/完整 IDE |
 | Chat 消息流 / Composer / StepCard 呈现 | 像素级复制 Codex 品牌资产 |
 | Settings 与其余业务页视觉对齐 | 本轮抽离 `packages/views` |
-| 替换无效 Tailwind-like `className` 与裸控件堆 | 全局快捷键、自动更新等 V1.0 排除项 |
+| 替换无效 Tailwind-like `className` 与裸控件堆 | 全局快捷键、自动更新等 1.0.0-Preview 排除项 |
 
 ## 2. 已确认的决策
 

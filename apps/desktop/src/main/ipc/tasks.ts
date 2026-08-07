@@ -30,7 +30,7 @@ const taskLogs = new Map<string, string[]>();
 const MAX_TASK_LOG_LINES = 500;
 
 // ARCH-01 (§13.3 writer ownership): the design doc assigns `tasks` to the Go
-// daemon, but V1.0 routes all task CRUD through Electron main for a single
+// daemon, but 1.0.0-Preview routes all task CRUD through Electron main for a single
 // user-facing path. The daemon only schedules Multica-claimed work; main and
 // daemon must not UPDATE the same task row concurrently.
 

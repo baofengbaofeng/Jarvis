@@ -10,7 +10,7 @@ import (
 )
 
 func TestHealth(t *testing.T) {
-	srv := NewServer("0.1.0", runtime.NewQueue(6, 20))
+	srv := NewServer("1.0.0-Preview", runtime.NewQueue(6, 20))
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 	srv.mux.ServeHTTP(rec, req)
@@ -27,7 +27,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestStatus(t *testing.T) {
-	srv := NewServer("0.1.0", runtime.NewQueue(6, 20))
+	srv := NewServer("1.0.0-Preview", runtime.NewQueue(6, 20))
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	rec := httptest.NewRecorder()
 	srv.mux.ServeHTTP(rec, req)
@@ -38,8 +38,8 @@ func TestStatus(t *testing.T) {
 	if body["running"] != true {
 		t.Fatalf("expected running=true, got %v", body["running"])
 	}
-	if body["version"] != "0.1.0" {
-		t.Fatalf("expected version 0.1.0, got %v", body["version"])
+	if body["version"] != "1.0.0-Preview" {
+		t.Fatalf("expected version 1.0.0-Preview, got %v", body["version"])
 	}
 	if body["activeTasks"] != float64(0) {
 		t.Fatalf("expected activeTasks=0, got %v", body["activeTasks"])

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS 产品原型 1.0.0-Preview</title>
+  <style>
+    :root {
+      --bg: #f5f5f7; --surface: #ffffff; --surface-raised: #ececec;
+      --border: #d1d1d6; --border-subtle: #e5e5ea;
+      --text: #1d1d1f; --text-bright: #000000; --muted: #8e8e93; --muted-dim: #aeaeb2;
+      --primary: #007aff; --primary-bright: #0062cc; --primary-muted: #e8f2ff;
+      --sidebar-w: 280px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; font-size: 13px; line-height: 1.47; -webkit-font-smoothing: antialiased; }
+    .app { display: flex; height: 100vh; }
+    .sidebar {
+      width: var(--sidebar-w); background: var(--surface-raised); border-right: 0.5px solid var(--border);
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 16px 18px; border-bottom: 0.5px solid var(--border);
+      background: var(--surface-raised);
+    }
+    .sidebar-header h1 { font-size: 17px; font-weight: 700; color: var(--text-bright); letter-spacing: -0.02em; }
+    .sidebar-header p { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .nav { flex: 1; overflow-y: auto; padding: 8px 0; list-style: none; }
+    .group { margin-bottom: 4px; }
+    .group-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--muted); padding: 10px 18px 4px; font-weight: 600;
+    }
+    .group ul { list-style: none; }
+    .group a {
+      display: block; padding: 6px 18px 6px 22px; font-size: 13px;
+      color: var(--text); text-decoration: none; border-radius: 8px; margin: 1px 8px;
+      line-height: 1.4;
+    }
+    .group a:hover { background: rgba(0,0,0,0.04); }
+    .group a.active {
+      color: var(--text-bright); background: #dcebff; font-weight: 600;
+    }
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+    .toolbar {
+      padding: 10px 18px; background: rgba(255,255,255,0.72); backdrop-filter: blur(20px);
+      border-bottom: 0.5px solid var(--border);
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px;
+    }
+    .toolbar h2 { font-size: 15px; font-weight: 600; color: var(--text-bright); letter-spacing: -0.01em; }
+    .badge {
+      font-size: 11px; padding: 2px 10px; border-radius: 11px; font-weight: 600;
+      background: var(--primary-muted); color: #0066cc;
+    }
+    .badge-v1 { background: #e8f8ec; color: #248a3d; }
+    .viewer {
+      flex: 1; overflow: auto; padding: 20px; display: flex; align-items: flex-start; justify-content: center;
+      background: #d6d6da;
+    }
+    .viewer img {
+      max-width: 100%; height: auto; border-radius: 10px;
+      box-shadow: 0 10px 36px rgba(0,0,0,0.18); border: 0.5px solid var(--border);
+    }
+    .empty { color: var(--muted); padding: 3rem; text-align: center; font-size: 13px; }
+    .counter { font-size: 12px; color: var(--muted-dim); }
+    .theme-switcher {
+      display: inline-flex; margin-left: auto; background: #e5e5ea;
+      border-radius: 7px; overflow: hidden; height: 28px; padding: 2px;
+    }
+    .theme-switcher button {
+      border: none; background: transparent; color: var(--muted); font-size: 11px;
+      padding: 0 14px; cursor: pointer; font-family: var(--font); height: 24px; border-radius: 5px;
+    }
+    .theme-switcher button.active {
+      background: #ffffff; color: var(--text-bright); font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .theme-switcher button:hover:not(.active) { color: var(--text); }
+    @media (max-width: 900px) {
+      .app { flex-direction: column; }
+      .sidebar { width: 100%; max-height: 40vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>JARVIS 产品原型</h1>
+        <p>1.0.0-Preview · 共 50 个界面 · 2026-08-02</p>
+      </div>
+      <ul class="nav" id="nav"><li class="group"><div class="group-title">平台基础</div><ul><li><a href="#" data-id="01-主界面-主聊天窗口" data-file="images/01-主界面-主聊天窗口.svg" data-file-light="images/01-主界面-主聊天窗口-浅色.svg" data-module="K1/D1" data-tier="MVP">主界面-主聊天窗口</a></li><li><a href="#" data-id="17-窗口吸附模式" data-file="images/17-窗口吸附模式.svg" data-file-light="images/17-窗口吸附模式-浅色.svg" data-module="A4" data-tier="MVP">窗口吸附模式</a></li><li><a href="#" data-id="18-系统托盘菜单" data-file="images/18-系统托盘菜单.svg" data-file-light="images/18-系统托盘菜单-浅色.svg" data-module="A2/L7" data-tier="MVP/1.0.0-Preview">系统托盘菜单</a></li><li><a href="#" data-id="27-深色主题-主聊天" data-file="images/27-深色主题-主聊天.svg" data-file-light="images/27-深色主题-主聊天.svg" data-module="A10" data-tier="MVP">深色主题-主聊天</a></li><li><a href="#" data-id="50-浅色主题-主聊天" data-file="images/50-浅色主题-主聊天.svg" data-file-light="images/50-浅色主题-主聊天.svg" data-module="A10" data-tier="MVP">浅色主题-主聊天</a></li><li><a href="#" data-id="48-运行模式指示" data-file="images/48-运行模式指示.svg" data-file-light="images/48-运行模式指示-浅色.svg" data-module="L39/A8" data-tier="1.0.0-Preview">运行模式指示</a></li></ul></li><li class="group"><div class="group-title">首次引导</div><ul><li><a href="#" data-id="02-首次引导-Provider配置" data-file="images/02-首次引导-Provider配置.svg" data-file-light="images/02-首次引导-Provider配置-浅色.svg" data-module="L1/B" data-tier="MVP">首次引导-Provider配置</a></li><li><a href="#" data-id="03-首次引导-创建Agent" data-file="images/03-首次引导-创建Agent.svg" data-file-light="images/03-首次引导-创建Agent-浅色.svg" data-module="L1/F1" data-tier="MVP">首次引导-创建Agent</a></li><li><a href="#" data-id="04-首次引导-环境诊断" data-file="images/04-首次引导-环境诊断.svg" data-file-light="images/04-首次引导-环境诊断-浅色.svg" data-module="L2/L3" data-tier="MVP">首次引导-环境诊断</a></li></ul></li><li class="group"><div class="group-title">对话与办公</div><ul><li><a href="#" data-id="14-AI写作助手" data-file="images/14-AI写作助手.svg" data-file-light="images/14-AI写作助手-浅色.svg" data-module="D5" data-tier="1.0.0-Preview">AI写作助手</a></li><li><a href="#" data-id="15-PDF伴读" data-file="images/15-PDF伴读.svg" data-file-light="images/15-PDF伴读-浅色.svg" data-module="D7" data-tier="1.0.0-Preview">PDF伴读</a></li><li><a href="#" data-id="16-内置浏览器-网页总结" data-file="images/16-内置浏览器-网页总结.svg" data-file-light="images/16-内置浏览器-网页总结-浅色.svg" data-module="I8/D8" data-tier="1.0.0-Preview">内置浏览器-网页总结</a></li><li><a href="#" data-id="25-划词菜单" data-file="images/25-划词菜单.svg" data-file-light="images/25-划词菜单-浅色.svg" data-module="D4" data-tier="1.0.0-Preview">划词菜单</a></li><li><a href="#" data-id="26-语音输入" data-file="images/26-语音输入.svg" data-file-light="images/26-语音输入-浅色.svg" data-module="D11" data-tier="1.0.0-Preview">语音输入</a></li><li><a href="#" data-id="29-联网搜索" data-file="images/29-联网搜索.svg" data-file-light="images/29-联网搜索-浅色.svg" data-module="D3/L25" data-tier="MVP">联网搜索</a></li><li><a href="#" data-id="30-边写边译" data-file="images/30-边写边译.svg" data-file-light="images/30-边写边译-浅色.svg" data-module="D6" data-tier="1.0.0-Preview">边写边译</a></li><li><a href="#" data-id="31-视频内容摘要" data-file="images/31-视频内容摘要.svg" data-file-light="images/31-视频内容摘要-浅色.svg" data-module="D9" data-tier="1.0.0-Preview">视频内容摘要</a></li><li><a href="#" data-id="32-文生图" data-file="images/32-文生图.svg" data-file-light="images/32-文生图-浅色.svg" data-module="D10" data-tier="1.0.0-Preview">文生图</a></li><li><a href="#" data-id="33-文件上传分析" data-file="images/33-文件上传分析.svg" data-file-light="images/33-文件上传分析-浅色.svg" data-module="D12/L22" data-tier="1.0.0-Preview">文件上传分析</a></li><li><a href="#" data-id="34-Prompt模板库" data-file="images/34-Prompt模板库.svg" data-file-light="images/34-Prompt模板库-浅色.svg" data-module="D15" data-tier="1.0.0-Preview">Prompt模板库</a></li><li><a href="#" data-id="35-对话导出" data-file="images/35-对话导出.svg" data-file-light="images/35-对话导出-浅色.svg" data-module="D14" data-tier="MVP">对话导出</a></li><li><a href="#" data-id="49-多模态图片理解" data-file="images/49-多模态图片理解.svg" data-file-light="images/49-多模态图片理解-浅色.svg" data-module="L23" data-tier="1.0.0-Preview">多模态图片理解</a></li></ul></li><li class="group"><div class="group-title">Agent 系统</div><ul><li><a href="#" data-id="05-Agent管理-列表" data-file="images/05-Agent管理-列表.svg" data-file-light="images/05-Agent管理-列表-浅色.svg" data-module="C2/F1" data-tier="MVP">Agent管理-列表</a></li><li><a href="#" data-id="09-Squad小队协作" data-file="images/09-Squad小队协作.svg" data-file-light="images/09-Squad小队协作-浅色.svg" data-module="F8/F9" data-tier="1.0.0-Preview">Squad小队协作</a></li><li><a href="#" data-id="28-编辑Agent详情" data-file="images/28-编辑Agent详情.svg" data-file-light="images/28-编辑Agent详情-浅色.svg" data-module="F1-F6" data-tier="MVP">编辑Agent详情</a></li><li><a href="#" data-id="44-Agent模板库" data-file="images/44-Agent模板库.svg" data-file-light="images/44-Agent模板库-浅色.svg" data-module="L30" data-tier="1.0.0-Preview">Agent模板库</a></li></ul></li><li class="group"><div class="group-title">编程 Agent</div><ul><li><a href="#" data-id="07-轻量代码面板-Diff" data-file="images/07-轻量代码面板-Diff.svg" data-file-light="images/07-轻量代码面板-Diff-浅色.svg" data-module="K3/E9" data-tier="1.0.0-Preview">轻量代码面板-Diff</a></li><li><a href="#" data-id="22-分屏-聊天加文件" data-file="images/22-分屏-聊天加文件.svg" data-file-light="images/22-分屏-聊天加文件-浅色.svg" data-module="K7" data-tier="1.0.0-Preview">分屏-聊天加文件</a></li><li><a href="#" data-id="23-Plan模式" data-file="images/23-Plan模式.svg" data-file-light="images/23-Plan模式-浅色.svg" data-module="E10" data-tier="1.0.0-Preview">Plan模式</a></li><li><a href="#" data-id="47-At引用文件" data-file="images/47-At引用文件.svg" data-file-light="images/47-At引用文件-浅色.svg" data-module="E6" data-tier="1.0.0-Preview">At引用文件</a></li></ul></li><li class="group"><div class="group-title">Task 管理</div><ul><li><a href="#" data-id="08-Task看板" data-file="images/08-Task看板.svg" data-file-light="images/08-Task看板-浅色.svg" data-module="K4/L4" data-tier="1.0.0-Preview">Task看板</a></li><li><a href="#" data-id="24-Task执行日志" data-file="images/24-Task执行日志.svg" data-file-light="images/24-Task执行日志-浅色.svg" data-module="K5/L5" data-tier="1.0.0-Preview">Task执行日志</a></li><li><a href="#" data-id="46-Task取消重试" data-file="images/46-Task取消重试.svg" data-file-light="images/46-Task取消重试-浅色.svg" data-module="L4-L6" data-tier="MVP">Task取消重试</a></li></ul></li><li class="group"><div class="group-title">模型与 Provider</div><ul><li><a href="#" data-id="06-Provider管理" data-file="images/06-Provider管理.svg" data-file-light="images/06-Provider管理-浅色.svg" data-module="C1/B" data-tier="MVP">Provider管理</a></li><li><a href="#" data-id="36-Token用量统计" data-file="images/36-Token用量统计.svg" data-file-light="images/36-Token用量统计-浅色.svg" data-module="B9" data-tier="1.0.0-Preview">Token用量统计</a></li></ul></li><li class="group"><div class="group-title">设置与配置</div><ul><li><a href="#" data-id="10-设置页" data-file="images/10-设置页.svg" data-file-light="images/10-设置页-浅色.svg" data-module="C1-C12" data-tier="MVP/1.0.0-Preview">设置页</a></li><li><a href="#" data-id="37-快捷键配置" data-file="images/37-快捷键配置.svg" data-file-light="images/37-快捷键配置-浅色.svg" data-module="C5" data-tier="1.0.0-Preview">快捷键配置</a></li><li><a href="#" data-id="38-权限沙箱配置" data-file="images/38-权限沙箱配置.svg" data-file-light="images/38-权限沙箱配置-浅色.svg" data-module="C6/J3/J6" data-tier="1.0.0-Preview">权限沙箱配置</a></li><li><a href="#" data-id="39-工作区绑定" data-file="images/39-工作区绑定.svg" data-file-light="images/39-工作区绑定-浅色.svg" data-module="C7/L10" data-tier="MVP">工作区绑定</a></li><li><a href="#" data-id="40-日志调试面板" data-file="images/40-日志调试面板.svg" data-file-light="images/40-日志调试面板-浅色.svg" data-module="C11" data-tier="MVP">日志调试面板</a></li><li><a href="#" data-id="41-配置导入导出" data-file="images/41-配置导入导出.svg" data-file-light="images/41-配置导入导出-浅色.svg" data-module="C12" data-tier="1.0.0-Preview">配置导入导出</a></li><li><a href="#" data-id="45-数据备份恢复" data-file="images/45-数据备份恢复.svg" data-file-light="images/45-数据备份恢复-浅色.svg" data-module="L18-L20" data-tier="1.0.0-Preview">数据备份恢复</a></li></ul></li><li class="group"><div class="group-title">Skills / MCP</div><ul><li><a href="#" data-id="11-Skills管理" data-file="images/11-Skills管理.svg" data-file-light="images/11-Skills管理-浅色.svg" data-module="G1/C4" data-tier="MVP/1.0.0-Preview">Skills管理</a></li><li><a href="#" data-id="12-MCP管理" data-file="images/12-MCP管理.svg" data-file-light="images/12-MCP管理-浅色.svg" data-module="G4/C3" data-tier="MVP/1.0.0-Preview">MCP管理</a></li><li><a href="#" data-id="43-MCP权限审批" data-file="images/43-MCP权限审批.svg" data-file-light="images/43-MCP权限审批-浅色.svg" data-module="J7/G8" data-tier="1.0.0-Preview">MCP权限审批</a></li></ul></li><li class="group"><div class="group-title">Multica / Daemon</div><ul><li><a href="#" data-id="13-Multica-Runtime状态" data-file="images/13-Multica-Runtime状态.svg" data-file-light="images/13-Multica-Runtime状态-浅色.svg" data-module="H1/L35" data-tier="1.0.0-Preview">Multica-Runtime状态</a></li><li><a href="#" data-id="42-Daemon管理" data-file="images/42-Daemon管理.svg" data-file-light="images/42-Daemon管理-浅色.svg" data-module="L7-L9" data-tier="1.0.0-Preview">Daemon管理</a></li></ul></li><li class="group"><div class="group-title">安全与审批</div><ul><li><a href="#" data-id="19-敏感操作确认" data-file="images/19-敏感操作确认.svg" data-file-light="images/19-敏感操作确认-浅色.svg" data-module="J2/F15" data-tier="MVP/1.0.0-Preview">敏感操作确认</a></li></ul></li><li class="group"><div class="group-title">高级视图</div><ul><li><a href="#" data-id="20-Canvas可视化" data-file="images/20-Canvas可视化.svg" data-file-light="images/20-Canvas可视化-浅色.svg" data-module="K6" data-tier="1.0.0-Preview">Canvas可视化</a></li><li><a href="#" data-id="21-全局搜索" data-file="images/21-全局搜索.svg" data-file-light="images/21-全局搜索-浅色.svg" data-module="L21" data-tier="1.0.0-Preview">全局搜索</a></li></ul></li></ul>
+    </aside>
+    <main class="main">
+      <div class="toolbar">
+        <h2 id="title">选择左侧原型图</h2>
+        <span class="badge" id="module"></span>
+        <span class="badge badge-v1" id="tier"></span>
+        <div class="theme-switcher" id="theme-switcher" title="A10 深/浅色主题预览">
+          <button type="button" data-theme="light" id="btn-light" class="active">浅色</button>
+          <button type="button" data-theme="dark" id="btn-dark">深色</button>
+        </div>
+        <span class="counter" id="counter"></span>
+      </div>
+      <div class="viewer" id="viewer">
+        <p class="empty">← 从左侧目录选择要查看的产品原型图</p>
+      </div>
+    </main>
+  </div>
+  <script>
+    const MANIFEST = [{"id": "01-主界面-主聊天窗口", "title": "主界面-主聊天窗口", "module": "K1/D1", "tier": "MVP", "file": "images/01-主界面-主聊天窗口.svg", "file_light": "images/01-主界面-主聊天窗口-浅色.svg"}, {"id": "02-首次引导-Provider配置", "title": "首次引导-Provider配置", "module": "L1/B", "tier": "MVP", "file": "images/02-首次引导-Provider配置.svg", "file_light": "images/02-首次引导-Provider配置-浅色.svg"}, {"id": "03-首次引导-创建Agent", "title": "首次引导-创建Agent", "module": "L1/F1", "tier": "MVP", "file": "images/03-首次引导-创建Agent.svg", "file_light": "images/03-首次引导-创建Agent-浅色.svg"}, {"id": "04-首次引导-环境诊断", "title": "首次引导-环境诊断", "module": "L2/L3", "tier": "MVP", "file": "images/04-首次引导-环境诊断.svg", "file_light": "images/04-首次引导-环境诊断-浅色.svg"}, {"id": "05-Agent管理-列表", "title": "Agent管理-列表", "module": "C2/F1", "tier": "MVP", "file": "images/05-Agent管理-列表.svg", "file_light": "images/05-Agent管理-列表-浅色.svg"}, {"id": "06-Provider管理", "title": "Provider管理", "module": "C1/B", "tier": "MVP", "file": "images/06-Provider管理.svg", "file_light": "images/06-Provider管理-浅色.svg"}, {"id": "07-轻量代码面板-Diff", "title": "轻量代码面板-Diff", "module": "K3/E9", "tier": "1.0.0-Preview", "file": "images/07-轻量代码面板-Diff.svg", "file_light": "images/07-轻量代码面板-Diff-浅色.svg"}, {"id": "08-Task看板", "title": "Task看板", "module": "K4/L4", "tier": "1.0.0-Preview", "file": "images/08-Task看板.svg", "file_light": "images/08-Task看板-浅色.svg"}, {"id": "09-Squad小队协作", "title": "Squad小队协作", "module": "F8/F9", "tier": "1.0.0-Preview", "file": "images/09-Squad小队协作.svg", "file_light": "images/09-Squad小队协作-浅色.svg"}, {"id": "10-设置页", "title": "设置页", "module": "C1-C12", "tier": "MVP/1.0.0-Preview", "file": "images/10-设置页.svg", "file_light": "images/10-设置页-浅色.svg"}, {"id": "11-Skills管理", "title": "Skills管理", "module": "G1/C4", "tier": "MVP/1.0.0-Preview", "file": "images/11-Skills管理.svg", "file_light": "images/11-Skills管理-浅色.svg"}, {"id": "12-MCP管理", "title": "MCP管理", "module": "G4/C3", "tier": "MVP/1.0.0-Preview", "file": "images/12-MCP管理.svg", "file_light": "images/12-MCP管理-浅色.svg"}, {"id": "13-Multica-Runtime状态", "title": "Multica-Runtime状态", "module": "H1/L35", "tier": "1.0.0-Preview", "file": "images/13-Multica-Runtime状态.svg", "file_light": "images/13-Multica-Runtime状态-浅色.svg"}, {"id": "14-AI写作助手", "title": "AI写作助手", "module": "D5", "tier": "1.0.0-Preview", "file": "images/14-AI写作助手.svg", "file_light": "images/14-AI写作助手-浅色.svg"}, {"id": "15-PDF伴读", "title": "PDF伴读", "module": "D7", "tier": "1.0.0-Preview", "file": "images/15-PDF伴读.svg", "file_light": "images/15-PDF伴读-浅色.svg"}, {"id": "16-内置浏览器-网页总结", "title": "内置浏览器-网页总结", "module": "I8/D8", "tier": "1.0.0-Preview", "file": "images/16-内置浏览器-网页总结.svg", "file_light": "images/16-内置浏览器-网页总结-浅色.svg"}, {"id": "17-窗口吸附模式", "title": "窗口吸附模式", "module": "A4", "tier": "MVP", "file": "images/17-窗口吸附模式.svg", "file_light": "images/17-窗口吸附模式-浅色.svg"}, {"id": "18-系统托盘菜单", "title": "系统托盘菜单", "module": "A2/L7", "tier": "MVP/1.0.0-Preview", "file": "images/18-系统托盘菜单.svg", "file_light": "images/18-系统托盘菜单-浅色.svg"}, {"id": "19-敏感操作确认", "title": "敏感操作确认", "module": "J2/F15", "tier": "MVP/1.0.0-Preview", "file": "images/19-敏感操作确认.svg", "file_light": "images/19-敏感操作确认-浅色.svg"}, {"id": "20-Canvas可视化", "title": "Canvas可视化", "module": "K6", "tier": "1.0.0-Preview", "file": "images/20-Canvas可视化.svg", "file_light": "images/20-Canvas可视化-浅色.svg"}, {"id": "21-全局搜索", "title": "全局搜索", "module": "L21", "tier": "1.0.0-Preview", "file": "images/21-全局搜索.svg", "file_light": "images/21-全局搜索-浅色.svg"}, {"id": "22-分屏-聊天加文件", "title": "分屏-聊天加文件", "module": "K7", "tier": "1.0.0-Preview", "file": "images/22-分屏-聊天加文件.svg", "file_light": "images/22-分屏-聊天加文件-浅色.svg"}, {"id": "23-Plan模式", "title": "Plan模式", "module": "E10", "tier": "1.0.0-Preview", "file": "images/23-Plan模式.svg", "file_light": "images/23-Plan模式-浅色.svg"}, {"id": "24-Task执行日志", "title": "Task执行日志", "module": "K5/L5", "tier": "1.0.0-Preview", "file": "images/24-Task执行日志.svg", "file_light": "images/24-Task执行日志-浅色.svg"}, {"id": "25-划词菜单", "title": "划词菜单", "module": "D4", "tier": "1.0.0-Preview", "file": "images/25-划词菜单.svg", "file_light": "images/25-划词菜单-浅色.svg"}, {"id": "26-语音输入", "title": "语音输入", "module": "D11", "tier": "1.0.0-Preview", "file": "images/26-语音输入.svg", "file_light": "images/26-语音输入-浅色.svg"}, {"id": "27-深色主题-主聊天", "title": "深色主题-主聊天", "module": "A10", "tier": "MVP", "file": "images/27-深色主题-主聊天.svg", "file_light": "images/27-深色主题-主聊天.svg"}, {"id": "50-浅色主题-主聊天", "title": "浅色主题-主聊天", "module": "A10", "tier": "MVP", "file": "images/50-浅色主题-主聊天.svg", "file_light": "images/50-浅色主题-主聊天.svg"}, {"id": "28-编辑Agent详情", "title": "编辑Agent详情", "module": "F1-F6", "tier": "MVP", "file": "images/28-编辑Agent详情.svg", "file_light": "images/28-编辑Agent详情-浅色.svg"}, {"id": "29-联网搜索", "title": "联网搜索", "module": "D3/L25", "tier": "MVP", "file": "images/29-联网搜索.svg", "file_light": "images/29-联网搜索-浅色.svg"}, {"id": "30-边写边译", "title": "边写边译", "module": "D6", "tier": "1.0.0-Preview", "file": "images/30-边写边译.svg", "file_light": "images/30-边写边译-浅色.svg"}, {"id": "31-视频内容摘要", "title": "视频内容摘要", "module": "D9", "tier": "1.0.0-Preview", "file": "images/31-视频内容摘要.svg", "file_light": "images/31-视频内容摘要-浅色.svg"}, {"id": "32-文生图", "title": "文生图", "module": "D10", "tier": "1.0.0-Preview", "file": "images/32-文生图.svg", "file_light": "images/32-文生图-浅色.svg"}, {"id": "33-文件上传分析", "title": "文件上传分析", "module": "D12/L22", "tier": "1.0.0-Preview", "file": "images/33-文件上传分析.svg", "file_light": "images/33-文件上传分析-浅色.svg"}, {"id": "34-Prompt模板库", "title": "Prompt模板库", "module": "D15", "tier": "1.0.0-Preview", "file": "images/34-Prompt模板库.svg", "file_light": "images/34-Prompt模板库-浅色.svg"}, {"id": "35-对话导出", "title": "对话导出", "module": "D14", "tier": "MVP", "file": "images/35-对话导出.svg", "file_light": "images/35-对话导出-浅色.svg"}, {"id": "36-Token用量统计", "title": "Token用量统计", "module": "B9", "tier": "1.0.0-Preview", "file": "images/36-Token用量统计.svg", "file_light": "images/36-Token用量统计-浅色.svg"}, {"id": "37-快捷键配置", "title": "快捷键配置", "module": "C5", "tier": "1.0.0-Preview", "file": "images/37-快捷键配置.svg", "file_light": "images/37-快捷键配置-浅色.svg"}, {"id": "38-权限沙箱配置", "title": "权限沙箱配置", "module": "C6/J3/J6", "tier": "1.0.0-Preview", "file": "images/38-权限沙箱配置.svg", "file_light": "images/38-权限沙箱配置-浅色.svg"}, {"id": "39-工作区绑定", "title": "工作区绑定", "module": "C7/L10", "tier": "MVP", "file": "images/39-工作区绑定.svg", "file_light": "images/39-工作区绑定-浅色.svg"}, {"id": "40-日志调试面板", "title": "日志调试面板", "module": "C11", "tier": "MVP", "file": "images/40-日志调试面板.svg", "file_light": "images/40-日志调试面板-浅色.svg"}, {"id": "41-配置导入导出", "title": "配置导入导出", "module": "C12", "tier": "1.0.0-Preview", "file": "images/41-配置导入导出.svg", "file_light": "images/41-配置导入导出-浅色.svg"}, {"id": "42-Daemon管理", "title": "Daemon管理", "module": "L7-L9", "tier": "1.0.0-Preview", "file": "images/42-Daemon管理.svg", "file_light": "images/42-Daemon管理-浅色.svg"}, {"id": "43-MCP权限审批", "title": "MCP权限审批", "module": "J7/G8", "tier": "1.0.0-Preview", "file": "images/43-MCP权限审批.svg", "file_light": "images/43-MCP权限审批-浅色.svg"}, {"id": "44-Agent模板库", "title": "Agent模板库", "module": "L30", "tier": "1.0.0-Preview", "file": "images/44-Agent模板库.svg", "file_light": "images/44-Agent模板库-浅色.svg"}, {"id": "45-数据备份恢复", "title": "数据备份恢复", "module": "L18-L20", "tier": "1.0.0-Preview", "file": "images/45-数据备份恢复.svg", "file_light": "images/45-数据备份恢复-浅色.svg"}, {"id": "46-Task取消重试", "title": "Task取消重试", "module": "L4-L6", "tier": "MVP", "file": "images/46-Task取消重试.svg", "file_light": "images/46-Task取消重试-浅色.svg"}, {"id": "47-At引用文件", "title": "At引用文件", "module": "E6", "tier": "1.0.0-Preview", "file": "images/47-At引用文件.svg", "file_light": "images/47-At引用文件-浅色.svg"}, {"id": "48-运行模式指示", "title": "运行模式指示", "module": "L39/A8", "tier": "1.0.0-Preview", "file": "images/48-运行模式指示.svg", "file_light": "images/48-运行模式指示-浅色.svg"}, {"id": "49-多模态图片理解", "title": "多模态图片理解", "module": "L23", "tier": "1.0.0-Preview", "file": "images/49-多模态图片理解.svg", "file_light": "images/49-多模态图片理解-浅色.svg"}];
+    const links = document.querySelectorAll('.group a');
+    const viewer = document.getElementById('viewer');
+    const titleEl = document.getElementById('title');
+    const moduleEl = document.getElementById('module');
+    const tierEl = document.getElementById('tier');
+    const counterEl = document.getElementById('counter');
+    const btnLight = document.getElementById('btn-light');
+    const btnDark = document.getElementById('btn-dark');
+    let idx = 0;
+    let viewTheme = 'light';
+    let currentLink = null;
+
+    function renderImage() {
+      if (!currentLink) return;
+      const file = viewTheme === 'light' ? currentLink.dataset.fileLight : currentLink.dataset.file;
+      viewer.innerHTML = '<img src="' + file + '" alt="' + currentLink.textContent.trim() + '">';
+    }
+
+    function setViewTheme(theme) {
+      viewTheme = theme;
+      btnLight.classList.toggle('active', theme === 'light');
+      btnDark.classList.toggle('active', theme === 'dark');
+      renderImage();
+    }
+
+    function show(link) {
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+      currentLink = link;
+      titleEl.textContent = link.textContent.trim();
+      moduleEl.textContent = '模块 ' + link.dataset.module;
+      tierEl.textContent = link.dataset.tier;
+      idx = Array.from(links).indexOf(link);
+      counterEl.textContent = (idx + 1) + ' / ' + links.length;
+      renderImage();
+    }
+
+    links.forEach(link => link.addEventListener('click', e => { e.preventDefault(); show(link); }));
+    btnLight.addEventListener('click', () => setViewTheme('light'));
+    btnDark.addEventListener('click', () => setViewTheme('dark'));
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next = e.key === 'ArrowDown' ? Math.min(idx + 1, links.length - 1) : Math.max(idx - 1, 0);
+        show(links[next]);
+      }
+    });
+
+    if (links.length) show(links[0]);
+  </script>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 [简体中文](#zh-cn) | [English](#en)
 
+[![Version](https://img.shields.io/badge/version-1.0.0--Preview-blue)]()
+
 [![Node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-9.12-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
 [![Electron](https://img.shields.io/badge/Electron-32-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -220,11 +222,11 @@ cd apps/desktop && pnpm vitest run src/renderer
 # Core 引擎测试
 cd packages/core && pnpm test
 
-# V1.0 功能回归（Playwright + Electron）
+# 1.0.0-Preview 功能回归（Playwright + Electron）
 pnpm test:functional
 ```
 
-功能测试套件说明见 [`test/V1.0/README.md`](test/V1.0/README.md)。
+功能测试套件说明见 [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md)。
 
 ### 项目结构
 
@@ -274,10 +276,10 @@ Jarvis/
 |------|------|
 | [`CLAUDE.md`](CLAUDE.md) | 仓库开发约定与架构速查（面向 AI / 贡献者） |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | 桌面端 native 模块与 Daemon 构建说明 |
-| [`wiki/`](wiki/) | 产品、技术、需求文档 V1.0 |
+| [`wiki/`](wiki/) | 产品、技术、需求文档 1.0.0-Preview |
 | [`docs/superpowers/plans/`](docs/superpowers/plans/) | M0–M8 分里程碑实现计划 |
 | [`docs/superpowers/specs/`](docs/superpowers/specs/) | UI 设计系统等规格 |
-| [`test/V1.0/README.md`](test/V1.0/README.md) | V1.0 功能测试矩阵 |
+| [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) | 1.0.0-Preview 功能测试矩阵 |
 
 ### 贡献
 
@@ -287,7 +289,7 @@ Jarvis/
 4. 为新逻辑补充 Vitest 用例；涉及 IPC 或端到端流程时考虑 Playwright 覆盖
 5. 提交 Pull Request 并说明变更范围与测试情况
 
-开发前建议阅读 [`CLAUDE.md`](CLAUDE.md) 中的 Global Constraints（Q4 自定义模型、单写者表、V1.0 排除项等）。
+开发前建议阅读 [`CLAUDE.md`](CLAUDE.md) 中的 Global Constraints（Q4 自定义模型、单写者表、1.0.0-Preview 排除项等）。
 
 ### 许可证
 
@@ -502,11 +504,11 @@ cd apps/desktop && pnpm vitest run src/renderer
 # core engine
 cd packages/core && pnpm test
 
-# V1.0 functional regression (Playwright + Electron)
+# 1.0.0-Preview functional regression (Playwright + Electron)
 pnpm test:functional
 ```
 
-See [`test/V1.0/README.md`](test/V1.0/README.md) for the functional test matrix.
+See [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) for the functional test matrix.
 
 ### Project Structure
 
@@ -556,10 +558,10 @@ Override the data directory with `JARVIS_DATA_DIR` (tests & CI).
 |-----|-------------|
 | [`CLAUDE.md`](CLAUDE.md) | Dev conventions & architecture cheat sheet |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | Native modules & daemon build notes |
-| [`wiki/`](wiki/) | Product, technical & requirements docs V1.0 |
+| [`wiki/`](wiki/) | Product, technical & requirements docs 1.0.0-Preview |
 | [`docs/superpowers/plans/`](docs/superpowers/plans/) | M0–M8 milestone plans |
 | [`docs/superpowers/specs/`](docs/superpowers/specs/) | UI design system & other specs |
-| [`test/V1.0/README.md`](test/V1.0/README.md) | V1.0 functional test matrix |
+| [`test/1.0.0-Preview/README.md`](test/1.0.0-Preview/README.md) | 1.0.0-Preview functional test matrix |
 
 ### Contributing
 
@@ -569,7 +571,7 @@ Override the data directory with `JARVIS_DATA_DIR` (tests & CI).
 4. Add Vitest coverage; use Playwright for IPC / E2E flows when relevant
 5. Open a PR describing scope and how you tested
 
-Read Global Constraints in [`CLAUDE.md`](CLAUDE.md) before large changes (custom models, single-writer tables, V1.0 exclusions).
+Read Global Constraints in [`CLAUDE.md`](CLAUDE.md) before large changes (custom models, single-writer tables, 1.0.0-Preview exclusions).
 
 ### License
 

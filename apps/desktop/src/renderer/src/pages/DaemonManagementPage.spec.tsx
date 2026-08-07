@@ -33,7 +33,7 @@ beforeEach(() => {
   statusMock.mockReset();
   listApprovalsMock.mockReset();
   approveMock.mockReset();
-  statusMock.mockResolvedValue({ running: true, version: '0.1.1', activeTasks: 2, queued: 1, perAgent: 6, concurrency: 20 });
+  statusMock.mockResolvedValue({ running: true, version: '1.0.0-Preview', activeTasks: 2, queued: 1, perAgent: 6, concurrency: 20 });
   listApprovalsMock.mockResolvedValue({ ok: true, items: [] });
 });
 
@@ -43,7 +43,7 @@ describe('DaemonManagementPage', () => {
   it('renders running indicator, version, task counts and restart button', async () => {
     render(<DaemonManagementPage />);
     await waitFor(() => expect(screen.getByTestId('daemon-running').textContent).toContain('●'));
-    expect(screen.getByTestId('daemon-version').textContent).toContain('0.1.1');
+    expect(screen.getByTestId('daemon-version').textContent).toContain('1.0.0-Preview');
     expect(screen.getByTestId('daemon-tasks').textContent).toContain('2');
     expect(screen.getByTestId('daemon-tasks').textContent).toContain('1');
     expect(screen.getByTestId('daemon-restart')).toBeTruthy();

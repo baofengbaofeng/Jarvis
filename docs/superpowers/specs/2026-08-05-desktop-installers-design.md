@@ -22,7 +22,7 @@
 3. **指纹算法**：SHA-256，指纹文件为 `.sha256`。
 4. **macOS 产物形态**：按架构拆分为两个 dmg（不做 universal 单文件）。
 5. **方案范围**：Windows MSI 与 macOS 双 dmg 在同一方案中一次完成。
-6. **版本号**：仓库中 `apps/desktop/package.json` 保持 `0.1.0` 不动；`1.0.0-Preview` 仅在打包时通过 `-c.extraMetadata.version` 注入，文件名保留 `1.0.0_Preview` 字样。MSI 的 ProductVersion 由 electron-builder 从注入版本派生，正常会取数字部分 `1.0.0`（Windows 安装器元数据不允许预发布后缀）；若实现时发现 electron-builder 对 `1.0.0-Preview` 的 MSI 目标报错，则 MSI job 改为注入 `1.0.0`，`_Preview` 只体现在文件名——文件名与 `.sha256` 文件名不受影响。
+6. **版本号**：仓库中 `apps/desktop/package.json` 统一为 `1.0.0-Preview`；`1.0.0-Preview` 仅在打包时通过 `-c.extraMetadata.version` 注入，文件名保留 `1.0.0_Preview` 字样。MSI 的 ProductVersion 由 electron-builder 从注入版本派生，正常会取数字部分 `1.0.0`（Windows 安装器元数据不允许预发布后缀）；若实现时发现 electron-builder 对 `1.0.0-Preview` 的 MSI 目标报错，则 MSI job 改为注入 `1.0.0`，`_Preview` 只体现在文件名——文件名与 `.sha256` 文件名不受影响。
 
 ## 3. 关键约束与事实
 
@@ -100,7 +100,7 @@ constructor(private binaryPath = join(import.meta.dirname, '../../../resources/d
 
 ### 4.4 `.github/workflows/build-installers.yml`（新增）
 
-两个 job，`workflow_dispatch`（网页手动触发，带版本号输入框，默认 `1.0.0-Preview`）+ `v1.0.0-preview*` tag 触发。
+两个 job，`workflow_dispatch`（网页手动触发，带版本号输入框，默认 `1.0.0-Preview`）+ `1.0.0-Preview.0-preview*` tag 触发。
 
 **job `windows-msi`（`runs-on: windows-latest`）：**
 
@@ -187,6 +187,6 @@ CI 上传的 6 个文件（msi + 2 dmg + 3 sha256）从 GitHub Actions 页面手
 - **dist 产物入库**：安装包 + 指纹文件跟踪入库（`.gitignore` 白名单）。⚠️ **体积风险**：Electron 的 MSI/dmg 通常 60–150MB，GitHub 对单文件有 50MB 告警、100MB 硬上限；若产物超限，push 会被拒。届时按"文件大小调整"约定：`dist/` 改回整体忽略，改用 GitHub Releases（单文件上限 2GB）分发，`.gitignore` 已注明该回退路径。
 - **未签名**：Windows SmartScreen 首次运行有警告；macOS 预览包下载后有 Gatekeeper 拦截（右键→打开）。正式发布需：Apple Developer 账号（$99/年）+ Developer ID 证书 + notarytool 公证，以及 Windows 代码签名证书；electron-builder 配置已留位，拿到证书后开启 `hardenedRuntime` 与签名即可。
 - **默认图标**：未提供自定义图标，使用 Electron 默认图标；后续补 `build/icon.ico` + `.icns`。
-- **版本号注入**：`1.0.0-Preview` 仅存在于构建时；仓库 `package.json` 版本保持 `0.1.0`，正式发版时再统一升版本。
+- **版本号注入**：`1.0.0-Preview` 仅存在于构建时；仓库 `package.json` 版本为 `1.0.0-Preview`，正式发版时再统一升版本。
 - **自动更新**（zip/electron-updater）：本次不做，`mac.target` 未来可加 `zip`。
 - **产物下载**：当前为手动从 Actions 下载；可后续加下载脚本。

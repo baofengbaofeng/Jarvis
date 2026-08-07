@@ -3,9 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 本计划依赖 M0–M2:`packages/core`(AgentEngine/ToolRegistry/ModelRouter)、main IPC、SQLite schema v1(mcp_servers/skills/mcp_grants 表)、渲染层 store 模式。
 >
 > **Part A(M3核心,MVP)** = G1/G2/G4/G5 + E2/E3 + J1/J2/J3(文件/Shell 工具、MCP stdio、Skills 基础、沙箱、审批)。
-> **Part B(M3剩余,V1.0 增量)** = E1/E4/E13 + G3/G6/G7/G8/G9 + C3/C4/C6/C8/C9/C10 + J6/J7 + L7/L8/L9/L11/L17/L32。
+> **Part B(M3剩余,1.0.0-Preview 增量)** = E1/E4/E13 + G3/G6/G7/G8/G9 + C3/C4/C6/C8/C9/C10 + J6/J7 + L7/L8/L9/L11/L17/L32。
 
-**Goal:** 打通 MVP 工具链闭环:Agent 在绑定工作区内读写文件、执行白名单 Shell、调用 MCP stdio 工具、加载 SKILL.md,并受沙箱与审批保护。随后补齐 V1.0 工具链:Git、完整沙箱策略、MCP/Skills 管理 UI、Daemon 可视化管理、环境变量/CLI/并发配置、Plugin 扩展。
+**Goal:** 打通 MVP 工具链闭环:Agent 在绑定工作区内读写文件、执行白名单 Shell、调用 MCP stdio 工具、加载 SKILL.md,并受沙箱与审批保护。随后补齐 1.0.0-Preview 工具链:Git、完整沙箱策略、MCP/Skills 管理 UI、Daemon 可视化管理、环境变量/CLI/并发配置、Plugin 扩展。
 
 **Architecture:** 工具一律注册进 `packages/core` 的 `ToolRegistry`(M2),AgentEngine 经 approvalGate 审批后执行。文件/Shell 沙箱实现于 `packages/core` 纯函数(便于单测);MCP Client 用 child_process stdio JSON-RPC,发现工具注册为 `mcp:{server}:{tool}`。Keychain(J1)已在 M1 Task 3;本里程碑补 audit_logs 写入与日志脱敏。Daemon 管理部分把 M0 桩升级为 Go 队列/并发实现(每表单写者:Multica 路径由 daemon 写 tasks,M2–M6 本地任务由 main 写,见 M2 Architecture 说明)。
 
@@ -688,7 +688,7 @@ export class McpClient {
   }
 
   async initialize(): Promise<void> {
-    await this.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'jarvis', version: '0.1.0' } });
+    await this.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'jarvis', version: '1.0.0-Preview' } });
   }
 
   async listTools(): Promise<MCPTool[]> {
@@ -1078,7 +1078,7 @@ git commit -m "feat(mcp/skills): CRUD IPC, admin UI shells, S2 E2E scaffolding (
 
 ---
 
-# Part B — M3剩余(V1.0 增量)
+# Part B — M3剩余(1.0.0-Preview 增量)
 
 ### Task 7: Git 工具(E4)与 MCP 管理完成(G6/G7/G8 审批)
 
@@ -1328,7 +1328,7 @@ func main() {
 	perAgent := getenvInt("JARVIS_CONCURRENCY_PER_AGENT", 6)
 	machine := getenvInt("JARVIS_CONCURRENCY_MACHINE", 20)
 	q := runtime.NewQueue(perAgent, machine)
-	srv := httpapi.NewServer("0.1.1", q)
+	srv := httpapi.NewServer("1.0.0-Preview", q)
 	log.Printf("jarvis-daemon on 127.0.0.1:%s concurrency %d/%d", port, perAgent, machine)
 	if err := http.ListenAndServe("127.0.0.1:"+port, srv.Handler()); err != nil {
 		log.Fatal(err)

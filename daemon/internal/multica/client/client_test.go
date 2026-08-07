@@ -40,7 +40,7 @@ func (f *fakeAPI) Ack(_ context.Context, _, _ string, _ bool) error             
 
 func TestRegister(t *testing.T) {
 	f := &fakeAPI{}
-	c := NewClient(f, ClientOptions{Name: "mac-mini", Version: "0.1.0", Concurrency: 6, Models: []string{"m1"}})
+	c := NewClient(f, ClientOptions{Name: "mac-mini", Version: "1.0.0-Preview", Concurrency: 6, Models: []string{"m1"}})
 	id, err := c.Register(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestPollBeforeRegisterFails(t *testing.T) {
 // across concurrent readers.
 func TestRegisteredIDReturnsServerAssigned(t *testing.T) {
 	f := &fakeAPI{}
-	c := NewClient(f, ClientOptions{Name: "jarvis", Version: "0.1.0"})
+	c := NewClient(f, ClientOptions{Name: "jarvis", Version: "1.0.0-Preview"})
 	if got := c.RegisteredID(); got != "" {
 		t.Fatalf("expected empty before register, got %q", got)
 	}
