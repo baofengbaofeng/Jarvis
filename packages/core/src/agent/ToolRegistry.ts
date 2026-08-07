@@ -1,6 +1,17 @@
 import type { ToolDef, ToolContext, ToolResult, ToolCall } from './types';
+import { DelegateGuardError } from '../squad/Delegate';
 
 type ToolHandler = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
+
+/** Errors that must abort the engine run (not converted to ok:false). */
+export class FatalToolError extends Error {
+  readonly fatal = true as const;
+}
+
+function isFatalToolError(err: unknown): boolean {
+  if (err instanceof FatalToolError || err instanceof DelegateGuardError) return true;
+  return Boolean(err && typeof err === 'object' && (err as { fatal?: boolean }).fatal === true);
+}
 
 // J5 (M8 Task 3): execution-audit hook. Fired once per execute() attempt — with
 // result 'ok' when the handler resolves, 'error' when it rejects or the tool is
@@ -49,8 +60,9 @@ export class ToolRegistry {
       return result;
     } catch (err) {
       emit('error');
-      // CORE-06: handler throws must return ok:false to the model so the REACT
-      // loop can continue, instead of aborting the whole task.
+      // Squad control-flow (member-leaf guard, failed delegation) must abort the
+      // run; other handler throws stay model-recoverable (CORE-06).
+      if (isFatalToolError(err)) throw err;
       const output = err instanceof Error ? err.message : String(err);
       return { ok: false, output };
     }

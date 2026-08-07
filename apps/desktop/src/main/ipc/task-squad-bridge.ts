@@ -5,6 +5,7 @@ import {
   buildPassedContext,
   createGuard,
   DelegateGuardError,
+  FatalToolError,
   registerDelegateTool,
   planVisibleTools,
   type Squad,
@@ -88,9 +89,13 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
       recordCallEdge(from, to, taskId, ctx.taskId, true);
       return text;
     } catch (e) {
-      bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: e instanceof Error ? e.message : String(e) } });
+      const msg = e instanceof Error ? e.message : String(e);
+      bus.post({ kind: 'complete', from: to, to: from, taskId, payload: { ok: false, error: msg } });
       recordCallEdge(from, to, taskId, ctx.taskId, false);
-      throw e;
+      // L14 + CORE-06: surface through ToolRegistry as a fatal error so the
+      // leader run rejects instead of continuing with ok:false.
+      if (e instanceof FatalToolError || e instanceof DelegateGuardError) throw e;
+      throw new FatalToolError(msg);
     } finally {
       ctx.memberActive = false;
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ToolRegistry } from './ToolRegistry';
+import { FatalToolError, ToolRegistry } from './ToolRegistry';
+import { DelegateGuardError } from '../squad/Delegate';
 
 describe('ToolRegistry', () => {
   it('registers and lists tools', () => {
@@ -39,6 +40,14 @@ describe('ToolRegistry', () => {
     expect(r).toEqual({ ok: false, output: 'handler failed' });
     expect(onExec).toHaveBeenCalledTimes(1);
     expect(onExec.mock.calls[0][0].result).toBe('error');
+  });
+
+  it('rethrows FatalToolError and DelegateGuardError (squad control-flow)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'fatal', description: '', parameters: {} }, async () => { throw new FatalToolError('member crashed'); });
+    reg.register({ name: 'guard', description: '', parameters: {} }, async () => { throw new DelegateGuardError('members cannot delegate'); });
+    await expect(reg.execute({ id: '1', name: 'fatal', arguments: {} }, { cwd: '/', env: {} })).rejects.toThrow('member crashed');
+    await expect(reg.execute({ id: '2', name: 'guard', arguments: {} }, { cwd: '/', env: {} })).rejects.toThrow('members cannot delegate');
   });
 
   it('returns ok:false for an unknown tool instead of throwing (CORE-06)', async () => {

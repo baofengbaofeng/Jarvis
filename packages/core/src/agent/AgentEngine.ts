@@ -125,7 +125,12 @@ export class AgentEngine {
         }
         // CORE-19 / CORE-20: enforce run-scoped visibility at execute time too
         // (model may still emit a tool name that was filtered from the request).
-        if ((visibleTools && !visibleTools.includes(call.name)) || (toolFilter && !toolFilter(call.name))) {
+        // MCP tools may be bound (toolFilter ok) before the client has registered
+        // them into the registry — those still reach the approval gate.
+        const mcpBound = call.name.startsWith('mcp:') && toolFilter?.(call.name) === true;
+        const blockedByVisible = Boolean(visibleTools && !visibleTools.includes(call.name) && !mcpBound);
+        const blockedByFilter = Boolean(toolFilter && !toolFilter(call.name));
+        if (blockedByVisible || blockedByFilter) {
           const output = `[denied] ${call.name} not allowed for this run`;
           const result = { ok: false, output };
           onTool?.(call, result);
