@@ -1,18 +1,21 @@
-# JARVIS 独立代码评审报告（1.0.0-Preview）
+# JARVIS Code Review 报告
 
-| 项 | 内容 |
+## 1. 基本信息
+
+| 项目 | 内容 |
 |---|---|
-| 产品 | JARVIS — 本地优先（local-first）跨平台 AI Agent 桌面工作台 |
+| 项目名称 | JARVIS 1.0.0-Preview（本地优先桌面 AI Agent 平台） |
 | 评审日期 | 2026-08-07 |
+| 评审范围 | `packages/core`、`packages/protocol`、`packages/ui`、`packages/i18n`、`apps/desktop`（main/preload/renderer）、`daemon/`、根构建/测试脚本、`test/1.0.0-Preview`、依赖与打包配置 |
 | 代码基线 | `master` / 工作树 HEAD（含 UI polish 等近期合入） |
-| 评审立场 | **独立全仓静态+调用链审查**；结论仅依据源码、构建配置与可执行验证，不继承既有质量报告的问题编号或整改矩阵 |
-| 覆盖范围 | `packages/core`、`packages/protocol`、`packages/ui`、`packages/i18n`、`apps/desktop`（main/preload/renderer）、`daemon/`、根构建/测试脚本、`test/1.0.0-Preview`、依赖与打包配置 |
+| 技术栈 | Electron 32、React 19、TypeScript 5、Zustand、react-i18next、better-sqlite3、Go、SQLite、pnpm/Turborepo、Vitest、Playwright |
+| 评审方式 | **独立全仓静态+调用链审查**；结论仅依据源码、构建配置与可执行验证，不继承既有质量报告的问题编号或整改矩阵 |
 | 评审维度 | 业务契合、技术方案、代码结构、编码规范、合理性、扩展性、健壮性、软件安全、测试方案 |
 | 结论 | **当前不建议作为 1.0.0-Preview 发布**；架构方向正确，但引擎工具协议、审批默认放行、打包 Daemon 不可达、无 CI、生产构建失败等构成发布阻断 |
 
 ---
 
-## 1. 业务背景与目标（评审基线）
+## 1.1 业务背景与目标（评审基线）
 
 JARVIS 面向个人办公，把对话、REACT 任务、编程辅助、办公增强、多 Agent（Squad）与可选 Multica 运行时收进一个 Electron 应用：
 
@@ -297,7 +300,7 @@ JARVIS 面向个人办公，把对话、REACT 任务、编程辅助、办公增�
 | TEST-05..09 | M/L | Go 未聚合、覆盖倒置、passWithNoTests 等 |
 | BUILD-07..10 | M/L | 无 lint、未签名、i18n 未入 CI、死依赖 |
 
-完整 AI_FIX 细节与文件列表见配套 backlog：`docs/superpowers/specs/2026-08-07-independent-cr-ai-backlog.md`。
+完整 AI_FIX 细节与文件列表见配套 backlog：`docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`。
 
 ---
 
@@ -426,4 +429,4 @@ Medium/Low: 见 §4.3 与 backlog。
 
 ## 附录 B — 给自动化 Agent 的一句话
 
-> 打开 `docs/superpowers/specs/2026-08-07-independent-cr-ai-backlog.md`，按 Wave 取下一个 `status: open` 的 ID，严格按本报告 §5 执行 TDD 与验证，禁止阅读或复用任何历史「质量报告」中的旧 ID 作为结案依据；以本报告 ID 为唯一真源。
+> 打开 `docs/superpowers/specs/2026-08-07-cr-ai-remediation-backlog.md`，按 Wave 取下一个 `status: open` 的 ID，严格按本报告 §5 执行 TDD 与验证，禁止阅读或复用任何历史「质量报告」中的旧 ID 作为结案依据；以本报告 ID 为唯一真源。

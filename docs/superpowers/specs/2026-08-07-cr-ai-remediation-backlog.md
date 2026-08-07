@@ -1,7 +1,7 @@
-# JARVIS Independent CR — AI Remediation Backlog
+# JARVIS Code Review AI Remediation Backlog
 
-Source of truth: `wiki/质量报告/JARVIS_Independent_CR_2026-08-07.md`  
-Do **not** use historical quality-report IDs. Track only IDs in this file.
+Source of truth: `wiki/质量报告/JARVIS CodeReview_2026-08-07.md`  
+Do **not** use historical quality-report IDs. Track only IDs defined in the 2026-08-07 Code Review report.
 
 ## Constraints
 
@@ -176,7 +176,7 @@ items:
 ## Protocol
 
 1. Pick next open ID from current wave (honor `depends_on`).
-2. Read the matching section in the independent CR report.
+2. Read the matching section in `wiki/质量报告/JARVIS CodeReview_2026-08-07.md`.
 3. Write Red tests → implement → run `validation`.
 4. Commit `fix|feat|test|chore({scope}): {ID} ...`
 5. Set `status: fixed` here and update the report matrix note.
