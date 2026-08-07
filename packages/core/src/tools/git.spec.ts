@@ -53,4 +53,26 @@ describe('git tools', () => {
     );
     expect(status.output).toContain('should-not-run');
   });
+
+  it('forwards AbortSignal and sets non-interactive git env (CORE-14)', async () => {
+    const calls: Array<{ args: string[]; opts: { signal?: AbortSignal; env?: Record<string, string> } }> = [];
+    const g = new ToolRegistry();
+    createGitTools(g, policy, {
+      execImpl: async (_cmd, args, _cwd, opts) => {
+        calls.push({ args, opts: opts ?? {} });
+        return { stdout: 'ok', stderr: '' };
+      },
+    });
+    const ac = new AbortController();
+    await g.execute(
+      { id: '1', name: 'git_status', arguments: {} },
+      { cwd: ws, env: { CUSTOM: '1' }, workspaceRoot: ws, signal: ac.signal },
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].opts.signal).toBe(ac.signal);
+    expect(calls[0].opts.env?.GIT_TERMINAL_PROMPT).toBe('0');
+    expect(calls[0].opts.env?.GIT_ASKPASS).toBe('echo');
+    expect(calls[0].opts.env?.GCM_INTERACTIVE).toBe('never');
+    expect(calls[0].opts.env?.CUSTOM).toBe('1');
+  });
 });
