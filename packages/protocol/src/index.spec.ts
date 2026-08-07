@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { IpcChannel, IpcEvent, ALLOWED_INVOKE, ALLOWED_EVENTS, type TaskStatus } from './index';
+import { IpcChannel, IpcEvent, ALLOWED_INVOKE, ALLOWED_EVENTS, GITHUB_REPO_URL, type TaskStatus } from './index';
 
 describe('protocol contract', () => {
+  it('exports GitHub repo URL', () => {
+    expect(GITHUB_REPO_URL).toBe('https://github.com/baofengbaofeng/Jarvis');
+  });
   it('exposes IpcChannel strings', () => {
     expect(IpcChannel.settingsGet).toBe('settings.get');
     expect(IpcChannel.settingsSet).toBe('settings.set');

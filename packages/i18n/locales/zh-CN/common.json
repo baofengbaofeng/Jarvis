@@ -298,8 +298,16 @@
     "groupWork": "功能",
     "groupCollab": "协作",
     "groupAgents": "Agent",
+    "groupChats": "对话",
+    "groupMore": "更多",
     "navChat": "对话",
-    "searchAgents": "搜索 Agent"
+    "newChat": "新建对话",
+    "search": "搜索",
+    "searchPlaceholder": "搜索 Agent 或对话",
+    "searchAgents": "搜索 Agent",
+    "settingsAria": "设置",
+    "repoLink": "github.com/baofengbaofeng/Jarvis",
+    "repoLinkAria": "打开 JARVIS GitHub 仓库"
   },
   "shortcuts": {
     "title": "键盘快捷键",

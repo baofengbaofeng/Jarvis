@@ -2,6 +2,7 @@ export { IpcChannel, IpcEvent } from './ipc-channels';
 
 export {
   APP_VERSION,
+  GITHUB_REPO_URL,
   CONFIG_SCHEMA_VERSION,
   LEGACY_CONFIG_SCHEMA_VERSION,
   INSTALLER_ARTIFACT_VERSION,

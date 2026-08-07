@@ -296,8 +296,16 @@
     "groupWork": "Features",
     "groupCollab": "Collaboration",
     "groupAgents": "Agents",
+    "groupChats": "Chats",
+    "groupMore": "More",
     "navChat": "Chat",
-    "searchAgents": "Search agents"
+    "newChat": "New Chat",
+    "search": "Search",
+    "searchPlaceholder": "Search agents or chats",
+    "searchAgents": "Search agents",
+    "settingsAria": "Settings",
+    "repoLink": "github.com/baofengbaofeng/Jarvis",
+    "repoLinkAria": "Open JARVIS GitHub repository"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

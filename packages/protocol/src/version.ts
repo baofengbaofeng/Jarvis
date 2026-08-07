@@ -1,6 +1,9 @@
 /** Product / package semver (Preview). */
 export const APP_VERSION = '1.0.0-Preview';
 
+/** Public GitHub repository (issues / source). */
+export const GITHUB_REPO_URL = 'https://github.com/baofengbaofeng/Jarvis';
+
 /** Config export/import payload schema — aligned with product version at 1.0.0-Preview. */
 export const CONFIG_SCHEMA_VERSION = '1.0.0-Preview';
 
