@@ -1,0 +1,29 @@
+.jui-collapsible-nav {
+  margin-bottom: var(--space-2);
+}
+
+.jui-collapsible-nav__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.jui-collapsible-nav__chevron {
+  font-size: 10px;
+}
+
+.jui-collapsible-nav__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

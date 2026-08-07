@@ -6,14 +6,14 @@ import { initReactI18next } from 'react-i18next';
 import { getResources } from '@jarvis/i18n';
 import { OnboardingPage } from './OnboardingPage';
 
-// The default settings store (Task 8) reads window.jarvis at module load time
-// (createSettingsStore(window.jarvis)), which happens when OnboardingPage is
-// imported. A beforeAll hook runs too late — the store would capture undefined.
-// vi.hoisted executes before the imports evaluate, so the bridge is defined
-// when the store is created. (Test-only; production code is untouched.)
 vi.hoisted(() => {
   window.jarvis = {
-    invoke: vi.fn(),
+    invoke: vi.fn(async (m: string) => {
+      if (m === 'provider.create') return { id: 'p1' };
+      if (m === 'agent.create') return { id: 'a1', name: 'Test', slug: 'test' };
+      if (m === 'diagnostics.run') return { items: [{ id: 'node', ok: true, detail: 'ok' }] };
+      return null;
+    }),
     settingsGet: vi.fn(),
     settingsSet: vi.fn().mockResolvedValue(undefined),
     onDidReceive: vi.fn()
@@ -33,12 +33,15 @@ describe('OnboardingPage', () => {
       </MemoryRouter>
     );
     expect(screen.getByTestId('onboarding-step-1')).toBeTruthy();
+    const step1Inputs = screen.getAllByRole('textbox');
+    fireEvent.change(step1Inputs[0]!, { target: { value: 'OpenAI' } });
+    fireEvent.change(step1Inputs[1]!, { target: { value: 'https://api.example.com' } });
     fireEvent.click(screen.getByTestId('onboarding-next'));
-    expect(screen.getByTestId('onboarding-step-2')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('onboarding-step-2')).toBeTruthy());
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Assistant' } });
     fireEvent.click(screen.getByTestId('onboarding-next'));
+    await waitFor(() => expect(screen.getByTestId('onboarding-step-3')).toBeTruthy());
     fireEvent.click(screen.getByTestId('onboarding-finish'));
-    // finish() awaits setOnboardingDone(true) before onDone(), so completion is
-    // async; wait for the bridge promise to settle.
     await waitFor(() => expect(done).toBe(true));
   });
 });

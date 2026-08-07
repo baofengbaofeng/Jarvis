@@ -45,6 +45,7 @@ beforeAll(async () => {
       if (method === 'audit.list') return [];
       if (method === 'agent-templates.list') return [];
       if (method === 'backup.list') return [];
+      if (method === 'taskboard.list') return [];
       return null;
     }),
     settingsSet: async () => {},

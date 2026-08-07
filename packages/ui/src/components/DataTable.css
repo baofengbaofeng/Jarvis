@@ -1,0 +1,36 @@
+.jui-data-table {
+  overflow-x: auto;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.jui-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.jui-data-table th,
+.jui-data-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 0.5px solid var(--border-subtle);
+}
+
+.jui-data-table th {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  background: var(--bg);
+}
+
+.jui-data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.jui-data-table tbody tr:hover {
+  background: var(--border-subtle);
+}

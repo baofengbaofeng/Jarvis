@@ -1,0 +1,58 @@
+.jui-setting-group {
+  margin-bottom: var(--space-5);
+}
+
+.jui-setting-group__label {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.jui-setting-group__card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.jui-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.jui-setting-row + .jui-setting-row {
+  border-top: 0.5px solid var(--border-subtle);
+}
+
+.jui-setting-row--clickable {
+  cursor: pointer;
+}
+
+.jui-setting-row--clickable:hover {
+  background: var(--border-subtle);
+}
+
+.jui-setting-row__label {
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.jui-setting-row__value {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  text-align: right;
+}

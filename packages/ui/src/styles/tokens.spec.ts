@@ -7,7 +7,7 @@ const dir = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(dir, 'tokens.css'), 'utf8');
 
 describe('tokens.css', () => {
-  it('defines light and dark surfaces and ink-blue accent', () => {
+  it('defines light and dark surfaces and Apple-blue accent', () => {
     expect(css).toMatch(/\[data-theme=['"]light['"]\]|:root/);
     expect(css).toMatch(/\[data-theme=['"]dark['"]\]/);
     for (const v of ['--bg', '--surface', '--surface-raised', '--border', '--border-subtle',
@@ -16,7 +16,7 @@ describe('tokens.css', () => {
       '--space-1', '--radius-md', '--text-sm', '--font-sans', '--font-mono']) {
       expect(css).toContain(v);
     }
-    expect(css).toMatch(/--accent:\s*#1f4e79/i);
+    expect(css).toMatch(/--accent:\s*#007aff/i);
     expect(css).not.toMatch(/#7c3aed|#8b5cf6|purple/i);
   });
 });

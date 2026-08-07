@@ -65,6 +65,8 @@ export const ALLOWED_INVOKE = new Set<string>([
   'usage.list',
   'audit.list',
   'audit.export',
+  'logs.list',
+  'logs.read',
   'artifacts.list',
   'artifacts.save',
   'backup.list',

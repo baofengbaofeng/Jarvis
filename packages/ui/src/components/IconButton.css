@@ -1,0 +1,55 @@
+.jui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.jui-icon-btn--sm {
+  width: 28px;
+  height: 28px;
+  font-size: var(--text-sm);
+}
+
+.jui-icon-btn--md {
+  width: 32px;
+  height: 32px;
+  font-size: var(--text-md);
+}
+
+.jui-icon-btn--ghost {
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.jui-icon-btn--ghost:hover {
+  background: var(--border-subtle);
+  color: var(--fg);
+}
+
+.jui-icon-btn--primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.jui-icon-btn--primary:hover {
+  filter: brightness(1.05);
+}
+
+.jui-icon-btn--danger {
+  background: transparent;
+  color: var(--danger);
+}
+
+.jui-icon-btn--danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.jui-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

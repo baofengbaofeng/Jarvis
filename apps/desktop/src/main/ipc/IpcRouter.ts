@@ -22,6 +22,7 @@ import { createTaskboardIpc } from './taskboard';
 import { createUsageIpc } from './usage';
 import { createShortcutsIpc } from './shortcuts';
 import { createAuditIpc } from './audit';
+import { createLogsIpc } from './logs';
 import { createArtifactsIpc } from './artifacts';
 import { createBackupIpc } from './backup';
 import { createWipeIpc } from './wipe';
@@ -353,6 +354,12 @@ export class IpcRouter {
     const audit = createAuditIpc(this.db);
     this.register('audit.list', (_e, filter) => audit.list(filter as { kind?: string; result?: string }));
     this.register('audit.export', (_e, filter) => audit.exportAudit(filter as { kind?: string; result?: string; format?: 'csv' | 'jsonl' }));
+    const logs = createLogsIpc();
+    this.register('logs.list', () => logs.list());
+    this.register('logs.read', (_e, args) => {
+      const { name, tail } = (args ?? {}) as { name?: string; tail?: number };
+      return logs.read(name ?? '', { tail });
+    });
     // M8 Task 10 (K6): canvas workspace artifact data plane. The task
     // completion path writes rows directly via the SAME createArtifactsIpc (in
     // tasks.ts onDone); these channels let the renderer CanvasView read them

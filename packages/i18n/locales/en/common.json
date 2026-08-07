@@ -16,7 +16,39 @@
   },
   "settings": {
     "title": "Settings",
-    "nav": { "providers": "Providers", "logs": "Logs", "mcp": "MCP Servers", "skills": "Skills", "daemon": "Daemon", "permissions": "Permissions", "env": "Environment", "concurrency": "Concurrency", "dataSafety": "Data Safety", "config": "Config Import/Export", "shortcuts": "Shortcuts", "usage": "Usage", "audit": "Audit Log", "appearance": "Appearance" },
+    "nav": {
+      "providers": "Providers",
+      "logs": "Logs",
+      "mcp": "MCP Servers",
+      "skills": "Skills",
+      "daemon": "Daemon",
+      "permissions": "Permissions",
+      "env": "Environment",
+      "concurrency": "Concurrency",
+      "dataSafety": "Data Safety",
+      "config": "Config Import/Export",
+      "shortcuts": "Shortcuts",
+      "usage": "Usage",
+      "audit": "Audit Log",
+      "appearance": "Appearance",
+      "groups": {
+        "ai": "AI & Models",
+        "runtime": "Runtime",
+        "agent": "Agent",
+        "data": "Data & Safety",
+        "preferences": "Preferences"
+      }
+    },
+    "logs": {
+      "title": "Log Panel",
+      "subtitle": "Inspect local log files",
+      "refresh": "Refresh",
+      "empty": "No log files yet",
+      "emptyHint": "Logs are written to ~/.jarvis/logs/",
+      "message": "Message",
+      "noLines": "This log file is empty",
+      "error": "Failed to read log"
+    },
     "mcp": {
       "title": "MCP Servers",
       "name": "Name",
@@ -62,10 +94,33 @@
     }
   },
   "theme": { "light": "Light", "dark": "Dark", "system": "System" },
-  "onboarding": { "title": "Welcome to JARVIS", "start": "Get started", "step1": "Provider", "step2": "Agent", "step3": "Workspace" },
-  "chat": { "placeholder": "Type a message…", "sessions": "Sessions", "newSession": "New chat", "taskCancelled": "Task cancelled" },
+  "onboarding": {
+    "title": "Welcome to JARVIS",
+    "subtitle": "Step {{step}} of 3",
+    "start": "Get started",
+    "step1": "Configure Provider",
+    "step2": "Create Agent",
+    "step3": "Environment check",
+    "defaultPrompt": "You are a helpful local AI assistant."
+  },
+  "chat": {
+    "placeholder": "Type a message, @ to reference files or agents…",
+    "sessions": "Sessions",
+    "newSession": "New chat",
+    "taskCancelled": "Task cancelled",
+    "subtitle": "Main chat",
+    "welcome": "Start chatting with your agent",
+    "welcomeHint": "Type below or use @ to reference files."
+  },
   "approval": { "title": "Approval Required", "approve": "Approve", "deny": "Deny", "reject": "Reject", "summary": "Summary" },
-  "agent": { "bindWorkspace": "Bind workspace", "workspaceBound": "Workspace bound", "systemPrompt": "System Prompt", "modelId": "Model ID" },
+  "agent": {
+    "name": "Name",
+    "add": "Add Agent",
+    "bindWorkspace": "Bind workspace",
+    "workspaceBound": "Workspace bound",
+    "systemPrompt": "System Prompt",
+    "modelId": "Model ID"
+  },
   "agents": { "add": "Add Agent" },
   "board": {
     "title": "Task Board",
@@ -225,17 +280,24 @@
   "error": { "title": "Something went wrong", "reload": "Reload" },
   "workflow": {
     "title": "Workflow Editor",
+    "subtitle": "DAG orchestration and execution",
     "run": "Run",
     "add": "+ {{name}}",
     "edge": "→ {{to}}",
     "connectTo": "Connect to…",
     "remove": "Remove",
-    "inputPlaceholder": "Input template"
+    "inputPlaceholder": "Input template",
+    "viewList": "List",
+    "viewGraph": "Graph",
+    "empty": "No nodes yet",
+    "emptyHint": "Pick an agent above to add a workflow node."
   },
   "shell": {
-    "groupWork": "Work",
-    "groupCollab": "Collaborate",
-    "navChat": "Chat"
+    "groupWork": "Features",
+    "groupCollab": "Collaboration",
+    "groupAgents": "Agents",
+    "navChat": "Chat",
+    "searchAgents": "Search agents"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

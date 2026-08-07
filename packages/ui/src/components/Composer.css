@@ -1,7 +1,7 @@
 .jui-composer {
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  padding: var(--space-3) var(--space-4);
+  border-top: 0.5px solid var(--border);
+  background: var(--bubble-assistant);
+  padding: var(--space-4);
 }
 
 .jui-composer__toolbar {
@@ -24,5 +24,7 @@
 .jui-composer__input {
   flex: 1;
   min-height: 72px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  border: 0.5px solid var(--border);
 }

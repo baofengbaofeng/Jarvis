@@ -1,17 +1,21 @@
 .jui-navitem {
   display: block;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
+  padding: 6px var(--space-3) 6px var(--space-4);
+  margin: 1px var(--space-2);
+  border-radius: var(--radius-md);
   color: var(--fg);
   text-decoration: none;
   font-size: var(--text-sm);
+  line-height: 1.4;
+  transition: background 0.15s ease;
 }
 
 .jui-navitem:hover {
-  background: var(--border-subtle);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
 }
 
 .jui-navitem--active {
-  background: var(--border-subtle);
+  background: var(--accent-muted);
+  color: var(--fg);
   font-weight: 600;
 }

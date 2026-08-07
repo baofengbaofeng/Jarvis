@@ -36,8 +36,8 @@ describe('WorkflowEditor connect (F10)', () => {
     const sel = screen.getByTestId('wf-connect-n1');
     expect(sel).toBeTruthy();
     // The OTHER node is a candidate; the node itself is excluded from ITS select.
-    expect(within(sel).getByRole('option', { name: 'a2' })).toBeTruthy();
-    expect(within(sel).queryByRole('option', { name: 'a1' })).toBeNull();
+    expect(within(sel).getByRole('option', { name: 'Reviewer' })).toBeTruthy();
+    expect(within(sel).queryByRole('option', { name: 'Coder' })).toBeNull();
   });
 
   it('calls connect(n.id, target) when a downstream target is chosen', () => {

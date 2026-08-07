@@ -1,0 +1,25 @@
+.jui-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--fg);
+}
+
+.jui-file-chip__remove {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.jui-file-chip__remove:hover {
+  color: var(--danger);
+}

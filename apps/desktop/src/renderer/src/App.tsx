@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './components/theme/ThemeProvider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useSettings } from './stores/settings-store';
@@ -36,99 +36,63 @@ import { useTaskStore } from './stores/task-store';
 import { useSquadStore } from './stores/squad-store';
 import { IpcChannel } from '@jarvis/protocol';
 
-// C5 (M8 Task 7): the persisted shortcut bindings fire GLOBALLY (the hook is
-// mounted once here, next to the other app-root overlays). focus.input/chat.send
-// focus the chat textarea when it is on the page (the chat route); from any
-// other route they land the user on the chat page so the next press focuses.
-function focusChatInput() {
+function focusChatInput(navigate: ReturnType<typeof useNavigate>) {
   const el = document.querySelector<HTMLTextAreaElement>('[data-testid="chat-input"]');
   if (el) { el.focus(); return; }
-  window.location.href = '/';
+  void navigate('/');
 }
 
-export default function App() {
+function AppRoutes() {
   const onboardingDone = useSettings((s) => s.onboardingDone);
-  // C5 (M8 Task 7): one global keydown listener resolving the persisted
-  // bindings (shortcuts.get) and dispatching the matching action. Mounted at the
-  // app root so every page honors the bindings (the "在 App 内生效" acceptance).
+  const navigate = useNavigate();
   useShortcuts({
-    'settings.open': () => { window.location.href = '/settings'; },
-    'chat.new': () => { window.location.href = '/'; },
+    'settings.open': () => { void navigate('/settings/providers'); },
+    'chat.new': () => { void navigate('/'); },
     'task.cancel': () => {
       const id = useTaskStore.getState().activeTaskId;
       if (id) void window.jarvis.invoke(IpcChannel.taskCancel, id);
     },
-    'focus.input': focusChatInput,
-    'chat.send': focusChatInput,
+    'focus.input': () => focusChatInput(navigate),
+    'chat.send': () => focusChatInput(navigate),
   });
+
   return (
-    <ThemeProvider>
-      <ErrorBoundary>
-      <ApprovalModal />
-      {/* D4 划词: a global mouseup floating overlay, so mount it once at the app
-          root (next to the equally-global ApprovalModal) rather than per page. */}
-      <SelectionMenu />
-      {/* I5 (M6 Task 8): the in-app toast queue is global, so host it once at
-          the root next to the other global overlays. */}
-      <ToastHost />
-      <BrowserRouter>
-        {/* F15 (M6 Task 8): while a squad sits in_review the ApprovalPanel is
-            shown; the squad-store clears it on approve/reject via the
-            squad:status event. Rendered INSIDE the router so it can route-aware
-            suppress itself on /squad — the squad view owns the F15 surface
-            there and renders its own full-data panel (duplicating it would show
-            two approve/reject control sets). */}
-        <RootApprovalPanel />
-        <Routes>
-          <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route element={<AppLayout />}>
-            <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
-            <Route path="/agents" element={<AgentListView />} />
-            {/* L30 (M8 Task 8): agent template library — create a new agent from
-                a preset. Top-level next to /agents; reached via the templates
-                button on AgentListView. */}
-            <Route path="/agents/templates" element={<AgentTemplatesPage />} />
-            <Route path="/coding" element={<CodingPanelPage />} />
-            <Route path="/office" element={<OfficePage />} />
-            {/* K5/L14 (M6 Task 10): the squad view — timeline + call graph +
-                ApprovalPanel driven by the FULL squad.current state. */}
-            <Route path="/squad" element={<SquadViewPage />} />
-            {/* K4 (M8 Task 1): six-column task kanban. */}
-            <Route path="/board" element={<TaskBoardPage />} />
-            {/* F10 (M8 Task 9): DAG workflow visual editor + runner. */}
-            <Route path="/workflow" element={<WorkflowPage />} />
-            {/* K6 (M8 Task 10): canvas workspace rendering task artifacts. */}
-            <Route path="/canvas" element={<CanvasPage />} />
-            <Route path="/settings" element={<SettingsLayout />}>
-              <Route path="providers" element={<ProviderSettingsPage />} />
-              <Route path="mcp" element={<McpSettingsPage />} />
-              <Route path="skills" element={<SkillsSettingsPage />} />
-              <Route path="daemon" element={<DaemonManagementPage />} />
-              <Route path="logs" element={<LogPanelPage />} />
-              <Route path="permissions" element={<PermissionsSettingsPage />} />
-              <Route path="env" element={<EnvSettingsPage />} />
-              <Route path="concurrency" element={<ConcurrencySettingsPage />} />
-              {/* M8 final review: wire the remaining M8 settings pages — L18/L20/J4
-                  data safety, C12 config transfer, C5 shortcuts, B9 usage, J5 audit. */}
-              <Route path="data-safety" element={<DataSafetyPage />} />
-              <Route path="config" element={<ConfigImportExportView />} />
-              <Route path="shortcuts" element={<ShortcutsSettingsView />} />
-              <Route path="usage" element={<UsageDashboard />} />
-              <Route path="audit" element={<AuditLogView />} />
-            </Route>
+    <>
+      <RootApprovalPanel />
+      <Routes>
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route element={<AppLayout />}>
+          <Route path="/" element={onboardingDone ? <ChatPage /> : <Navigate to="/onboarding" replace />} />
+          <Route path="/agents" element={<AgentListView />} />
+          <Route path="/agents/templates" element={<AgentTemplatesPage />} />
+          <Route path="/coding" element={<CodingPanelPage />} />
+          <Route path="/office" element={<OfficePage />} />
+          <Route path="/squad" element={<SquadViewPage />} />
+          <Route path="/board" element={<TaskBoardPage />} />
+          <Route path="/workflow" element={<WorkflowPage />} />
+          <Route path="/canvas" element={<CanvasPage />} />
+          <Route path="/settings" element={<SettingsLayout />}>
+            <Route index element={<Navigate to="providers" replace />} />
+            <Route path="providers" element={<ProviderSettingsPage />} />
+            <Route path="mcp" element={<McpSettingsPage />} />
+            <Route path="skills" element={<SkillsSettingsPage />} />
+            <Route path="daemon" element={<DaemonManagementPage />} />
+            <Route path="logs" element={<LogPanelPage />} />
+            <Route path="permissions" element={<PermissionsSettingsPage />} />
+            <Route path="env" element={<EnvSettingsPage />} />
+            <Route path="concurrency" element={<ConcurrencySettingsPage />} />
+            <Route path="data-safety" element={<DataSafetyPage />} />
+            <Route path="config" element={<ConfigImportExportView />} />
+            <Route path="shortcuts" element={<ShortcutsSettingsView />} />
+            <Route path="usage" element={<UsageDashboard />} />
+            <Route path="audit" element={<AuditLogView />} />
           </Route>
-        </Routes>
-      </BrowserRouter>
-      </ErrorBoundary>
-    </ThemeProvider>
+        </Route>
+      </Routes>
+    </>
   );
 }
 
-// F15 (M6 Task 8): the global approval panel rendered from useSquadStore.review,
-// shown on every page while a squad sits in_review. On the /squad route the page
-// owns the F15 surface (it drives the panel with FULL data via squad.current),
-// so this root panel is suppressed there to avoid duplicate approve/reject
-// controls (M6 Task 10 review finding).
 function RootApprovalPanel() {
   const { pathname } = useLocation();
   const review = useSquadStore((s) => s.review);
@@ -140,5 +104,20 @@ function RootApprovalPanel() {
       members={review.members}
       onDone={() => useSquadStore.getState().setReview(null)}
     />
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <ErrorBoundary>
+        <ApprovalModal />
+        <SelectionMenu />
+        <ToastHost />
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }

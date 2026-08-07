@@ -22,15 +22,17 @@
 }
 
 .jui-message--user .jui-message__content {
-  background: var(--border-subtle);
-  color: var(--fg);
+  background: var(--bubble-user);
+  color: var(--accent-fg);
+  border-radius: 18px 18px 4px 18px;
 }
 
 .jui-message--assistant .jui-message__content,
 .jui-message--system .jui-message__content {
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
+  background: var(--bubble-assistant);
+  border: none;
   color: var(--fg);
+  border-radius: 12px;
 }
 
 .jui-message__content img {

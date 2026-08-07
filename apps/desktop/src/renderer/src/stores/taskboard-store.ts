@@ -17,8 +17,8 @@ export const useTaskboardStore = create<{
   loading: false,
   load: async () => {
     set({ loading: true });
-    const tasks = (await window.jarvis.invoke(IpcChannel.taskboardList)) as TaskSummary[];
-    set({ cols: groupByStatus(tasks), loading: false });
+    const tasks = (await window.jarvis.invoke(IpcChannel.taskboardList)) as TaskSummary[] | null;
+    set({ cols: groupByStatus(Array.isArray(tasks) ? tasks : []), loading: false });
   },
   cancel: async (id) => { await window.jarvis.invoke(IpcChannel.taskCancel, id); await get().load(); },
   pause: async (id) => { await window.jarvis.invoke(IpcChannel.taskPause, id); await get().load(); },
