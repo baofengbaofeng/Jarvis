@@ -327,12 +327,13 @@ export class IpcRouter {
     // M8 Task 2 (B9): ONE shared token-usage sink feeds the chat path, the task
     // path, and the usage.* IPC channels.
     const usageTracker = new UsageTracker(this.db);
-    const chat = registerChatHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), { usageTracker });
+    const getMainWindow = () => this.opts.getMainWindow?.() ?? null;
+    const chat = registerChatHandlers(this.db, secrets, getMainWindow, { usageTracker });
     this.register(IpcChannel.chatSend, (e, args) => chat.send(e, args as Parameters<typeof chat.send>[1]));
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
-    const tasks = registerTaskHandlers(this.db, secrets, () => BrowserWindow.getFocusedWindow(), createAgentStore(this.db), { settings, usageTracker });
+    const tasks = registerTaskHandlers(this.db, secrets, getMainWindow, createAgentStore(this.db), { settings, usageTracker });
     this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string; sessionId?: string }));
     this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
     this.register(IpcChannel.taskPause, (_e, id) => tasks.pause(_e, id as string));
@@ -412,7 +413,7 @@ export class IpcRouter {
     // the leader/member engine runs through the SAME shared engine; the store
     // persists to the squads table (migration v5). The `{ ok, error }` contract
     // is enforced inside registerSquadIpc, so no ipcMain rejection leaks.
-    registerSquadIpc((ch, h) => this.register(ch, h), { db: this.db, getWindow: () => BrowserWindow.getFocusedWindow(), runner: tasks.squad });
+    registerSquadIpc((ch, h) => this.register(ch, h), { db: this.db, getWindow: () => this.opts.getMainWindow?.() ?? null, runner: tasks.squad });
     this.register(IpcChannel.settingsGet, (_e, key) => settings.get(key as string));
     this.register(IpcChannel.settingsSet, (_e, key, value) => {
       const k = key as string;
@@ -554,7 +555,7 @@ export class IpcRouter {
     // K5 (M6 Task 10): forward squad/agent bus messages to the renderer as
     // 'squad:event' so the squad timeline (TimelineView) streams live. Same
     // disposeFns lifecycle as the persist subscription.
-    this.disposeFns.push(createSquadEventPush(getMessageBus(), () => BrowserWindow.getFocusedWindow()));
+    this.disposeFns.push(createSquadEventPush(getMessageBus(), () => this.opts.getMainWindow?.() ?? null));
   }
 
   listen(): void {
