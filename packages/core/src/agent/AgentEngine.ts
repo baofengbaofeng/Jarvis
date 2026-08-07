@@ -1,5 +1,6 @@
 import type { AgentConfig } from '@jarvis/protocol';
 import type { AssistantToolCallMessage, ChatChunk, ChatRequest, ModelMessage, ToolResultMessage, Usage } from '../model/types';
+import { sumUsage } from '../model/usage';
 import type { ToolRegistry } from './ToolRegistry';
 import type { ApprovalRequest, TaskResult, ToolCall, ToolResult } from './types';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
@@ -49,7 +50,7 @@ export class AgentEngine {
     const { agent, messages, cwd, env, apiKey, signal, onDelta, onTool, workspaceRoot, policy } = input;
     const working: ModelMessage[] = [...messages];
     let toolCalls = 0;
-    let totalUsage: Usage | null = null;
+    const usageParts: Usage[] = [];
     let finalText = '';
 
     for (let step = 0; step < this.maxSteps; step++) {
@@ -69,17 +70,21 @@ export class AgentEngine {
       };
 
       let callCalls: ToolCall[] = [];
+      let stepUsage: Usage | null = null;
       const { text, usage } = await this.cfg.modelRouter.chat(req, {
         apiKey,
         signal,
         onChunk: (c) => {
           if (c.kind === 'delta') { onDelta?.(c.delta); }
           if (c.kind === 'tool_call') callCalls = callCalls.concat(c.toolCalls);
-          if (c.kind === 'usage') totalUsage = c.usage;
+          if (c.kind === 'usage') stepUsage = c.usage;
         }
       });
       if (text) finalText += text;
-      if (usage) totalUsage = usage;
+      // CORE-05: accumulate per-step usage; prefer the chat() return value when
+      // present (same step's onChunk usage is a duplicate of that return).
+      const stepTotal = usage ?? stepUsage;
+      if (stepTotal) usageParts.push(stepTotal);
 
       if (callCalls.length === 0) {
         if (text) working.push({ role: 'assistant', content: text });
@@ -127,6 +132,12 @@ export class AgentEngine {
       }
     }
 
+    // CORE-05: sum across REACT steps instead of keeping only the last write.
+    let totalUsage: Usage | null = null;
+    if (usageParts.length > 0) {
+      const s = sumUsage(usageParts);
+      totalUsage = { promptTokens: s.promptTokens, completionTokens: s.completionTokens, totalTokens: s.totalTokens };
+    }
     return { text: finalText, toolCalls, usage: totalUsage };
   }
 }

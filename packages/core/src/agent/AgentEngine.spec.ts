@@ -127,6 +127,28 @@ describe('AgentEngine', () => {
     expect(seen[1][2]).toMatchObject({ role: 'tool', content: '[denied] echo', toolCallId: 'call_9' });
   });
 
+  it('accumulates usage across REACT steps instead of overwriting (CORE-05)', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    let step = 0;
+    const chat = async (_req: unknown, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      step++;
+      if (step === 1) {
+        opts.onChunk?.({ kind: 'tool_call', toolCalls: [{ id: 't1', name: 'echo', arguments: {} }] });
+        opts.onChunk?.({ kind: 'usage', usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } });
+        opts.onChunk?.({ kind: 'done' });
+        return { text: '', usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } };
+      }
+      opts.onChunk?.({ kind: 'delta', delta: 'done' });
+      opts.onChunk?.({ kind: 'usage', usage: { promptTokens: 20, completionTokens: 5, totalTokens: 25 } });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'done', usage: { promptTokens: 20, completionTokens: 5, totalTokens: 25 } };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 3 });
+    const result = await engine.run({ agent, messages: [{ role: 'user', content: 'go' }], cwd: '/tmp', env: {}, apiKey: 'sk', provider: { type: 'openai-compatible', baseUrl: 'https://x.com' }, modelId: 'm1' });
+    expect(result.usage).toEqual({ promptTokens: 30, completionTokens: 7, totalTokens: 37 });
+  });
+
   it('feeds a throwing tool handler back to the model as ok:false without killing the run (CORE-06)', async () => {
     const reg = new ToolRegistry();
     reg.register({ name: 'boom', description: '', parameters: {} }, async () => { throw new Error('handler failed'); });
