@@ -1,17 +1,14 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
 
 export interface IdeBridgeOptions {
   port?: number;
+  token?: string;
   resolveFile: (rel: string) => string | null;
   resolveTaskDiff: (taskId: string) => { path: string; diff: string } | null;
 }
 
-// E12 containment: a localhost /open endpoint must NOT be able to read arbitrary
-// files off disk, so the production wiring resolves the requested relative path
-// against the workspace root and refuses anything that escapes it (same
-// resolve/relative startsWith pattern as Sandbox.assertInside and
-// mention.ts resolveFileMention). Returns null for paths outside the workspace.
 export function resolveFileInWorkspace(rel: string, wsRoot: string): string | null {
   const root = resolve(wsRoot);
   const abs = resolve(root, rel);
@@ -20,13 +17,39 @@ export function resolveFileInWorkspace(rel: string, wsRoot: string): string | nu
   return abs;
 }
 
+export function mintIdeBridgeToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+function unauthorized(res: ServerResponse): void {
+  res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, error: 'UNAUTHORIZED' }));
+}
+
 export class IdeBridge {
   private server?: Server;
-  constructor(private opts: IdeBridgeOptions) {}
+  readonly token: string;
+  constructor(private opts: IdeBridgeOptions) {
+    this.token = opts.token ?? mintIdeBridgeToken();
+  }
+
+  private authorized(req: IncomingMessage, port: number): boolean {
+    const host = req.headers.host ?? '';
+    if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return false;
+    const auth = req.headers.authorization ?? '';
+    const expected = `Bearer ${this.token}`;
+    if (auth.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < auth.length; i++) diff |= auth.charCodeAt(i) ^ expected.charCodeAt(i);
+    return diff === 0;
+  }
 
   async start(): Promise<number> {
     const port = this.opts.port ?? 17891;
     this.server = createServer((req, res) => {
+      if (!this.authorized(req, port)) {
+        unauthorized(res);
+        return;
+      }
       const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
       if (url.pathname === '/open') {
         const file = url.searchParams.get('file');
@@ -40,12 +63,15 @@ export class IdeBridge {
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(d));
       } else { res.writeHead(404).end(); }
     });
-    await new Promise<void>((resolve) => this.server!.listen(port, '127.0.0.1', () => resolve()));
+    await new Promise<void>((resolvePromise, reject) => {
+      this.server!.once('error', reject);
+      this.server!.listen(port, '127.0.0.1', () => resolvePromise());
+    });
     return port;
   }
 
   async close(): Promise<void> {
-    await new Promise<void>((resolve) => this.server?.close(() => resolve()));
+    await new Promise<void>((resolvePromise) => this.server?.close(() => resolvePromise()));
   }
 }
 
