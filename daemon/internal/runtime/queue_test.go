@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -80,5 +81,23 @@ func TestQueueRespectsPerAgentCap(t *testing.T) {
 	defer mu.Unlock()
 	if peak > 2 {
 		t.Fatalf("peak %d exceeds per-agent cap 2", peak)
+	}
+}
+
+func TestQueueDrainWaitsForInFlight(t *testing.T) {
+	q := NewQueue(1, 1)
+	started := make(chan struct{})
+	q.Submit("a", func() {
+		close(started)
+		time.Sleep(50 * time.Millisecond)
+	})
+	<-started
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := q.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if q.Status().ActiveTasks != 0 || q.Status().Queued != 0 {
+		t.Fatalf("expected empty queue after drain, got %+v", q.Status())
 	}
 }

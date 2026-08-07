@@ -98,6 +98,12 @@ func main() {
 	// shutdown goroutine then drains the HTTP listener so the daemon terminates.
 	go func() {
 		<-ctx.Done()
+		// DAEM-03: drain in-flight jobs (so SendResult can finish) before closing HTTP.
+		drainCtx, drainCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := q.Drain(drainCtx); err != nil {
+			log.Printf("queue drain: %v", err)
+		}
+		drainCancel()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {

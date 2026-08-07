@@ -114,7 +114,11 @@ func (h *ClaimHandler) runOne(ctx context.Context, payload *acp.TaskPayload, loc
 	if err != nil {
 		res = TaskResult{Status: "failed", Error: err.Error(), FinishedAt: time.Now().Unix()}
 	}
-	if err := h.API.SendResult(ctx, h.ClientID(), payload.TaskID, res); err != nil {
+	// DAEM-03: SendResult must outlive the Multica Serve/signal ctx so a
+	// shutdown cancel cannot drop the final result report.
+	sendCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := h.API.SendResult(sendCtx, h.ClientID(), payload.TaskID, res); err != nil {
 		return err
 	}
 	if h.Recorder != nil {

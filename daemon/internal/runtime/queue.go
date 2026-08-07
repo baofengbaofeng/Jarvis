@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"sync"
 )
 
@@ -21,6 +22,8 @@ type Queue struct {
 	active       map[string]int // active per-agent counter (read/written)
 	runningTotal int
 	waiting      []Job
+	draining     bool
+	idle         chan struct{} // closed when runningTotal==0 while draining; recreated on activity
 }
 
 // NewQueue creates a Queue with per-agent and machine-wide concurrency caps.
@@ -63,6 +66,29 @@ func (q *Queue) Status() Status {
 	}
 }
 
+
+// Drain stops starting new waiting jobs and waits until in-flight jobs finish
+// (DAEM-03). Waiting jobs are left in place for durable recovery (DAEM-02) when
+// dropWaiting is false; when true they are discarded from memory.
+func (q *Queue) Drain(ctx context.Context) error {
+	q.mu.Lock()
+	q.draining = true
+	if q.runningTotal == 0 {
+		q.mu.Unlock()
+		return nil
+	}
+	idle := make(chan struct{})
+	q.idle = idle
+	q.mu.Unlock()
+
+	select {
+	case <-idle:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // pump starts as many waiting jobs as the caps allow. It selects the first
 // waiting job whose agent still has capacity AND the machine-wide running
 // total is under the cap, increments both counters, then runs it in a
@@ -70,6 +96,10 @@ func (q *Queue) Status() Status {
 func (q *Queue) pump() {
 	for {
 		q.mu.Lock()
+		if q.draining {
+			q.mu.Unlock()
+			return
+		}
 		idx := -1
 		for i := range q.waiting {
 			j := q.waiting[i]
@@ -100,7 +130,13 @@ func (q *Queue) pump() {
 					delete(q.active, j.AgentID)
 				}
 				q.runningTotal--
+				idle := q.idle
+				draining := q.draining
+				done := q.runningTotal == 0
 				q.mu.Unlock()
+				if draining && done && idle != nil {
+					close(idle)
+				}
 				q.pump()
 			}()
 			j.Run()

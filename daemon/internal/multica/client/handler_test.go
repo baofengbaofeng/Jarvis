@@ -361,3 +361,47 @@ func TestHandleClaimsAckErrorDropsJob(t *testing.T) {
 		t.Fatalf("queue must be empty after ack drop, status=%+v", q.Status())
 	}
 }
+
+func TestRunOneSendResultIgnoresCanceledParentCtx(t *testing.T) {
+	api := &recordingAPI{}
+	var sendCtxErr error
+	var sendCalled bool
+	h := &ClaimHandler{
+		API: &sendCaptureAPI{recordingAPI: api, onSend: func(ctx context.Context) {
+			sendCalled = true
+			sendCtxErr = ctx.Err() // must be nil at call time (separate from parent)
+		}},
+		Queue: runtime.NewQueue(1, 1),
+		ClientID: func() string { return "c1" },
+		Exec: func(context.Context, *acp.TaskPayload, func(runtime.StreamChunk)) (TaskResult, error) {
+			return TaskResult{Status: "completed", Result: "ok", FinishedAt: time.Now().Unix()}, nil
+		},
+	}
+	parent, cancel := context.WithCancel(context.Background())
+	cancel() // parent already canceled (shutdown)
+	payload := &acp.TaskPayload{TaskID: "t-shutdown", Instruction: "x"}
+	if err := h.runOne(parent, payload, "t-shutdown", "mt"); err != nil {
+		t.Fatalf("runOne should not fail when parent ctx canceled: %v", err)
+	}
+	if !sendCalled {
+		t.Fatal("SendResult not called")
+	}
+	if sendCtxErr != nil {
+		t.Fatalf("SendResult ctx must not be canceled at call time, got %v", sendCtxErr)
+	}
+	if api.resultCount() != 1 {
+		t.Fatalf("expected result sent, got %d", api.resultCount())
+	}
+}
+
+type sendCaptureAPI struct {
+	*recordingAPI
+	onSend func(context.Context)
+}
+
+func (s *sendCaptureAPI) SendResult(ctx context.Context, id, taskID string, r TaskResult) error {
+	if s.onSend != nil {
+		s.onSend(ctx)
+	}
+	return s.recordingAPI.SendResult(ctx, id, taskID, r)
+}
