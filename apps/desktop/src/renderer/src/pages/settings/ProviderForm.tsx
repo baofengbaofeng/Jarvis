@@ -110,7 +110,7 @@ export function ProviderForm({ provider, onDone, onCancel, idPrefix = 'provider'
   const providers = useProviderStore((s) => s.providers);
   const editing = provider != null;
   const [name, setName] = useState(() => sanitizeProviderNameInput(provider?.name ?? ''));
-  const [type, setType] = useState<ProviderType>(provider?.type ?? 'openai-compatible');
+  const [type, setType] = useState<ProviderType>(provider?.type ?? 'anthropic-compatible');
   const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
@@ -130,7 +130,7 @@ export function ProviderForm({ provider, onDone, onCancel, idPrefix = 'provider'
 
   const reset = () => {
     setName(sanitizeProviderNameInput(provider?.name ?? ''));
-    setType(provider?.type ?? 'openai-compatible');
+    setType(provider?.type ?? 'anthropic-compatible');
     setBaseUrl(provider?.baseUrl ?? '');
     setApiKey('');
     setFieldErrors({});
@@ -244,23 +244,23 @@ export function ProviderForm({ provider, onDone, onCancel, idPrefix = 'provider'
               <input
                 type="radio"
                 name={tid('type')}
-                data-testid={tid('type-openai-compatible')}
-                value="openai-compatible"
-                checked={type === 'openai-compatible'}
-                onChange={() => setType('openai-compatible')}
-              />
-              {t('settings.provider.typeOpenai')}
-            </label>
-            <label className="radio-label">
-              <input
-                type="radio"
-                name={tid('type')}
                 data-testid={tid('type-anthropic-compatible')}
                 value="anthropic-compatible"
                 checked={type === 'anthropic-compatible'}
                 onChange={() => setType('anthropic-compatible')}
               />
               {t('settings.provider.typeAnthropic')}
+            </label>
+            <label className="radio-label">
+              <input
+                type="radio"
+                name={tid('type')}
+                data-testid={tid('type-openai-compatible')}
+                value="openai-compatible"
+                checked={type === 'openai-compatible'}
+                onChange={() => setType('openai-compatible')}
+              />
+              {t('settings.provider.typeOpenai')}
             </label>
           </div>
         </div>

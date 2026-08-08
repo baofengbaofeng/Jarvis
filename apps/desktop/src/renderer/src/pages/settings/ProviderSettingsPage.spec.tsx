@@ -57,6 +57,16 @@ describe('ProviderSettingsPage', () => {
     expect((screen.getByTestId('provider-baseurl') as HTMLInputElement).placeholder).toBe('');
   });
 
+  it('defaults type to Anthropic (first option)', () => {
+    (window as unknown as { jarvis: unknown }).jarvis = {
+      invoke: async (method: string) => (method === 'provider.list' ? [] : []),
+      onDidReceive: () => () => {},
+    };
+    render(<ProviderSettingsPage />);
+    expect((screen.getByTestId('provider-type-anthropic-compatible') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByTestId('provider-type-openai-compatible') as HTMLInputElement).checked).toBe(false);
+  });
+
   it('hides the provider list section when there are no providers', async () => {
     (window as unknown as { jarvis: unknown }).jarvis = {
       invoke: async (method: string) => (method === 'provider.list' ? [] : []),

@@ -120,7 +120,7 @@
       "saveModel": "保存",
       "removeModel": "删除",
       "type": "类型",
-      "typeHint": "多数网关选 OpenAI；官方 Anthropic 或 Messages API 选 Anthropic。不确定时选 OpenAI。",
+      "typeHint": "官方 Anthropic 或 Messages API 选 Anthropic；多数网关选 OpenAI。不确定时可选 Anthropic。",
       "typeOpenai": "OpenAI",
       "typeAnthropic": "Anthropic",
       "errors": {

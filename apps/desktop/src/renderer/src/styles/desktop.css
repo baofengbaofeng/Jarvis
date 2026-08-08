@@ -198,6 +198,12 @@
   line-height: 1.4;
 }
 
+.jui-modal-message.provider-delete-error {
+  margin-top: var(--space-3);
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
 /* Validation error overlays inside the control — height stays fixed. */
 .form-input-shell {
   position: relative;

@@ -120,7 +120,7 @@
       "saveModel": "Save",
       "removeModel": "Delete",
       "type": "Type",
-      "typeHint": "Most gateways use OpenAI; use Anthropic for official Anthropic or Messages API. Prefer OpenAI if unsure.",
+      "typeHint": "Use Anthropic for official Anthropic or Messages API; most gateways use OpenAI. Prefer Anthropic if unsure.",
       "typeOpenai": "OpenAI",
       "typeAnthropic": "Anthropic",
       "errors": {

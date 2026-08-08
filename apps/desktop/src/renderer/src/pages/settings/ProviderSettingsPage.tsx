@@ -601,9 +601,9 @@ export function ProviderSettingsPage() {
               {t('settings.provider.deleteConfirm', { name: deleting.name })}
             </ModalMessage>
             {deleteError ? (
-              <p className="form-field__error" data-testid="provider-delete-error" role="alert">
+              <ModalMessage testId="provider-delete-error" className="form-field__error provider-delete-error">
                 {deleteError}
-              </p>
+              </ModalMessage>
             ) : null}
           </>
         ) : null}
