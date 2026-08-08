@@ -210,7 +210,22 @@ export class IpcRouter {
         return { ok: false as const, error: code };
       }
     });
-    this.register('skills.delete', (_e, id) => skillsStore.remove(id as string));
+    this.register('skills.delete', (_e, id) => {
+      try {
+        skillsStore.remove(id as string);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('skills.setEnabled', (_e, id, enabled) => {
+      try {
+        const skill = skillsStore.setEnabled(id as string, Boolean(enabled));
+        return { ok: true as const, skill };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     const workspace = createWorkspaceService(this.db);
     this.register('workspace.bind', (_e, agentId, req) => {
       const path = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'workspace:bind');

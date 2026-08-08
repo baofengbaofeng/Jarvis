@@ -85,16 +85,34 @@
       }
     },
     "skills": {
+      "title": "技能",
+      "subtitle": "从本地目录或 URL 导入技能。禁用后仍保留在列表中，但不注入 Agent。",
       "import": "导入",
       "importLocal": "从文件夹导入",
       "importUrl": "从 URL 导入",
+      "url": "URL",
+      "urlHint": "须为 http:// 或 https:// 开头的 SKILL.md 地址。",
       "urlPlaceholder": "https://example.com/SKILL.md",
+      "listTitle": "技能列表",
+      "colName": "名称",
+      "colPath": "路径",
+      "colEnabled": "是否启用",
+      "colActions": "操作",
+      "enable": "启用",
+      "disable": "禁用",
+      "remove": "删除",
+      "deleteTitle": "删除技能",
+      "deleteConfirm": "确定删除技能「{{name}}」？删除后不可恢复。",
       "importFailed": "技能导入失败",
       "errors": {
         "nameInvalid": "技能名称无效",
         "exists": "同名技能已存在",
         "contentType": "URL 必须返回 Markdown 或纯文本",
-        "pathEscape": "技能路径越出受管目录"
+        "pathEscape": "技能路径越出受管目录",
+        "urlRequired": "请填写 URL",
+        "urlTooLong": "URL 不能超过 {{max}} 个字符",
+        "urlProtocol": "URL 必须以 http:// 或 https:// 开头",
+        "unknown": "操作失败，请重试"
       }
     },
     "permissions": { "agent": "Agent", "level": "沙箱级别", "readonly": "只读", "readwrite": "读写", "system": "系统" },

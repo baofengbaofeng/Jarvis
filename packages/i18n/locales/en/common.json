@@ -85,16 +85,34 @@
       }
     },
     "skills": {
+      "title": "Skills",
+      "subtitle": "Import skills from a local folder or URL. Disabled skills stay listed but are not injected into Agents.",
       "import": "Import",
       "importLocal": "Import from folder",
       "importUrl": "Import from URL",
+      "url": "URL",
+      "urlHint": "Must be an http:// or https:// URL to a SKILL.md document.",
       "urlPlaceholder": "https://example.com/SKILL.md",
+      "listTitle": "Skill list",
+      "colName": "Name",
+      "colPath": "Path",
+      "colEnabled": "Enabled",
+      "colActions": "Actions",
+      "enable": "Enable",
+      "disable": "Disable",
+      "remove": "Delete",
+      "deleteTitle": "Delete skill",
+      "deleteConfirm": "Delete skill “{{name}}”? This cannot be undone.",
       "importFailed": "Skill import failed",
       "errors": {
         "nameInvalid": "Invalid skill name",
         "exists": "A skill with this name already exists",
         "contentType": "URL must return markdown or plain text",
-        "pathEscape": "Skill path escapes the managed directory"
+        "pathEscape": "Skill path escapes the managed directory",
+        "urlRequired": "URL is required",
+        "urlTooLong": "URL must be at most {{max}} characters",
+        "urlProtocol": "URL must start with http:// or https://",
+        "unknown": "Something went wrong; try again"
       }
     },
     "permissions": { "agent": "Agent", "level": "Sandbox level", "readonly": "Read-only", "readwrite": "Read/write", "system": "System" },
