@@ -9,6 +9,8 @@ import {
   GITHUB_ISSUES_URL,
   GITHUB_WIKI_URL,
   PROVIDER_FIELD_MAX,
+  MCP_FIELD_MAX,
+  SKILL_FIELD_MAX,
   contextTokensFromInput,
   formatContextTokens,
   type TaskStatus,
@@ -24,6 +26,14 @@ describe('protocol contract', () => {
     expect(PROVIDER_FIELD_MAX.modelName).toBe(64);
     expect(PROVIDER_FIELD_MAX.contextDigits).toBe(6);
     expect(PROVIDER_FIELD_MAX.contextTokens).toBe(100_000_000);
+  });
+
+  it('exports MCP and Skills field max lengths', () => {
+    expect(MCP_FIELD_MAX.name).toBe(64);
+    expect(MCP_FIELD_MAX.command).toBe(512);
+    expect(MCP_FIELD_MAX.args).toBe(2048);
+    expect(SKILL_FIELD_MAX.name).toBe(64);
+    expect(SKILL_FIELD_MAX.url).toBe(2048);
   });
 
   it('converts and formats model context tokens (K/M)', () => {

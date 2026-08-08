@@ -37,6 +37,21 @@ export const PROVIDER_FIELD_MAX = {
   contextTokens: 100_000_000,
 } as const;
 
+/** Max lengths for MCP server fields (IPC + UI). */
+export const MCP_FIELD_MAX = {
+  name: 64,
+  command: 512,
+  args: 2048,
+} as const;
+
+/** Max lengths for Skills import / display fields (IPC + UI). */
+export const SKILL_FIELD_MAX = {
+  name: 64,
+  url: 2048,
+  path: 2048,
+  description: 512,
+} as const;
+
 export {
   PROVIDER_BASE_URL_PATTERN,
   PROVIDER_NAME_PATTERN,
