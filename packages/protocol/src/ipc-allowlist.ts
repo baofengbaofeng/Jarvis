@@ -25,6 +25,8 @@ export const ALLOWED_INVOKE = new Set<string>([
   IpcChannel.chatListSessions,
   IpcChannel.chatCreateSession,
   IpcChannel.chatLoadMessages,
+  IpcChannel.chatDeleteSession,
+  IpcChannel.chatRenameSession,
   IpcChannel.squadStart,
   IpcChannel.squadCurrent,
   IpcChannel.daemonStatus,
@@ -32,6 +34,7 @@ export const ALLOWED_INVOKE = new Set<string>([
   'dialog.pickPath',
   IpcChannel.diagnosticsRun,
   IpcChannel.envInfo,
+  IpcChannel.windowGetChrome,
   IpcChannel.taskboardList,
   'shortcuts.get',
   'shortcuts.set',
@@ -59,7 +62,11 @@ export const ALLOWED_INVOKE = new Set<string>([
   'dialog.saveText',
   'config.readPickedFile',
   'provider.listModels',
+  'provider.listSelectableModels',
   'provider.addModel',
+  'provider.deleteModel',
+  'provider.setEnabled',
+  'provider.setModelEnabled',
   'provider.test',
   'usage.summary',
   'usage.list',
@@ -120,6 +127,7 @@ export const ALLOWED_EVENTS = new Set<string>([
   IpcEvent.squadEvent,
   IpcEvent.toastPush,
   IpcEvent.approvalRequest,
+  IpcEvent.windowChrome,
 ]);
 
 export function assertAllowedInvoke(channel: string): void {

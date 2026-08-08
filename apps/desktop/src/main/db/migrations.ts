@@ -391,6 +391,44 @@ export const MIGRATIONS: Migration[] = [
       content TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`
+  },
+  // v13: length CHECKs on providers (name/base_url/api_key_ref). SQLite cannot
+  // ADD CHECK to an existing table — rebuild and preserve rows. models.provider_id
+  // FK is recreated by the rename; foreign_keys off during swap.
+  {
+    version: 13,
+    sql: `
+    PRAGMA foreign_keys=OFF;
+    CREATE TABLE providers_v13 (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL CHECK (length(name) <= 64),
+      type TEXT NOT NULL CHECK (type IN ('openai-compatible','anthropic-compatible')),
+      base_url TEXT NOT NULL CHECK (length(base_url) <= 2048),
+      api_key_ref TEXT NOT NULL CHECK (length(api_key_ref) <= 128),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    INSERT INTO providers_v13 (id, name, type, base_url, api_key_ref, created_at, updated_at)
+      SELECT id, name, type, base_url, api_key_ref, created_at, updated_at FROM providers;
+    DROP TABLE providers;
+    ALTER TABLE providers_v13 RENAME TO providers;
+    PRAGMA foreign_keys=ON;
+    `
+  },
+  // v14: optional model context window (absolute token count).
+  {
+    version: 14,
+    sql: `
+    ALTER TABLE models ADD COLUMN context_tokens INTEGER;
+    `
+  },
+  // v15: enable flags for providers and models (settings + selection filter).
+  {
+    version: 15,
+    sql: `
+    ALTER TABLE providers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE models ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+    `
   }
 ];
 

@@ -14,6 +14,8 @@ export type { TextareaProps } from './components/Textarea';
 
 export { Select } from './components/Select';
 export type { SelectProps } from './components/Select';
+export { MenuSelect } from './components/MenuSelect';
+export type { MenuSelectProps, MenuSelectOption } from './components/MenuSelect';
 
 export { Badge } from './components/Badge';
 export type { BadgeProps, BadgeVariant } from './components/Badge';
@@ -47,6 +49,8 @@ export type { TabsProps, TabItem, TabPanelProps } from './components/Tabs';
 
 export { Modal } from './components/Modal';
 export type { ModalProps } from './components/Modal';
+export { ModalMessage } from './components/ModalMessage';
+export type { ModalMessageProps } from './components/ModalMessage';
 
 export { Toast, ToastHost } from './components/Toast';
 export type { ToastProps, ToastKind, ToastHostProps } from './components/Toast';

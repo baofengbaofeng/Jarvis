@@ -22,6 +22,21 @@ export function createChatDbAdapter(db: Database.Database): Parameters<typeof cr
       db.prepare('INSERT INTO chat_sessions (id, title, created_at, updated_at) VALUES (?,?,?,?)').run(id, title ?? '新对话', now(), now());
       return { id, title: title ?? '新对话', createdAt: now(), updatedAt: now() };
     },
+    async deleteSession(sessionId: string) {
+      db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(sessionId);
+    },
+    async renameSession(sessionId: string, title: string) {
+      const updatedAt = now();
+      const result = db.prepare('UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?').run(title, updatedAt, sessionId);
+      if (result.changes === 0) throw new Error(`session not found: ${sessionId}`);
+      const row = db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId) as Record<string, unknown>;
+      return {
+        id: row.id as string,
+        title: row.title as string,
+        createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
+      };
+    },
     async loadMessages(sessionId: string) {
       return (db.prepare('SELECT id, session_id, role, content, created_at FROM chat_messages WHERE session_id = ? ORDER BY created_at').all(sessionId) as Array<{ id: string; session_id: string; role: ChatRole; content: string; created_at: string }>).map(r => ({
         id: r.id, sessionId: r.session_id, role: r.role, content: r.content, createdAt: r.created_at
@@ -52,6 +67,8 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
   return {
     async listSessions() { return chatService.listSessions(); },
     async createSession(title?: string) { return chatService.createSession(title); },
+    async deleteSession(sessionId: string) { return chatService.deleteSession(sessionId); },
+    async renameSession(sessionId: string, title: string) { return chatService.renameSession(sessionId, title); },
     async loadMessages(sessionId: string) { return chatService.loadMessages(sessionId); },
 
     async send(_event: Electron.IpcMainInvokeEvent, args: { sessionId: string; agentId: string; text?: string; content?: string | MessageContent }) {
@@ -64,19 +81,29 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
       await chatService.appendMessage(sessionId, 'user', content);
       const history = await chatService.loadMessages(sessionId);
       const agent = await dbAdapter.loadAgent(agentId);
-      const provider = db.prepare(`
-        SELECT p.* FROM providers p JOIN models m ON m.provider_id = p.id WHERE m.id = ?
+      const binding = db.prepare(`
+        SELECT p.*, m.model_id AS api_model_id, m.enabled AS model_enabled, p.enabled AS provider_enabled
+        FROM providers p JOIN models m ON m.provider_id = p.id WHERE m.id = ?
       `).get(agent.modelId) as Record<string, unknown> | undefined;
-      if (!provider) throw new Error('agent has no valid model/provider binding');
+      if (!binding) throw new Error('agent has no valid model/provider binding');
+      if (Number(binding.provider_enabled ?? 1) !== 1) throw new Error('PROVIDER_DISABLED');
+      if (Number(binding.model_enabled ?? 1) !== 1) throw new Error('MODEL_DISABLED');
+      const provider = binding;
       const sendChunk = (chunk: unknown) => { getWindow()?.webContents.send(IpcEvent.chatDelta, { sessionId, chunk }); };
 
       let full = '';
       try {
-        const modelId = (db.prepare('SELECT model_id FROM models WHERE id = ?').get(agent.modelId) as { model_id: string }).model_id;
+        const modelId = binding.api_model_id as string;
         await router.chat({
           provider: {
-            id: provider.id as string, name: provider.name as string, type: provider.type as 'openai-compatible' | 'anthropic-compatible',
-            baseUrl: provider.base_url as string, apiKeyRef: provider.api_key_ref as string, createdAt: provider.created_at as string, updatedAt: provider.updated_at as string
+            id: provider.id as string,
+            name: provider.name as string,
+            type: provider.type as 'openai-compatible' | 'anthropic-compatible',
+            baseUrl: provider.base_url as string,
+            apiKeyRef: provider.api_key_ref as string,
+            enabled: Number(provider.enabled ?? 1) === 1,
+            createdAt: provider.created_at as string,
+            updatedAt: provider.updated_at as string,
           },
           modelId,
           messages: chatService.buildModelMessages(history, agent.systemPrompt),

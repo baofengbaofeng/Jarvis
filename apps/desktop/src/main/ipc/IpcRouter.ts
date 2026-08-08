@@ -43,6 +43,7 @@ import { SafeUrlPolicy } from '../security/SafeUrlPolicy';
 import { jarvisDataDir } from '../db/connection';
 import { setDefaultWebSearchHttp } from './search';
 import { sqliteAuditSink } from '../audit/sqliteAuditSink';
+import { windowChromePayload } from '../window/macTitlebar';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
@@ -276,7 +277,7 @@ export class IpcRouter {
       'workspace-copy': { kind: 'file', operations: ['workspace:copy'] },
       'workspace-bind': { kind: 'directory', operations: ['workspace:bind'] },
       'skills-import': { kind: 'directory', operations: ['skills:import-dir'] },
-      'config-import': { kind: 'file', operations: ['config:read'], filters: [{ name: 'JARVIS config', extensions: ['json', 'yaml', 'yml'] }] },
+      'config-import': { kind: 'file', operations: ['config:read'], filters: [{ name: 'J.A.R.V.I.S config', extensions: ['json', 'yaml', 'yml'] }] },
     };
     this.register('dialog.pickPath', async (event, request) => {
       const { purpose, multiple } = (request ?? {}) as { purpose: PathPickPurpose; multiple?: boolean };
@@ -319,11 +320,64 @@ export class IpcRouter {
       }
     });
     this.register(IpcChannel.providerList, () => providers.list());
-    this.register(IpcChannel.providerCreate, (_e, input) => providers.create(input as ProviderInput));
-    this.register(IpcChannel.providerUpdate, (_e, id, patch) => providers.update(id as string, patch as Partial<ProviderInput>));
-    this.register(IpcChannel.providerDelete, (_e, id) => providers.remove(id as string));
+    this.register(IpcChannel.providerCreate, async (_e, input) => {
+      try {
+        const provider = await providers.create(input as ProviderInput);
+        return { ok: true as const, provider };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register(IpcChannel.providerUpdate, async (_e, id, patch) => {
+      try {
+        const provider = await providers.update(id as string, patch as Partial<ProviderInput>);
+        return { ok: true as const, provider };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register(IpcChannel.providerDelete, async (_e, id) => {
+      try {
+        await providers.remove(id as string);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('provider.listModels', (_e, providerId) => providers.listModels(providerId as string));
-    this.register('provider.addModel', (_e, providerId, input) => providers.addModel(providerId as string, input as ModelInput));
+    this.register('provider.listSelectableModels', () => providers.listSelectableModels());
+    this.register('provider.addModel', (_e, providerId, input) => {
+      try {
+        const model = providers.addModel(providerId as string, input as ModelInput);
+        return { ok: true as const, model };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('provider.deleteModel', (_e, modelId) => {
+      try {
+        providers.removeModel(modelId as string);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('provider.setEnabled', (_e, id, enabled) => {
+      try {
+        const provider = providers.setEnabled(id as string, Boolean(enabled));
+        return { ok: true as const, provider };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('provider.setModelEnabled', (_e, id, enabled) => {
+      try {
+        const model = providers.setModelEnabled(id as string, Boolean(enabled));
+        return { ok: true as const, model };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     // M8 Task 2 (B9): ONE shared token-usage sink feeds the chat path, the task
     // path, and the usage.* IPC channels.
     const usageTracker = new UsageTracker(this.db);
@@ -338,6 +392,11 @@ export class IpcRouter {
     this.register('chat.listSessions', () => chat.listSessions());
     this.register('chat.createSession', (_e, title) => chat.createSession(title as string | undefined));
     this.register('chat.loadMessages', (_e, sessionId) => chat.loadMessages(sessionId as string));
+    this.register(IpcChannel.chatDeleteSession, (_e, sessionId) => chat.deleteSession(sessionId as string));
+    this.register(IpcChannel.chatRenameSession, (_e, args) => {
+      const { sessionId, title } = (args ?? {}) as { sessionId?: string; title?: string };
+      return chat.renameSession(sessionId as string, title as string);
+    });
     const tasks = registerTaskHandlers(this.db, secrets, getMainWindow, createAgentStore(this.db), { settings, usageTracker, router: modelRouter });
     this.register(IpcChannel.taskCreate, (e, args) => tasks.create(e, args as { agentId: string; prompt: string; sessionId?: string }));
     this.register(IpcChannel.taskCancel, (_e, id) => tasks.cancel(_e, id as string));
@@ -491,6 +550,10 @@ export class IpcRouter {
     );
     const collectEnv = () => collectEnvInfo({ daemonRunning: async () => (await daemon.status()).running });
     this.register(IpcChannel.envInfo, collectEnv);
+    this.register(IpcChannel.windowGetChrome, () => {
+      const win = this.opts.getMainWindow?.() ?? null;
+      return windowChromePayload(win?.isFullScreen() === true);
+    });
     this.register(IpcChannel.diagnosticsRun, () => runDiagnostics(this.db, secrets));
     this.register('provider.test', (_e, providerId, modelId) => testProviderConnectivity(this.db, secrets, providerId as string, modelId as string));
     this.register('export.session', async (_e, sessionId) => {

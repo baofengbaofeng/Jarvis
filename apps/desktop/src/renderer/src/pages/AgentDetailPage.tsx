@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Panel, Textarea } from '@jarvis/ui';
+import { Button, Input, MenuSelect, Panel, Textarea } from '@jarvis/ui';
+import type { SelectableModel } from '@jarvis/protocol';
 import { useAgentStore } from '../stores/agent-store';
 
 export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; onClose: () => void }) {
@@ -10,8 +11,29 @@ export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; 
   const [name, setName] = useState(existing?.name ?? '');
   const [systemPrompt, setSystemPrompt] = useState(existing?.systemPrompt ?? '');
   const [modelId, setModelId] = useState<string | null>(existing?.modelId ?? null);
+  const [selectable, setSelectable] = useState<SelectableModel[]>([]);
   const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(existing?.workspaceId ? t('agent.workspaceBound') : null);
   const [pendingBindToken, setPendingBindToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    void window.jarvis.invoke('provider.listSelectableModels').then((rows) => {
+      setSelectable(rows as SelectableModel[]);
+    });
+  }, []);
+
+  const modelOptions = useMemo(() => {
+    const opts = selectable.map((m) => ({
+      value: m.id,
+      label: `${m.providerName} / ${m.name?.trim() || m.modelId}`,
+    }));
+    if (modelId && !opts.some((o) => o.value === modelId)) {
+      opts.unshift({ value: modelId, label: t('agent.modelDisabledBound') });
+    }
+    if (opts.length === 0) {
+      opts.push({ value: '', label: t('agent.modelNone') });
+    }
+    return opts;
+  }, [modelId, selectable, t]);
 
   const pickWorkspace = async () => {
     const caps = (await window.jarvis.invoke('dialog.pickPath', { purpose: 'workspace-bind' })) as Array<{ token: string; name: string }>;
@@ -49,8 +71,14 @@ export function AgentDetailPage({ agentId, onClose }: { agentId: string | null; 
         <Textarea id="agent-prompt" data-testid="agent-prompt" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={6} />
       </div>
       <div className="form-field">
-        <label htmlFor="agent-model">{t('agent.modelId')}</label>
-        <Input id="agent-model" data-testid="agent-model" value={modelId ?? ''} onChange={e => setModelId(e.target.value || null)} />
+        <span className="form-field__label" id="agent-model-label">{t('agent.modelId')}</span>
+        <MenuSelect
+          testId="agent-model"
+          aria-label={t('agent.modelId')}
+          value={modelId ?? ''}
+          options={modelOptions}
+          onChange={(v) => setModelId(v || null)}
+        />
       </div>
       <div className="page__actions">
         <Button variant="ghost" data-testid="agent-bind-workspace" onClick={() => void pickWorkspace()}>{workspaceLabel ?? t('agent.bindWorkspace')}</Button>

@@ -7,6 +7,9 @@ import { AgentDetailPage } from './AgentDetailPage';
 
 const invoke = vi.fn(async (m: string, ..._args: unknown[]) => {
   if (m === 'dialog.pickPath') return [{ token: 'cap-ws', name: 'my-project', kind: 'directory', sizeBytes: 0, expiresAt: 1 }];
+  if (m === 'provider.listSelectableModels') {
+    return [{ id: 'm1', providerId: 'p1', providerName: 'P', modelId: 'gpt-x', name: 'Model X', contextTokens: null }];
+  }
   if (m === 'agent.create') return { id: 'new-agent', name: 'Test', slug: 'test', description: '', systemPrompt: '', modelId: null, workspaceId: null, contextBudgetTokens: 1000, planOnly: false, createdAt: '', updatedAt: '' };
   if (m === 'workspace.bind') return { ok: true };
   return undefined;

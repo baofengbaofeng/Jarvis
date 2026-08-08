@@ -38,7 +38,7 @@ describe('IpcRouter provider model channels', () => {
 
   beforeEach(() => { db = new Database(':memory:'); applyMigrations(db); });
 
-  it('registers provider.listModels and provider.addModel against the provider store', async () => {
+  it('registers provider.listModels, provider.addModel, and provider.deleteModel against the provider store', async () => {
     const router = new IpcRouter(db);
     const daemon = { status: async () => ({ running: true }), restart: () => {} } as unknown as DaemonSupervisor;
     router.registerAll(daemon);
@@ -46,8 +46,10 @@ describe('IpcRouter provider model channels', () => {
     const handlers = (router as unknown as { handlers: Map<string, (e: unknown, ...args: unknown[]) => unknown> }).handlers;
     const listModels = handlers.get('provider.listModels')!;
     const addModel = handlers.get('provider.addModel')!;
+    const deleteModel = handlers.get('provider.deleteModel')!;
     expect(listModels).toBeTruthy();
     expect(addModel).toBeTruthy();
+    expect(deleteModel).toBeTruthy();
 
     // The registered handlers delegate to the provider store, so a provider
     // created in the UI can immediately be given models through the same IPC.
@@ -56,14 +58,29 @@ describe('IpcRouter provider model channels', () => {
 
     expect(await listModels({}, p.id)).toEqual([]);
 
-    const added = await addModel({}, p.id, { modelId: 'm1', name: 'M1' }) as { providerId: string; modelId: string; name: string };
-    expect(added.providerId).toBe(p.id);
-    expect(added.modelId).toBe('m1');
-    expect(added.name).toBe('M1');
+    const added = await addModel({}, p.id, { modelId: 'm1', name: 'M1', contextTokens: 64_000 }) as {
+      ok: true;
+      model: {
+        id: string;
+        providerId: string;
+        modelId: string;
+        name: string;
+        contextTokens: number | null;
+      };
+    };
+    expect(added.ok).toBe(true);
+    expect(added.model.providerId).toBe(p.id);
+    expect(added.model.modelId).toBe('m1');
+    expect(added.model.name).toBe('M1');
+    expect(added.model.contextTokens).toBe(64_000);
 
-    const models = await listModels({}, p.id) as Array<{ modelId: string }>;
+    const models = await listModels({}, p.id) as Array<{ modelId: string; contextTokens: number | null }>;
     expect(models).toHaveLength(1);
     expect(models[0].modelId).toBe('m1');
+    expect(models[0].contextTokens).toBe(64_000);
+
+    expect(await deleteModel({}, added.model.id)).toEqual({ ok: true });
+    expect(await listModels({}, p.id)).toEqual([]);
   });
 });
 

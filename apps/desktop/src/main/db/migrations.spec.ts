@@ -70,8 +70,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 12 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table)', () => {
-    expect(latestVersion()).toBe(12);
+  it('reports latestVersion as 15 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table; v13 adds provider field length CHECKs; v14 adds models.context_tokens; v15 adds providers/models.enabled)', () => {
+    expect(latestVersion()).toBe(15);
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created

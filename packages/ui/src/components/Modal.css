@@ -9,6 +9,11 @@
   padding: var(--space-4);
 }
 
+/* Later-mounted dialogs (e.g. confirm over editor) stack above the previous. */
+.jui-modal-backdrop ~ .jui-modal-backdrop {
+  z-index: 1010;
+}
+
 .jui-modal-card {
   width: min(100%, 480px);
   max-height: 80vh;
@@ -48,4 +53,19 @@
   gap: var(--space-2);
   justify-content: flex-end;
   margin-top: var(--space-4);
+}
+
+.jui-modal-message {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.jui-modal-message--center {
+  text-align: center;
+}
+
+.jui-modal-message--start {
+  text-align: start;
 }

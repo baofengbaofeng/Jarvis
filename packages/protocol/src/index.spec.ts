@@ -1,9 +1,41 @@
 import { describe, it, expect } from 'vitest';
-import { IpcChannel, IpcEvent, ALLOWED_INVOKE, ALLOWED_EVENTS, GITHUB_REPO_URL, type TaskStatus } from './index';
+import {
+  IpcChannel,
+  IpcEvent,
+  ALLOWED_INVOKE,
+  ALLOWED_EVENTS,
+  APP_DISPLAY_NAME,
+  GITHUB_REPO_URL,
+  GITHUB_ISSUES_URL,
+  GITHUB_WIKI_URL,
+  PROVIDER_FIELD_MAX,
+  contextTokensFromInput,
+  formatContextTokens,
+  type TaskStatus,
+} from './index';
 
 describe('protocol contract', () => {
-  it('exports GitHub repo URL', () => {
+  it('exports provider field max lengths aligned with DB CHECKs', () => {
+    expect(PROVIDER_FIELD_MAX.name).toBe(64);
+    expect(PROVIDER_FIELD_MAX.baseUrl).toBe(2048);
+    expect(PROVIDER_FIELD_MAX.apiKey).toBe(512);
+    expect(PROVIDER_FIELD_MAX.apiKeyRef).toBe(128);
+  });
+
+  it('converts and formats model context tokens (K/M)', () => {
+    expect(contextTokensFromInput(128, 'K')).toBe(128_000);
+    expect(contextTokensFromInput(1, 'M')).toBe(1_000_000);
+    expect(formatContextTokens(128_000)).toBe('128K');
+    expect(formatContextTokens(2_000_000)).toBe('2M');
+    expect(formatContextTokens(null)).toBeNull();
+    expect(formatContextTokens(1500)).toBe('1500');
+  });
+
+  it('exports display name and GitHub URLs', () => {
+    expect(APP_DISPLAY_NAME).toBe('J.A.R.V.I.S');
     expect(GITHUB_REPO_URL).toBe('https://github.com/baofengbaofeng/Jarvis');
+    expect(GITHUB_ISSUES_URL).toBe('https://github.com/baofengbaofeng/Jarvis/issues');
+    expect(GITHUB_WIKI_URL).toBe('https://github.com/baofengbaofeng/Jarvis/wiki');
   });
   it('exposes IpcChannel strings', () => {
     expect(IpcChannel.settingsGet).toBe('settings.get');

@@ -48,7 +48,7 @@ Preload (`src/preload/index.ts`) exposes `window.jarvis.invoke(channel, ...args)
 
 ### SQLite schema & migrations
 
-Migrations are an ordered array of `{ version, sql }` in `apps/desktop/src/main/db/migrations.ts`, applied via `schema_migrations` (current latest = v12). Comments in that file are important: several v1 tables had vestigial legacy shapes that later milestones had to `DROP`/`ALTER` in place (token_usage v10, audit_logs v11). When adding a table, **append a new migration** — never edit applied ones.
+Migrations are an ordered array of `{ version, sql }` in `apps/desktop/src/main/db/migrations.ts`, applied via `schema_migrations` (current latest = v15). Comments in that file are important: several v1 tables had vestigial legacy shapes that later milestones had to `DROP`/`ALTER` in place (token_usage v10, audit_logs v11). When adding a table, **append a new migration** — never edit applied ones.
 
 Writer ownership (§13.3): Electron main owns providers/models/agents/settings/chat/mcp_servers/skills/prompt_templates; the daemon owns tasks/squads/agent_messages/agent_call_edges/audit/token_usage/runtime_profiles. In practice today the main process writes most tables and the daemon writes its own (e.g. L36 multica task-id mapping).
 

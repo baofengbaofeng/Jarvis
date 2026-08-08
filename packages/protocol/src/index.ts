@@ -2,7 +2,10 @@ export { IpcChannel, IpcEvent } from './ipc-channels';
 
 export {
   APP_VERSION,
+  APP_DISPLAY_NAME,
   GITHUB_REPO_URL,
+  GITHUB_ISSUES_URL,
+  GITHUB_WIKI_URL,
   CONFIG_SCHEMA_VERSION,
   LEGACY_CONFIG_SCHEMA_VERSION,
   INSTALLER_ARTIFACT_VERSION,
@@ -18,12 +21,37 @@ export {
 
 export type ProviderType = 'openai-compatible' | 'anthropic-compatible';
 
+/** Max lengths for provider fields (aligned with SQLite CHECKs in migration v13). */
+export const PROVIDER_FIELD_MAX = {
+  name: 64,
+  baseUrl: 2048,
+  /** Plaintext token in keychain — not a DB column; enforced in IPC + UI. */
+  apiKey: 512,
+  apiKeyRef: 128,
+} as const;
+
+export {
+  PROVIDER_BASE_URL_PATTERN,
+  PROVIDER_NAME_PATTERN,
+  PROVIDER_MODEL_ID_PATTERN,
+  providerBaseUrlError,
+  sanitizeProviderNameInput,
+  isValidProviderName,
+  sanitizeProviderModelIdInput,
+  isValidProviderModelId,
+  sanitizeProviderModelNameInput,
+  isValidProviderModelName,
+} from './provider-fields';
+export type { ProviderBaseUrlError } from './provider-fields';
+
 export interface Provider {
   id: string;
   name: string;
   type: ProviderType;
   baseUrl: string;
   apiKeyRef: string;      // Keychain 引用,不落盘明文
+  /** When false, hidden from chat/agent model selection. Omit/undefined = enabled. */
+  enabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,7 +61,36 @@ export interface Model {
   providerId: string;
   modelId: string;        // 用户自定义 model id,禁止硬编码预设
   name: string;
+  /** Absolute context window in tokens; null/undefined = unset. */
+  contextTokens?: number | null;
+  /** When false (or parent provider disabled), hidden from selection. Omit = enabled. */
+  enabled?: boolean;
   createdAt: string;
+}
+
+/** Model row eligible for Agent / chat binding (provider + model both enabled). */
+export interface SelectableModel {
+  id: string;
+  providerId: string;
+  providerName: string;
+  modelId: string;
+  name: string;
+  contextTokens?: number | null;
+}
+
+export type ContextTokenUnit = 'K' | 'M';
+
+export function contextTokensFromInput(value: number, unit: ContextTokenUnit): number {
+  return unit === 'M' ? value * 1_000_000 : value * 1_000;
+}
+
+export function formatContextTokens(tokens: number | null | undefined): string | null {
+  if (tokens == null) return null;
+  const n = typeof tokens === 'number' ? tokens : Number(tokens);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n % 1_000_000 === 0) return `${n / 1_000_000}M`;
+  if (n % 1_000 === 0) return `${n / 1_000}K`;
+  return String(n);
 }
 
 export interface AgentConfig {
