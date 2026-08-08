@@ -429,6 +429,14 @@ export const MIGRATIONS: Migration[] = [
     ALTER TABLE providers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE models ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
     `
+  },
+  // v16: enable flags for MCP servers and skills (settings + runtime filter).
+  {
+    version: 16,
+    sql: `
+    ALTER TABLE mcp_servers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE skills ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+    `
   }
 ];
 

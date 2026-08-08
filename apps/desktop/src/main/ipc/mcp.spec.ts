@@ -28,6 +28,39 @@ describe('mcp store', () => {
     const listed = store.list();
     expect(listed[0].config.agentIds).toEqual(['a1', 'a2']);
   });
+
+  it('rejects empty or overlong name / command / args', () => {
+    const store = createMcpStore(db);
+    expect(() => store.create({ name: '  ', transport: 'stdio', command: 'npx', args: [] })).toThrow(
+      'MCP_NAME_REQUIRED',
+    );
+    expect(() =>
+      store.create({ name: 'n'.repeat(65), transport: 'stdio', command: 'npx', args: [] }),
+    ).toThrow('MCP_NAME_TOO_LONG');
+    expect(() =>
+      store.create({ name: 'ok', transport: 'stdio', command: 'c'.repeat(513), args: [] }),
+    ).toThrow('MCP_COMMAND_TOO_LONG');
+    expect(() =>
+      store.create({ name: 'ok', transport: 'stdio', command: 'npx', args: ['a'.repeat(2049)] }),
+    ).toThrow('MCP_ARGS_TOO_LONG');
+  });
+
+  it('toggles enabled and defaults new servers to enabled', () => {
+    const store = createMcpStore(db);
+    const s = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [] });
+    expect(s.enabled).toBe(true);
+    const off = store.setEnabled(s.id, false);
+    expect(off.enabled).toBe(false);
+    expect(store.list()[0]?.enabled).toBe(false);
+  });
+
+  it('excludes disabled servers from agent bindings', () => {
+    const store = createMcpStore(db);
+    const s = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [], agentIds: ['a1'] });
+    expect(listBoundMcpServerNames(db, 'a1')).toEqual(['fs']);
+    store.setEnabled(s.id, false);
+    expect(listBoundMcpServerNames(db, 'a1')).toEqual([]);
+  });
 });
 
 describe('mcp.test', () => {

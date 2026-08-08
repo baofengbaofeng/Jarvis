@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
+import { MCP_FIELD_MAX } from '@jarvis/protocol';
 import {
   createMcpClient,
   registerMcpTools,
@@ -10,6 +11,10 @@ import {
   type SpawnImpl,
   type ToolRegistry,
 } from '@jarvis/core';
+
+function asEnabled(value: unknown): boolean {
+  return Number(value ?? 1) === 1;
+}
 
 export interface McpServerInput {
   name: string;
@@ -64,15 +69,34 @@ export function createMcpStore(db: Database.Database) {
   return {
     list() {
       return (db.prepare('SELECT * FROM mcp_servers ORDER BY created_at').all() as Record<string, unknown>[]).map(r => ({
-        id: r.id as string, name: r.name as string, transport: r.transport as string, config: JSON.parse((r.config_json as string) ?? '{}')
+        id: r.id as string,
+        name: r.name as string,
+        transport: r.transport as string,
+        enabled: asEnabled(r.enabled),
+        config: JSON.parse((r.config_json as string) ?? '{}'),
       }));
     },
     create(input: McpServerInput) {
-      if (input.transport === 'stdio') assertMcpCommand(input.command ?? '', input.args ?? []);
+      const name = (input.name ?? '').trim();
+      if (!name) throw new Error('MCP_NAME_REQUIRED');
+      if (name.length > MCP_FIELD_MAX.name) throw new Error('MCP_NAME_TOO_LONG');
+      const command = (input.command ?? '').trim();
+      const args = input.args ?? [];
+      if (command.length > MCP_FIELD_MAX.command) throw new Error('MCP_COMMAND_TOO_LONG');
+      const argsJoined = args.join(' ');
+      if (argsJoined.length > MCP_FIELD_MAX.args) throw new Error('MCP_ARGS_TOO_LONG');
+      if (input.transport === 'stdio') assertMcpCommand(command, args);
       const id = randomUUID();
       db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
-        .run(id, input.name, input.transport, JSON.stringify({ command: input.command, args: input.args, config: input.configJson, agentIds: input.agentIds ?? [] }), new Date().toISOString());
+        .run(id, name, input.transport, JSON.stringify({ command, args, config: input.configJson, agentIds: input.agentIds ?? [] }), new Date().toISOString());
       return this.list().find(s => s.id === id)!;
+    },
+    setEnabled(id: string, enabled: boolean) {
+      const cur = db.prepare('SELECT id FROM mcp_servers WHERE id = ?').get(id);
+      if (!cur) throw new Error('MCP_SERVER_NOT_FOUND');
+      db.prepare('UPDATE mcp_servers SET enabled=? WHERE id=?').run(enabled ? 1 : 0, id);
+      if (!enabled) closeMcpClient(id);
+      return this.list().find((s) => s.id === id)!;
     },
     remove(id: string) {
       db.prepare('DELETE FROM mcp_servers WHERE id = ?').run(id);
@@ -122,9 +146,14 @@ export interface McpRegistrationDeps { spawnImpl?: SpawnImpl }
 
 /** CORE-20: server names bound to this agent via config_json.agentIds. */
 export function listBoundMcpServerNames(db: Database.Database, agentId: string): string[] {
-  const rows = db.prepare('SELECT name, config_json FROM mcp_servers').all() as Array<{ name: string; config_json: string }>;
+  const rows = db.prepare('SELECT name, config_json, enabled FROM mcp_servers').all() as Array<{
+    name: string;
+    config_json: string;
+    enabled?: number;
+  }>;
   const names: string[] = [];
   for (const s of rows) {
+    if (!asEnabled(s.enabled)) continue;
     const cfg = JSON.parse(s.config_json ?? '{}') as { agentIds?: string[] };
     if (cfg.agentIds?.includes(agentId)) names.push(s.name);
   }
@@ -157,8 +186,15 @@ export function mcpVisibilityForAgent(db: Database.Database, agentId: string, al
 // CORE-20: cache is transport-only — per-agent visibility is applied at run
 // submit via mcpVisibilityForAgent / toolFilter, not by mutating the registry.
 export async function registerAgentMcpTools(db: Database.Database, toolRegistry: ToolRegistry, agentId: string, deps: McpRegistrationDeps = {}): Promise<void> {
-  const rows = db.prepare('SELECT id, name, transport, config_json FROM mcp_servers').all() as Array<{ id: string; name: string; transport: string; config_json: string }>;
+  const rows = db.prepare('SELECT id, name, transport, config_json, enabled FROM mcp_servers').all() as Array<{
+    id: string;
+    name: string;
+    transport: string;
+    config_json: string;
+    enabled?: number;
+  }>;
   for (const s of rows) {
+    if (!asEnabled(s.enabled)) continue;
     const cfg = JSON.parse(s.config_json ?? '{}') as { command?: string; args?: string[]; agentIds?: string[] };
     if (s.transport !== 'stdio' || !cfg.command || !cfg.agentIds?.includes(agentId)) continue;
     if (mcpClientCache.has(s.id)) {

@@ -169,8 +169,30 @@ export class IpcRouter {
       http: safeUrlPolicy,
     });
     this.register('mcp.list', () => mcpStore.list());
-    this.register('mcp.create', (_e, input) => mcpStore.create(input as McpServerInput));
-    this.register('mcp.delete', (_e, id) => mcpStore.remove(id as string));
+    this.register('mcp.create', (_e, input) => {
+      try {
+        const server = mcpStore.create(input as McpServerInput);
+        return { ok: true as const, server };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('mcp.delete', (_e, id) => {
+      try {
+        mcpStore.remove(id as string);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('mcp.setEnabled', (_e, id, enabled) => {
+      try {
+        const server = mcpStore.setEnabled(id as string, Boolean(enabled));
+        return { ok: true as const, server };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('mcp.test', (_e, args) =>
       testMcpServerById(this.db, ((args ?? {}) as { id: string }).id));
     this.register('skills.list', () => skillsStore.list());
