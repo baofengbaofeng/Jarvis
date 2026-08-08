@@ -115,9 +115,58 @@
         "unknown": "Something went wrong; try again"
       }
     },
-    "permissions": { "agent": "Agent", "level": "Sandbox level", "readonly": "Read-only", "readwrite": "Read/write", "system": "System" },
-    "env": { "agent": "Agent", "envVars": "Environment variables", "cliArgs": "CLI arguments", "placeholder": "KEY=value", "cliPlaceholder": "-flag arg" },
-    "concurrency": { "perAgent": "Per Agent", "machine": "Machine" },
+    "concurrency": {
+      "title": "Concurrency",
+      "subtitle": "Limit per-Agent and machine-wide concurrent tasks. Saving restarts the local Daemon.",
+      "perAgent": "Per Agent",
+      "perAgentHint": "Max concurrent tasks for a single Agent.",
+      "machine": "Machine",
+      "machineHint": "Machine-wide concurrency; must be ≥ per-Agent limit.",
+      "saved": "Saved and requested Daemon restart",
+      "errors": {
+        "perAgentInvalid": "Enter a positive integer",
+        "perAgentRange": "Per Agent must be between {{min}} and {{max}}",
+        "machineInvalid": "Enter a positive integer",
+        "machineRange": "Machine concurrency must be between {{min}} and {{max}}",
+        "machineGtePerAgent": "Machine concurrency must be ≥ per-Agent limit",
+        "saveFailed": "Save failed; try again"
+      }
+    },
+    "permissions": {
+      "title": "Permissions",
+      "subtitle": "Choose a sandbox level per Agent. Saving requires an Agent selection.",
+      "agent": "Agent",
+      "agentHint": "Select the Agent to configure.",
+      "level": "Sandbox level",
+      "levelHint": "Read-only / read-write / system — increasing privilege.",
+      "readonly": "Read-only",
+      "readwrite": "Read/write",
+      "system": "System",
+      "saved": "Saved",
+      "errors": {
+        "agentRequired": "Select an Agent"
+      }
+    },
+    "env": {
+      "title": "Environment",
+      "subtitle": "Configure environment variables and CLI arguments for the selected Agent.",
+      "agent": "Agent",
+      "agentHint": "Select the Agent to configure.",
+      "envVars": "Environment variables",
+      "envHint": "One KEY=value per line; KEY must be an identifier.",
+      "cliArgs": "CLI arguments",
+      "cliHint": "Space-separated argument list.",
+      "placeholder": "KEY=value",
+      "cliPlaceholder": "-flag arg",
+      "saved": "Saved",
+      "errors": {
+        "agentRequired": "Select an Agent",
+        "envTooLong": "Environment text is too long",
+        "cliTooLong": "CLI arguments are too long",
+        "envLineInvalid": "Line {{line}} is invalid: KEY must be a non-empty identifier",
+        "saveFailed": "Save failed; try again"
+      }
+    },
     "provider": {
       "title": "Add Provider",
       "description": "Configure each model vendor here: enter the endpoint address and token (tokens stay in local secure storage and are never written in plaintext), then register the model IDs you want to use. Once saved, they are available to chat and agents. OpenAI- and Anthropic-compatible APIs are supported.",
@@ -239,6 +288,7 @@
   "canvas": { "title": "Canvas", "no_artifacts": "No task artifacts yet", "selectTask": "Select a task" },
   "daemon": {
     "title": "Daemon management",
+    "subtitle": "Check local Daemon status, restart the service, and handle pending injection approvals.",
     "running": "Running",
     "stopped": "Stopped",
     "version": "Version",
@@ -249,6 +299,7 @@
     "injectionApprovals": {
       "title": "Pending injection approvals",
       "none": "No pending approvals",
+      "noneHint": "Remote injection requests will appear here.",
       "source": "Remote",
       "approve": "Approve",
       "retryHint": "Approved. Retry the original task to apply the injection."
@@ -267,8 +318,13 @@
   },
   "safety": {
     "title": "Data Safety",
+    "subtitle": "Back up and restore the local database, or wipe data after a confirmation phrase.",
     "backup_now": "Back up now",
+    "backupName": "Backup",
+    "backupEmpty": "No backups yet",
+    "backupEmptyHint": "Create the first backup with “Back up now”.",
     "restore": "Restore",
+    "restoreTitle": "Restore backup",
     "restore_confirm": "Restore this backup? The app will relaunch.",
     "tab": { "backup": "Backup", "wipe": "Wipe" },
     "wipe_keychain": "Also delete API keys from the Keychain",
@@ -278,22 +334,30 @@
   },
   "configTransfer": {
     "title": "Config Import / Export",
+    "subtitle": "Export local config or import with a strategy. Secrets are never exported as plaintext.",
     "exportJson": "Export JSON",
     "exportYaml": "Export YAML",
     "import": "Import config",
     "strategy": "Import strategy",
+    "strategyHint": "Overwrite replaces existing items — confirm before continuing.",
     "strategySkip": "Skip existing",
     "strategyOverwrite": "Overwrite existing",
-    "strategyMerge": "Merge existing"
+    "strategyMerge": "Merge existing",
+    "overwriteTitle": "Overwrite import",
+    "overwriteConfirm": "Overwrite will replace existing config items. Continue?"
   },
   "coding": { "selectFile": "Select a file from the left to preview" },
   "usage": {
     "title": "Usage",
+    "subtitle": "View local cumulative token usage.",
+    "empty": "No usage data yet",
     "col": { "agent": "Agent", "prompt": "Prompt", "completion": "Completion", "total": "Total", "calls": "Calls" },
     "totalTokens": "Total tokens"
   },
   "audit": {
     "title": "Audit log",
+    "subtitle": "View tool-call and approval records; export CSV when needed.",
+    "empty": "No audit entries yet",
     "col": { "ts": "Time", "kind": "Kind", "action": "Action", "result": "Result" },
     "export": "Export",
     "filter": { "all": "All", "tool_call": "Tool call", "approval": "Approval" }
@@ -450,9 +514,17 @@
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",
+    "subtitle": "Record shortcuts for common actions; the same combo cannot bind multiple actions.",
     "press_key": "Press a key…",
     "capture": "capture",
     "save": "Save shortcuts",
+    "saved": "Saved",
+    "colAction": "Action",
+    "colCombo": "Shortcut",
+    "errors": {
+      "empty": "Shortcut cannot be empty",
+      "conflict": "Combo {{combo}} is used by more than one action"
+    },
     "action": {
       "chatSend": "Send chat message",
       "chatNew": "New chat",

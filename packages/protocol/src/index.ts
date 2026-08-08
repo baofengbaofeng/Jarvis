@@ -52,6 +52,22 @@ export const SKILL_FIELD_MAX = {
   description: 512,
 } as const;
 
+/** Concurrency settings bounds (settings.concurrency). */
+export const CONCURRENCY_FIELD_MAX = {
+  perAgentMin: 1,
+  perAgentMax: 64,
+  machineMin: 1,
+  machineMax: 512,
+} as const;
+
+/** Agent env/cli text area limits. */
+export const ENV_FIELD_MAX = {
+  envText: 8192,
+  cliText: 2048,
+  key: 128,
+  value: 2048,
+} as const;
+
 export {
   PROVIDER_BASE_URL_PATTERN,
   PROVIDER_NAME_PATTERN,

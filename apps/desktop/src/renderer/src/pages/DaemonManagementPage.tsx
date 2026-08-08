@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, Panel } from '@jarvis/ui';
+import { Badge, Button, EmptyState, PageHeader, Panel } from '@jarvis/ui';
 import { RuntimeStatusView } from '../components/runtime/RuntimeStatusView';
 import { SkillsMerger } from '../components/runtime/SkillsMerger';
 
@@ -67,8 +67,8 @@ export function DaemonManagementPage() {
   };
 
   return (
-    <div data-testid="daemon-management" className="page form-stack">
-      <h2 className="page__title">{t('daemon.title')}</h2>
+    <div data-testid="daemon-management" className="page form-stack settings-page">
+      <PageHeader title={t('daemon.title')} subtitle={t('daemon.subtitle')} />
       <Panel className="form-stack">
         <p data-testid="daemon-running" className={`status-badge ${status.running ? 'status-badge--running' : 'status-badge--stopped'}`}>
           {status.running ? `● ${t('daemon.running')}` : `○ ${t('daemon.stopped')}`}
@@ -79,9 +79,14 @@ export function DaemonManagementPage() {
         <Button variant="primary" data-testid="daemon-restart" onClick={() => void restart()}>{t('menu.restart')}</Button>
       </Panel>
       <section data-testid="injection-approvals" className="form-stack">
-        <h3 className="page__title">{t('daemon.injectionApprovals.title')}</h3>
+        <h3 className="settings-section-title">{t('daemon.injectionApprovals.title')}</h3>
         {approvals.length === 0 ? (
-          <p data-testid="injection-approvals-empty" className="empty-text">{t('daemon.injectionApprovals.none')}</p>
+          <div data-testid="injection-approvals-empty">
+            <EmptyState
+              title={t('daemon.injectionApprovals.none')}
+              description={t('daemon.injectionApprovals.noneHint')}
+            />
+          </div>
         ) : (
           <ul className="settings-card-list" data-testid="injection-approvals-list">
             {approvals.map((item) => (

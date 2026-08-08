@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tabs, TabPanel } from '@jarvis/ui';
+import { PageHeader, Tabs, TabPanel } from '@jarvis/ui';
 import { BackupPane } from './BackupPane';
 import { WipePane } from './WipePane';
 
@@ -13,7 +13,8 @@ export function DataSafetyPage() {
     await window.jarvis.settingsSet('data_policy', { local_only: checked });
   };
   return (
-    <div data-testid="data-safety-page" className="form-stack">
+    <div data-testid="data-safety-page" className="page form-stack settings-page">
+      <PageHeader title={t('safety.title')} subtitle={t('safety.subtitle')} />
       <Tabs
         tabs={[
           { id: 'backup', label: t('safety.tab.backup'), testId: 'safety-tab-backup' },
