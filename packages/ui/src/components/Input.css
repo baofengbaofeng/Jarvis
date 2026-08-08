@@ -17,6 +17,14 @@
   border-color: var(--accent);
 }
 
+.jui-input.jui-input--invalid {
+  border-color: var(--danger);
+}
+
+.jui-input.jui-input--invalid:focus {
+  border-color: var(--danger);
+}
+
 .jui-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;

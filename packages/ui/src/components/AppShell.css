@@ -6,6 +6,11 @@
   background: var(--bg);
 }
 
+.jui-appshell--with-right {
+  /* Main stays flexible; right pane width is set when a push panel is mounted. */
+  grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr) var(--shell-right-width, 360px);
+}
+
 .jui-appshell__sidebar {
   grid-row: 1 / -1;
   grid-column: 1;
@@ -15,9 +20,15 @@
 .jui-appshell__topbar {
   grid-column: 2;
   grid-row: 1;
+  min-width: 0;
+}
+
+.jui-appshell--with-right .jui-appshell__topbar {
+  grid-column: 2;
 }
 
 .jui-appshell__main-col {
+  position: relative;
   grid-column: 2;
   grid-row: 2;
   display: flex;
@@ -42,4 +53,13 @@
   background: var(--bg);
   font-size: var(--text-xs);
   color: var(--fg-muted);
+}
+
+.jui-appshell__right {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 0.5px solid var(--border-subtle);
 }

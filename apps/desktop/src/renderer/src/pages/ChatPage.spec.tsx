@@ -52,6 +52,9 @@ describe('ChatPage', () => {
     await waitFor(() => expect(screen.getByTestId('chat-input')).toBeTruthy());
     useChatStore.setState({ sessionId: 's2', messages: [], streamingText: '', steps: [] });
     await waitFor(() => expect(screen.getByTestId('chat-empty-composer')).toBeTruthy());
+    expect(screen.getByTestId('chat-welcome')).toBeTruthy();
+    expect(screen.getByTestId('jarvis-mark')).toBeTruthy();
+    expect(screen.getByText('开始与 Agent 对话')).toBeTruthy();
     expect(screen.queryByTestId('chat-sessions')).toBeNull();
     expect(screen.queryByTestId('chat-session-s1')).toBeNull();
   });

@@ -135,9 +135,12 @@
         "baseUrlTooLong": "地址不能超过 {{max}} 个字符",
         "apiKeyRequired": "请填写秘钥",
         "apiKeyTooLong": "秘钥不能超过 {{max}} 个字符",
+        "modelIdRequired": "请填写模型 ID",
         "modelIdInvalid": "模型 ID 仅允许字母、数字与 - _",
+        "modelIdTooLong": "模型 ID 不能超过 {{max}} 个字符",
         "modelNameInvalid": "显示名称仅允许中文、英文字母、数字与 - _",
-        "modelContextInvalid": "上下文容量须为正整数",
+        "modelNameTooLong": "显示名称不能超过 {{max}} 个字符",
+        "modelContextInvalid": "上下文容量须为正整数，且换算后不超过 100M",
         "secureStorage": "系统安全存储不可用，无法保存秘钥",
         "unknown": "保存失败，请检查填写内容后重试"
       }

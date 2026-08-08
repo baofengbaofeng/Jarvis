@@ -189,4 +189,45 @@ describe('provider store', () => {
     expect(set).not.toHaveBeenCalled();
     expect(store.list()).toEqual([]);
   });
+
+  it('rejects empty apiKey on create', async () => {
+    const set = vi.fn();
+    const store = createProviderStore(db, { set, get: async () => null, delete: async () => {} });
+    await expect(
+      store.create({
+        name: 'Ok',
+        type: 'openai-compatible',
+        baseUrl: 'https://x.com',
+        apiKey: '',
+      }),
+    ).rejects.toThrow('PROVIDER_API_KEY_REQUIRED');
+    await expect(
+      store.create({
+        name: 'Ok',
+        type: 'openai-compatible',
+        baseUrl: 'https://x.com',
+        apiKey: '   ',
+      }),
+    ).rejects.toThrow('PROVIDER_API_KEY_REQUIRED');
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('rejects overlong model id / name / contextTokens', async () => {
+    const store = createProviderStore(db, { set: async () => {}, get: async () => null, delete: async () => {} });
+    const p = await store.create({
+      name: 'P',
+      type: 'openai-compatible',
+      baseUrl: 'https://x.com',
+      apiKey: 'sk-t',
+    });
+    expect(() => store.addModel(p.id, { modelId: 'm'.repeat(129), name: 'Ok' })).toThrow(
+      'PROVIDER_MODEL_ID_TOO_LONG',
+    );
+    expect(() => store.addModel(p.id, { modelId: 'ok', name: 'n'.repeat(65) })).toThrow(
+      'PROVIDER_MODEL_NAME_TOO_LONG',
+    );
+    expect(() =>
+      store.addModel(p.id, { modelId: 'ok', name: 'Ok', contextTokens: 100_000_001 }),
+    ).toThrow('PROVIDER_MODEL_CONTEXT_INVALID');
+  });
 });

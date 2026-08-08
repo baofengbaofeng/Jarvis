@@ -44,7 +44,7 @@ export function VideoSummary() {
         </Button>
       </div>
       {error && <div data-testid="video-error" role="alert" className="error-text">{error}</div>}
-      {result && <div data-testid="video-result" className="office-tool__result">{result}</div>}
+      {result && <div data-testid="video-result" className="office-tool__result" data-selection-menu>{result}</div>}
     </Panel>
   );
 }

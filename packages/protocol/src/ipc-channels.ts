@@ -22,6 +22,8 @@ export const IpcChannel = {
   chatListSessions: 'chat.listSessions',
   chatCreateSession: 'chat.createSession',
   chatLoadMessages: 'chat.loadMessages',
+  chatDeleteSession: 'chat.deleteSession',
+  chatRenameSession: 'chat.renameSession',
   squadStart: 'squad.start',
   squadCurrent: 'squad.current',
   daemonStatus: 'daemon.status',
@@ -32,6 +34,8 @@ export const IpcChannel = {
   dialogOpenFile: 'dialog.openFile',
   diagnosticsRun: 'diagnostics.run',
   envInfo: 'diagnostics.env',
+  /** Current macOS traffic-light / fullscreen chrome metrics. */
+  windowGetChrome: 'window.getChrome',
   workspaceTree: 'workspace.tree',
   workspaceRead: 'workspace.read',
   indexReindex: 'index.reindex',
@@ -51,4 +55,6 @@ export const IpcEvent = {
   squadEvent: 'squad:event',
   toastPush: 'toast:push',
   approvalRequest: 'approval:request',
+  /** macOS traffic-light / fullscreen chrome metrics for renderer alignment. */
+  windowChrome: 'window:chrome',
 } as const;

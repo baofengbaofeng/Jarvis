@@ -54,7 +54,7 @@ export function GlobalSearch() {
       </div>
       {error && <div data-testid="global-search-error" role="alert" className="error-text">{error}</div>}
       {done && results.length === 0 && !error && <div data-testid="global-search-empty" className="empty-text">{t('officeTools.noResult')}</div>}
-      <div data-testid="global-search-results">
+      <div data-testid="global-search-results" data-selection-menu>
         {TABLES.map(table => {
           const rows = results.filter(r => r.table === table);
           if (rows.length === 0) return null;

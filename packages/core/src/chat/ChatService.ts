@@ -5,6 +5,8 @@ import { isContentArray, type MessageContent } from '../office/content';
 export interface ChatDbAdapter {
   listSessions(): Promise<ChatSession[]>;
   createSession(title?: string): Promise<ChatSession>;
+  deleteSession(sessionId: string): Promise<void>;
+  renameSession(sessionId: string, title: string): Promise<ChatSession>;
   loadMessages(sessionId: string): Promise<ChatMessage[]>;
   appendMessage(sessionId: string, role: string, content: string): Promise<void>;
   loadAgent(agentId: string): Promise<AgentConfig>;
@@ -44,6 +46,12 @@ export function createChatService(db: ChatDbAdapter) {
   return {
     async listSessions() { return db.listSessions(); },
     async createSession(title?: string) { return db.createSession(title); },
+    async deleteSession(sessionId: string) { return db.deleteSession(sessionId); },
+    async renameSession(sessionId: string, title: string) {
+      const trimmed = title.trim();
+      if (!trimmed) throw new Error('title required');
+      return db.renameSession(sessionId, trimmed);
+    },
     async loadMessages(sessionId: string) {
       // L23: rows may hold a marker-serialized content array; restore the
       // structured form so the renderer never sees the marker/JSON and the model

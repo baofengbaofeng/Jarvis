@@ -25,6 +25,8 @@ const ALLOWED_KEYS = new Set([
   'concurrency.machine',
   'shortcuts',
   'onboarding.completed',
+  // Renderer settings-store / init-store use this key (legacy alias of onboarding.completed).
+  'onboarding_done',
 ]);
 
 export function isAllowedSettingsKey(key: string): boolean {

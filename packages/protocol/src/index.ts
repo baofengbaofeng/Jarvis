@@ -28,6 +28,13 @@ export const PROVIDER_FIELD_MAX = {
   /** Plaintext token in keychain — not a DB column; enforced in IPC + UI. */
   apiKey: 512,
   apiKeyRef: 128,
+  /** Model id / display name — enforced in IPC + UI (no DB length CHECK yet). */
+  modelId: 128,
+  modelName: 64,
+  /** Digits before K/M in the model context UI. */
+  contextDigits: 6,
+  /** Absolute context window after unit conversion (100M tokens). */
+  contextTokens: 100_000_000,
 } as const;
 
 export {

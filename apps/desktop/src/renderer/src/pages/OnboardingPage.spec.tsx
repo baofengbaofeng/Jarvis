@@ -9,7 +9,7 @@ import { OnboardingPage } from './OnboardingPage';
 vi.hoisted(() => {
   window.jarvis = {
     invoke: vi.fn(async (m: string) => {
-      if (m === 'provider.create') return { id: 'p1' };
+      if (m === 'provider.create') return { ok: true, provider: { id: 'p1' } };
       if (m === 'agent.create') return { id: 'a1', name: 'Test', slug: 'test' };
       if (m === 'diagnostics.run') return { items: [{ id: 'node', ok: true, detail: 'ok' }] };
       return null;
@@ -36,6 +36,7 @@ describe('OnboardingPage', () => {
     const step1Inputs = screen.getAllByRole('textbox');
     fireEvent.change(step1Inputs[0]!, { target: { value: 'OpenAI' } });
     fireEvent.change(step1Inputs[1]!, { target: { value: 'https://api.example.com' } });
+    fireEvent.change(screen.getByTestId('onboarding-apikey'), { target: { value: 'sk-test' } });
     fireEvent.click(screen.getByTestId('onboarding-next'));
     await waitFor(() => expect(screen.getByTestId('onboarding-step-2')).toBeTruthy());
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Assistant' } });
@@ -43,5 +44,28 @@ describe('OnboardingPage', () => {
     await waitFor(() => expect(screen.getByTestId('onboarding-step-3')).toBeTruthy());
     fireEvent.click(screen.getByTestId('onboarding-finish'));
     await waitFor(() => expect(done).toBe(true));
+  });
+
+  it('hardcodes openai-compatible when creating the onboarding provider', async () => {
+    const invoke = window.jarvis.invoke as ReturnType<typeof vi.fn>;
+    invoke.mockClear();
+    render(
+      <MemoryRouter>
+        <OnboardingPage />
+      </MemoryRouter>,
+    );
+    const step1Inputs = screen.getAllByRole('textbox');
+    fireEvent.change(step1Inputs[0]!, { target: { value: 'DeepSeek' } });
+    fireEvent.change(step1Inputs[1]!, { target: { value: 'https://api.deepseek.com/anthropic' } });
+    fireEvent.change(screen.getByTestId('onboarding-apikey'), { target: { value: 'sk-test' } });
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('provider.create', {
+        name: 'DeepSeek',
+        type: 'openai-compatible',
+        baseUrl: 'https://api.deepseek.com/anthropic',
+        apiKey: 'sk-test',
+      });
+    });
   });
 });

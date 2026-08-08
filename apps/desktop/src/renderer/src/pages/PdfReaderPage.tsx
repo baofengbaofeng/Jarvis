@@ -133,7 +133,7 @@ export function PdfReaderPage() {
       )}
       {error && <div data-testid="pdf-error" role="alert" className="error-text">{error}</div>}
       {loading && <div data-testid="pdf-loading" className="empty-text">{t('pdf.loading')}</div>}
-      {summary && <div data-testid="pdf-summary" className="office-tool__result">{summary}</div>}
+      {summary && <div data-testid="pdf-summary" className="office-tool__result" data-selection-menu>{summary}</div>}
     </Panel>
   );
 }

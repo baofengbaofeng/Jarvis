@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@jarvis/ui';
+import { JarvisMark } from '../brand/JarvisMark';
 import { parseTable, type Artifact } from '@jarvis/core/renderer';
 
 // K6 (M8 Task 10): canvas workspace view. When a taskId is present it loads the
@@ -37,15 +38,17 @@ export function CanvasView({ taskId }: { taskId?: string }) {
       {artifacts.map(a => (
         <div key={a.id} className="canvas-card" data-testid="canvas-card">
           <h4>{a.title ?? a.kind}</h4>
-          {a.kind === 'table' && <TableCard content={a.content} />}
-          {a.kind === 'markdown' && <pre data-testid="artifact-md">{a.content}</pre>}
-          {a.kind === 'mermaid' && <pre data-testid="artifact-mermaid">{a.content}</pre>}
-          {a.kind === 'chart' && <pre data-testid="artifact-chart">{a.content}</pre>}
+          <div data-selection-menu>
+            {a.kind === 'table' && <TableCard content={a.content} />}
+            {a.kind === 'markdown' && <pre data-testid="artifact-md">{a.content}</pre>}
+            {a.kind === 'mermaid' && <pre data-testid="artifact-mermaid">{a.content}</pre>}
+            {a.kind === 'chart' && <pre data-testid="artifact-chart">{a.content}</pre>}
+          </div>
         </div>
       ))}
       {artifacts.length === 0 && (
         <div data-testid="canvas-empty">
-          <EmptyState title={t('canvas.no_artifacts')} />
+          <EmptyState icon={<JarvisMark size="md" variant="app" />} title={t('canvas.no_artifacts')} />
         </div>
       )}
     </div>

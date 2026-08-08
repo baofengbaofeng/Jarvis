@@ -20,6 +20,10 @@ describe('protocol contract', () => {
     expect(PROVIDER_FIELD_MAX.baseUrl).toBe(2048);
     expect(PROVIDER_FIELD_MAX.apiKey).toBe(512);
     expect(PROVIDER_FIELD_MAX.apiKeyRef).toBe(128);
+    expect(PROVIDER_FIELD_MAX.modelId).toBe(128);
+    expect(PROVIDER_FIELD_MAX.modelName).toBe(64);
+    expect(PROVIDER_FIELD_MAX.contextDigits).toBe(6);
+    expect(PROVIDER_FIELD_MAX.contextTokens).toBe(100_000_000);
   });
 
   it('converts and formats model context tokens (K/M)', () => {

@@ -1,0 +1,17 @@
+.jarvis-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.jarvis-mark svg {
+  display: block;
+}
+
+.jarvis-mark--app {
+  border-radius: 22%;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}

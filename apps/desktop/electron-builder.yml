@@ -1,5 +1,5 @@
 appId: com.jarvis.app
-productName: Jarvis
+productName: J.A.R.V.I.S
 directories:
   output: ../../dist
   buildResources: resources
@@ -17,8 +17,13 @@ extraResources:
     to: core
     filter:
       - headless.mjs
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/tray-icon.png
+    to: tray-icon.png
 
 win:
+  icon: icon.ico
   target:
     - target: msi
       arch: [x64]
@@ -29,6 +34,7 @@ msi:
   perMachine: true
 
 mac:
+  icon: icon.icns
   category: public.app-category.developer-tools
   target:
     - target: dmg

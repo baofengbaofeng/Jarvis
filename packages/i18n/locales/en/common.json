@@ -135,9 +135,12 @@
         "baseUrlTooLong": "Address must be at most {{max}} characters",
         "apiKeyRequired": "Token is required",
         "apiKeyTooLong": "Token must be at most {{max}} characters",
+        "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Model ID may only use letters, digits, hyphen, and underscore",
+        "modelIdTooLong": "Model ID must be at most {{max}} characters",
         "modelNameInvalid": "Display name may only use Chinese characters, Latin letters, digits, hyphen, and underscore",
-        "modelContextInvalid": "Context capacity must be a positive integer",
+        "modelNameTooLong": "Display name must be at most {{max}} characters",
+        "modelContextInvalid": "Context capacity must be a positive integer and at most 100M after conversion",
         "secureStorage": "Secure storage is unavailable; token cannot be saved",
         "unknown": "Save failed. Check the form and try again"
       }

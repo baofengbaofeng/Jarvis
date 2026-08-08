@@ -94,14 +94,16 @@ export function createProviderStore(
       if (!name) throw new Error('PROVIDER_NAME_REQUIRED');
       if (!isValidProviderName(name)) throw new Error('PROVIDER_NAME_INVALID');
       const baseUrl = input.baseUrl.trim();
-      assertProviderFieldLengths({ name, baseUrl, apiKey: input.apiKey });
+      const apiKey = input.apiKey.trim();
+      if (!apiKey) throw new Error('PROVIDER_API_KEY_REQUIRED');
+      assertProviderFieldLengths({ name, baseUrl, apiKey });
       assertNameUnique(name);
       assertProviderType(input.type);
       validatePersistUrl(baseUrl);
       const id = randomUUID();
       const ref = `provider:${id}:key`;
       // Write the keychain entry FIRST so a keychain failure leaves no dangling api_key_ref row.
-      await secrets.set(ref, input.apiKey);
+      await secrets.set(ref, apiKey);
       db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
         .run(id, name, input.type, baseUrl, ref, now(), now());
       return this.list().find(p => p.id === id)!;
@@ -113,13 +115,11 @@ export function createProviderStore(
       const name = (patch.name ?? cur.name as string).trim();
       if (!name) throw new Error('PROVIDER_NAME_REQUIRED');
       if (!isValidProviderName(name)) throw new Error('PROVIDER_NAME_INVALID');
-      assertProviderFieldLengths({
-        name,
-        baseUrl,
-        apiKey: patch.apiKey,
-      });
+      const nextApiKey = patch.apiKey !== undefined ? patch.apiKey.trim() : undefined;
+      if (patch.apiKey !== undefined && !nextApiKey) throw new Error('PROVIDER_API_KEY_REQUIRED');
+      assertProviderFieldLengths({ name, baseUrl, apiKey: nextApiKey });
       validatePersistUrl(baseUrl);
-      if (patch.apiKey !== undefined) await secrets.set(`provider:${id}:key`, patch.apiKey);
+      if (nextApiKey !== undefined) await secrets.set(`provider:${id}:key`, nextApiKey);
       assertNameUnique(name, id);
       const type = patch.type ?? cur.type as Provider['type'];
       assertProviderType(type);
@@ -162,12 +162,18 @@ export function createProviderStore(
       const modelId = input.modelId.trim();
       if (!modelId) throw new Error('PROVIDER_MODEL_ID_REQUIRED');
       if (!isValidProviderModelId(modelId)) throw new Error('PROVIDER_MODEL_ID_INVALID');
+      if (modelId.length > PROVIDER_FIELD_MAX.modelId) throw new Error('PROVIDER_MODEL_ID_TOO_LONG');
       const nameRaw = (input.name ?? '').trim();
       if (nameRaw && !isValidProviderModelName(nameRaw)) throw new Error('PROVIDER_MODEL_NAME_INVALID');
+      if (nameRaw.length > PROVIDER_FIELD_MAX.modelName) throw new Error('PROVIDER_MODEL_NAME_TOO_LONG');
       const name = nameRaw || modelId;
       let contextTokens: number | null = null;
       if (input.contextTokens != null) {
-        if (!Number.isInteger(input.contextTokens) || input.contextTokens <= 0) {
+        if (
+          !Number.isInteger(input.contextTokens)
+          || input.contextTokens <= 0
+          || input.contextTokens > PROVIDER_FIELD_MAX.contextTokens
+        ) {
           throw new Error('PROVIDER_MODEL_CONTEXT_INVALID');
         }
         contextTokens = input.contextTokens;

@@ -1,6 +1,14 @@
-import { BrowserWindow, screen, shell } from 'electron';
+import { BrowserWindow, app, screen, shell } from 'electron';
 import { join } from 'node:path';
+import { APP_DISPLAY_NAME, IpcEvent } from '@jarvis/protocol';
+import { appResourcePath } from '../assets/appIconPath';
 import { TrustedRendererPolicy, installNavigationGuards } from '../security/TrustedRendererPolicy';
+import {
+  MAC_TRAFFIC_LIGHT_POSITION,
+  trafficLightPositionFor,
+  windowChromePayload,
+  type WindowChromePayload,
+} from './macTitlebar';
 
 export interface DisplayBounds { x: number; y: number; width: number; height: number; }
 
@@ -15,6 +23,7 @@ const SNAP_WIDTH = 400;
 export class WindowManager {
   private main: BrowserWindow | null = null;
   private snapSide: 'left' | 'right' = 'right';
+  private chromeSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   createMainWindow(): BrowserWindow {
     if (this.main && !this.main.isDestroyed()) return this.main;
@@ -28,7 +37,15 @@ export class WindowManager {
       height: 800,
       minWidth: 800,
       minHeight: 600,
-      title: 'JARVIS',
+      title: APP_DISPLAY_NAME,
+      icon: appResourcePath('icon.png', import.meta.dirname, app.isPackaged, process.resourcesPath),
+      // Overlay traffic lights so sidebar chrome can sit immediately to their right.
+      ...(process.platform === 'darwin'
+        ? {
+            titleBarStyle: 'hidden' as const,
+            trafficLightPosition: { ...MAC_TRAFFIC_LIGHT_POSITION },
+          }
+        : {}),
       webPreferences: {
         preload: this.preloadPath(),
         contextIsolation: true,
@@ -37,6 +54,7 @@ export class WindowManager {
       }
     });
     this.main.setMenuBarVisibility(false);
+    this.bindMacTitlebarChrome(this.main);
 
     const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
     if (rendererUrl) {
@@ -54,6 +72,13 @@ export class WindowManager {
     return this.main && !this.main.isDestroyed() ? this.main : null;
   }
 
+  /** Snapshot used by window.getChrome invoke (avoids missed push-on-load races). */
+  getWindowChrome(): WindowChromePayload {
+    const win = this.getMainWindow();
+    const fullscreen = win?.isFullScreen() === true;
+    return windowChromePayload(fullscreen);
+  }
+
   setSnapMode(on: boolean): void {
     if (!this.main || this.main.isDestroyed()) return;
     const display = screen.getDisplayMatching(this.main.getBounds());
@@ -64,6 +89,30 @@ export class WindowManager {
   toggleSnap(): void {
     this.snapSide = this.snapSide === 'right' ? 'left' : 'right';
     this.setSnapMode(true);
+  }
+
+  private bindMacTitlebarChrome(win: BrowserWindow): void {
+    if (process.platform !== 'darwin') return;
+
+    const sync = (fullscreen: boolean) => {
+      if (win.isDestroyed()) return;
+      const pos = trafficLightPositionFor(fullscreen);
+      win.setWindowButtonPosition(pos);
+      win.webContents.send(IpcEvent.windowChrome, windowChromePayload(fullscreen));
+    };
+
+    // macOS often re-layouts traffic lights after the transition animation.
+    const syncSoon = (fullscreen: boolean) => {
+      sync(fullscreen);
+      if (this.chromeSyncTimer) clearTimeout(this.chromeSyncTimer);
+      this.chromeSyncTimer = setTimeout(() => sync(fullscreen), 120);
+    };
+
+    win.on('enter-full-screen', () => syncSoon(true));
+    win.on('leave-full-screen', () => syncSoon(false));
+    win.on('maximize', () => sync(win.isFullScreen()));
+    win.on('unmaximize', () => sync(win.isFullScreen()));
+    win.webContents.on('did-finish-load', () => sync(win.isFullScreen()));
   }
 
   private preloadPath(): string {

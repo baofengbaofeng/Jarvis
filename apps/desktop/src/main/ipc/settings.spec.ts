@@ -24,4 +24,11 @@ describe('settings store', () => {
     createSettingsStore(db).set('onboarding_done', true);
     expect(createSettingsStore(db).get('onboarding_done', false)).toBe(true);
   });
+
+  it('round-trips a non-default permissions sandbox level', () => {
+    const s = createSettingsStore(db);
+    const value = { level: 'readonly', allowCommands: [] as string[], allowDomains: [] as string[] };
+    s.set('permissions.agent-1', value);
+    expect(createSettingsStore(db).get('permissions.agent-1', null)).toEqual(value);
+  });
 });

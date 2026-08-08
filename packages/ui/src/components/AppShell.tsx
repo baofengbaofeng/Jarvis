@@ -5,12 +5,18 @@ export type AppShellProps = {
   sidebar: ReactNode;
   topBar?: ReactNode;
   mainFooter?: ReactNode;
+  /** Optional right push panel — only then does the shell allocate a third column. */
+  rightPane?: ReactNode;
   children: ReactNode;
 };
 
-export function AppShell({ sidebar, topBar, mainFooter, children }: AppShellProps) {
+export function AppShell({ sidebar, topBar, mainFooter, rightPane, children }: AppShellProps) {
+  const withRight = rightPane != null;
   return (
-    <div className="jui-appshell" data-testid="jui-appshell">
+    <div
+      className={['jui-appshell', withRight ? 'jui-appshell--with-right' : ''].filter(Boolean).join(' ')}
+      data-testid="jui-appshell"
+    >
       <div className="jui-appshell__sidebar">{sidebar}</div>
       {topBar != null && <div className="jui-appshell__topbar">{topBar}</div>}
       <div className="jui-appshell__main-col">
@@ -21,6 +27,11 @@ export function AppShell({ sidebar, topBar, mainFooter, children }: AppShellProp
           </div>
         )}
       </div>
+      {withRight && (
+        <aside className="jui-appshell__right" data-testid="jui-appshell-right">
+          {rightPane}
+        </aside>
+      )}
     </div>
   );
 }

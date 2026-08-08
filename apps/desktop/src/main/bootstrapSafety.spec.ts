@@ -5,7 +5,7 @@ describe('bootstrapSafety (DESK-03)', () => {
   it('reportBootstrapFailure shows an error dialog', () => {
     const show = vi.fn();
     reportBootstrapFailure(new Error('db locked'), show);
-    expect(show).toHaveBeenCalledWith('JARVIS failed to start', 'db locked');
+    expect(show).toHaveBeenCalledWith('J.A.R.V.I.S failed to start', 'db locked');
   });
 
   it('runBootstrapSafe reports and returns false when bootstrap throws', async () => {

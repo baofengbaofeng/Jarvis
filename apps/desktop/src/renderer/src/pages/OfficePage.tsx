@@ -80,7 +80,7 @@ export function OfficePage() {
             </div>
           )}
           {analysis.length > 0 && (
-            <div data-testid="office-analysis" className="office-analysis">
+            <div data-testid="office-analysis" className="office-analysis" data-selection-menu>
               <h3 className="office-analysis__title">{t('officeTools.analysis')}</h3>
               {analysis.map((a, i) => (
                 <div key={`${a.name}-${i}`} data-testid={`office-analysis-${i}`} className="office-analysis__item">
@@ -97,14 +97,16 @@ export function OfficePage() {
 
         <TabPanel active={tab === 'composer'}>
           <VoiceInputButton onText={insertToComposer} />
-          <Textarea
-            ref={composerRef}
-            data-testid="office-composer"
-            value={composer}
-            onChange={e => setComposer(e.target.value)}
-            rows={8}
-            className="office-composer"
-          />
+          <div data-selection-menu>
+            <Textarea
+              ref={composerRef}
+              data-testid="office-composer"
+              value={composer}
+              onChange={e => setComposer(e.target.value)}
+              rows={8}
+              className="office-composer"
+            />
+          </div>
         </TabPanel>
 
         <TabPanel active={tab === 'templates'}>

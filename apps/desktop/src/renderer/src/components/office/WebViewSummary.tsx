@@ -45,7 +45,7 @@ export function WebViewSummary() {
         </Button>
       </div>
       {error && <div data-testid="webview-error" role="alert" className="error-text">{error}</div>}
-      {result && <div data-testid="webview-result" className="office-tool__result">{result}</div>}
+      {result && <div data-testid="webview-result" className="office-tool__result" data-selection-menu>{result}</div>}
     </Panel>
   );
 }

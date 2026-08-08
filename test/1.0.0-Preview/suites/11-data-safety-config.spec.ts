@@ -30,13 +30,12 @@ test.beforeAll(async () => {
 
   await window.goto(rendererHref('/settings/providers'));
   await window.getByTestId('provider-settings').waitFor({ timeout: 30_000 });
-  await window.getByTestId('provider-add-open').click();
-  await window.getByTestId('provider-name').fill('Safety Export Provider');
-  await window.getByTestId('provider-type').selectOption('openai-compatible');
+  await window.getByTestId('provider-name').fill('Safety-Export-Provider');
+  await window.getByTestId('provider-type-openai-compatible').check();
   await window.getByTestId('provider-baseurl').fill(mock.baseUrl);
   await window.getByTestId('provider-apikey').fill('sk-safety-export-test');
   await window.getByTestId('provider-save').click();
-  await expect(window.getByText('Safety Export Provider')).toBeVisible({ timeout: 15_000 });
+  await expect(window.getByText('Safety-Export-Provider')).toBeVisible({ timeout: 15_000 });
   await mock.close();
 });
 

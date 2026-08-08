@@ -97,6 +97,40 @@ describe('SquadViewPage', () => {
     });
   });
 
+  it('uses a non-default leader selection in squad.create payload', async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    const invoke = vi.fn(async (method: string, ...args: unknown[]) => {
+      calls.push({ method, args });
+      if (method === 'squad.current') return { ok: true, squad: null };
+      if (method === 'agent.list') return [
+        { id: 'leader', name: 'Leader Agent' },
+        { id: 'm1', name: 'M1' },
+        { id: 'm2', name: 'M2' },
+      ];
+      if (method === 'squad.create') return { ok: true, id: 'sq-new' };
+      if (method === 'squad.start') return { ok: true, result: { status: 'running' } };
+      return null;
+    });
+    (window as unknown as { jarvis: unknown }).jarvis = { invoke, onDidReceive: () => () => {} };
+    render(<SquadViewPage />);
+    await waitFor(() => expect(screen.getByTestId('squad-new')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('squad-new'));
+    await waitFor(() => expect(screen.getByTestId('squad-create-form')).toBeTruthy());
+
+    fireEvent.change(screen.getByTestId('squad-leader-select'), { target: { value: 'm2' } });
+    expect((screen.getByTestId('squad-leader-select') as HTMLSelectElement).value).toBe('m2');
+    fireEvent.click(screen.getByTestId('squad-member-m1'));
+    fireEvent.change(screen.getByTestId('squad-task-input'), { target: { value: 'lead as m2' } });
+    fireEvent.click(screen.getByTestId('squad-create-submit'));
+
+    await waitFor(() => {
+      const createCall = calls.find((c) => c.method === 'squad.create');
+      expect(createCall?.args[0]).toEqual({ leaderAgentId: 'm2', memberAgentIds: ['m1'] });
+      const startCall = calls.find((c) => c.method === 'squad.start');
+      expect(startCall?.args[0]).toEqual({ id: 'sq-new', input: 'lead as m2' });
+    });
+  });
+
   it('surfaces an inline error when squad.create fails', async () => {
     const invoke = vi.fn(async (method: string) => {
       if (method === 'squad.current') return { ok: true, squad: null };

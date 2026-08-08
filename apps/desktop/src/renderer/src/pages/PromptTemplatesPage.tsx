@@ -67,7 +67,9 @@ export function PromptTemplatesPage({ onInsert }: PromptTemplatesPageProps) {
       <h2 className="prompt-templates__title">{t('templates.title')}</h2>
       <Panel className="prompt-templates__form form-stack">
         <Input data-testid="tpl-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('templates.name')} />
-        <Textarea data-testid="tpl-text" value={content} onChange={e => setContent(e.target.value)} placeholder={t('templates.textPlaceholder')} rows={6} />
+        <div data-selection-menu>
+          <Textarea data-testid="tpl-text" value={content} onChange={e => setContent(e.target.value)} placeholder={t('templates.textPlaceholder')} rows={6} />
+        </div>
         <div data-testid="tpl-vars" className="prompt-templates__vars">{t('templates.variables')}: {detectedVars.length ? detectedVars.join(', ') : '—'}</div>
         <Button data-testid="tpl-save" variant="primary" onClick={() => void save()}>{t('templates.save')}</Button>
         {error && <div data-testid="tpl-error" role="alert" className="error-text">{error}</div>}
@@ -85,7 +87,7 @@ export function PromptTemplatesPage({ onInsert }: PromptTemplatesPageProps) {
           </li>
         ))}
       </ul>
-      <Panel data-testid="tpl-preview" className="prompt-templates__preview">{preview}</Panel>
+      <Panel data-testid="tpl-preview" className="prompt-templates__preview" data-selection-menu>{preview}</Panel>
     </div>
   );
 }

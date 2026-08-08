@@ -195,7 +195,7 @@ export function ProviderForm({ provider, onDone, onCancel, idPrefix = 'provider'
         if (apiKey.trim()) patch.apiKey = apiKey.trim();
         await update(provider.id, patch);
       } else {
-        await create({ name: trimmedName, type, baseUrl: trimmedBaseUrl, apiKey });
+        await create({ name: trimmedName, type, baseUrl: trimmedBaseUrl, apiKey: apiKey.trim() });
         reset();
       }
       onDone?.();

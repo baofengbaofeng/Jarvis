@@ -40,6 +40,25 @@ describe('chat handlers', () => {
     expect(s.title).toBe('新对话');
   });
 
+  it('deletes a session and cascades its messages', async () => {
+    const chat = registerChatHandlers(db, secrets, getWindow);
+    const s = await chat.createSession('To delete');
+    db.prepare("INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES ('m1', ?, 'user', 'hi', '2026-01-01')").run(s.id);
+    await chat.deleteSession(s.id);
+    expect(await chat.listSessions()).toEqual([]);
+    expect((db.prepare('SELECT COUNT(*) AS c FROM chat_messages WHERE session_id = ?').get(s.id) as { c: number }).c).toBe(0);
+  });
+
+  it('renames a session title', async () => {
+    const chat = registerChatHandlers(db, secrets, getWindow);
+    const s = await chat.createSession('Old title');
+    const renamed = await chat.renameSession(s.id, '  Renamed chat  ');
+    expect(renamed.title).toBe('Renamed chat');
+    expect(renamed.id).toBe(s.id);
+    const list = await chat.listSessions();
+    expect(list[0].title).toBe('Renamed chat');
+  });
+
   it('send persists the user message before failing on a missing agent', async () => {
     const chat = registerChatHandlers(db, secrets, getWindow);
     const s = await chat.createSession('Test');

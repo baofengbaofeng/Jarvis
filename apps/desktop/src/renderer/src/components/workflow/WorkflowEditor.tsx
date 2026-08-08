@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import ReactFlow, { Background, Controls, type Edge, type Connection, addEdge, useEdgesState, useNodesState } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button, EmptyState, Input, PageHeader, Panel, Select } from '@jarvis/ui';
+import { JarvisMark } from '../brand/JarvisMark';
 import { useWorkflowStore } from '../../stores/workflow-store';
 
 function WorkflowNodeCard({ id, agentId, input, agents, peers, onInput, onRemove, onConnect }: {
@@ -93,7 +94,11 @@ export function WorkflowEditor() {
         ))}
       </div>
       {nodes.length === 0 ? (
-        <EmptyState title={t('workflow.empty')} description={t('workflow.emptyHint')} />
+        <EmptyState
+          icon={<JarvisMark size="md" variant="app" />}
+          title={t('workflow.empty')}
+          description={t('workflow.emptyHint')}
+        />
       ) : view === 'graph' ? graph : (
         <div className="workflow-canvas" data-testid="workflow-canvas">
           {nodes.map(n => (

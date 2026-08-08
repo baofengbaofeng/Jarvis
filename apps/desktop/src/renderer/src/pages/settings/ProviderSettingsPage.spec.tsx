@@ -412,4 +412,46 @@ describe('ProviderSettingsPage', () => {
     await waitFor(() => expect(screen.queryByTestId('provider-model-m1')).toBeNull());
     expect(screen.getByTestId('provider-model-m2')).toBeTruthy();
   });
+
+  it('shows an error when saving a model without model id', async () => {
+    const invoke = vi.fn(async (method: string) => {
+      if (method === 'provider.list') {
+        return [{ id: 'p1', name: 'My-Provider', type: 'openai-compatible', baseUrl: 'https://x.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' }];
+      }
+      if (method === 'provider.listModels') return [];
+      return [];
+    });
+    (window as unknown as { jarvis: unknown }).jarvis = { invoke, onDidReceive: () => () => {} };
+    render(<ProviderSettingsPage />);
+    await waitFor(() => expect(screen.getByTestId('provider-edit-models-p1')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('provider-edit-models-p1'));
+    await waitFor(() => expect(screen.getByTestId('provider-models-p1')).toBeTruthy());
+    const draftKey = screen.getByTestId(/^provider-model-add-row-/).getAttribute('data-testid')!
+      .replace('provider-model-add-row-', '');
+    fireEvent.click(screen.getByTestId(`provider-model-add-${draftKey}`));
+    await waitFor(() => expect(screen.getByTestId('provider-model-add-error').textContent).toMatch(/模型 ID|Model ID/i));
+    expect(invoke).not.toHaveBeenCalledWith('provider.addModel', expect.anything(), expect.anything());
+  });
+
+  it('applies maxlength on model draft fields', async () => {
+    (window as unknown as { jarvis: unknown }).jarvis = {
+      invoke: async (method: string) => {
+        if (method === 'provider.list') {
+          return [{ id: 'p1', name: 'My-Provider', type: 'openai-compatible', baseUrl: 'https://x.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' }];
+        }
+        if (method === 'provider.listModels') return [];
+        return [];
+      },
+      onDidReceive: () => () => {},
+    };
+    render(<ProviderSettingsPage />);
+    await waitFor(() => expect(screen.getByTestId('provider-edit-models-p1')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('provider-edit-models-p1'));
+    await waitFor(() => expect(screen.getByTestId('provider-models-p1')).toBeTruthy());
+    const draftKey = screen.getByTestId(/^provider-model-add-row-/).getAttribute('data-testid')!
+      .replace('provider-model-add-row-', '');
+    expect((screen.getByTestId(`provider-model-id-${draftKey}`) as HTMLInputElement).maxLength).toBe(128);
+    expect((screen.getByTestId(`provider-model-name-${draftKey}`) as HTMLInputElement).maxLength).toBe(64);
+    expect((screen.getByTestId(`provider-model-context-${draftKey}`) as HTMLInputElement).maxLength).toBe(6);
+  });
 });

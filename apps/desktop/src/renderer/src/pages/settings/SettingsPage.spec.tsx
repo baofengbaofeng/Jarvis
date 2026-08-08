@@ -11,10 +11,7 @@ beforeAll(async () => {
 });
 
 describe('settings pages', () => {
-  it('ProviderSettingsPage shows empty state', () => {
-    // Task 5 rewrote the page to call window.jarvis.invoke('provider.list') on
-    // mount (via the provider store's refresh()); provide a minimal bridge so
-    // the effect resolves to an empty list and the empty state renders.
+  it('ProviderSettingsPage shows description and always-on add form', () => {
     (window as unknown as { jarvis: unknown }).jarvis = {
       invoke: async (method: string) => (method === 'provider.list' ? [] : []),
       settingsGet: async () => null,
@@ -22,7 +19,13 @@ describe('settings pages', () => {
       onDidReceive: () => () => {}
     };
     render(<ProviderSettingsPage />);
-    expect(screen.getByText('尚未配置 Provider')).toBeTruthy();
+    expect(screen.getByText('供应商添加')).toBeTruthy();
+    expect(screen.getByText(/在此配置大模型供应商/)).toBeTruthy();
+    expect(screen.getByTestId('provider-add-area')).toBeTruthy();
+    expect(screen.getByTestId('provider-form')).toBeTruthy();
+    expect(screen.queryByTestId('provider-add-open')).toBeNull();
+    expect(screen.getByTestId('provider-list-section')).toBeTruthy();
+    expect(screen.getByText('供应商列表')).toBeTruthy();
   });
   it('LogPanelPage renders', () => {
     render(<LogPanelPage />);

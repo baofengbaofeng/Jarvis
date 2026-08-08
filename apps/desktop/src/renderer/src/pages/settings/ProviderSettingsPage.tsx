@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, DataTable, Input, MenuSelect, Modal, ModalMessage, PageHeader } from '@jarvis/ui';
 import {
+  PROVIDER_FIELD_MAX,
   contextTokensFromInput,
   formatContextTokens,
   sanitizeProviderModelIdInput,
@@ -72,14 +73,36 @@ function ProviderModels({
     const draft = draftsRef.current.find((row) => row.key === key);
     if (!draft) return;
     const id = draft.modelId.trim();
-    if (!id) return;
+    if (!id) {
+      setDraftError(t('settings.provider.errors.modelIdRequired'));
+      return;
+    }
+    if (id.length > PROVIDER_FIELD_MAX.modelId) {
+      setDraftError(t('settings.provider.errors.modelIdTooLong', { max: PROVIDER_FIELD_MAX.modelId }));
+      return;
+    }
     const displayName = draft.name.trim();
+    if (displayName.length > PROVIDER_FIELD_MAX.modelName) {
+      setDraftError(t('settings.provider.errors.modelNameTooLong', { max: PROVIDER_FIELD_MAX.modelName }));
+      return;
+    }
     const digits = draft.contextValue.trim();
     let contextTokens: number | null = null;
     if (digits) {
+      if (digits.length > PROVIDER_FIELD_MAX.contextDigits) {
+        setDraftError(t('settings.provider.errors.modelContextInvalid'));
+        return;
+      }
       const n = Number(digits);
-      if (!Number.isInteger(n) || n <= 0) return;
+      if (!Number.isInteger(n) || n <= 0) {
+        setDraftError(t('settings.provider.errors.modelContextInvalid'));
+        return;
+      }
       contextTokens = contextTokensFromInput(n, draft.contextUnit);
+      if (contextTokens > PROVIDER_FIELD_MAX.contextTokens) {
+        setDraftError(t('settings.provider.errors.modelContextInvalid'));
+        return;
+      }
     }
     setDraftError(null);
     const res = (await window.jarvis.invoke('provider.addModel', providerId, {
@@ -92,11 +115,17 @@ function ProviderModels({
         setDraftError(
           res.error === 'PROVIDER_MODEL_CONTEXT_INVALID'
             ? t('settings.provider.errors.modelContextInvalid')
-            : res.error === 'PROVIDER_MODEL_ID_INVALID'
-              ? t('settings.provider.errors.modelIdInvalid')
-              : res.error === 'PROVIDER_MODEL_NAME_INVALID'
-                ? t('settings.provider.errors.modelNameInvalid')
-                : t('settings.provider.errors.unknown'),
+            : res.error === 'PROVIDER_MODEL_ID_REQUIRED'
+              ? t('settings.provider.errors.modelIdRequired')
+              : res.error === 'PROVIDER_MODEL_ID_TOO_LONG'
+                ? t('settings.provider.errors.modelIdTooLong', { max: PROVIDER_FIELD_MAX.modelId })
+                : res.error === 'PROVIDER_MODEL_ID_INVALID'
+                  ? t('settings.provider.errors.modelIdInvalid')
+                  : res.error === 'PROVIDER_MODEL_NAME_TOO_LONG'
+                    ? t('settings.provider.errors.modelNameTooLong', { max: PROVIDER_FIELD_MAX.modelName })
+                    : res.error === 'PROVIDER_MODEL_NAME_INVALID'
+                      ? t('settings.provider.errors.modelNameInvalid')
+                      : t('settings.provider.errors.unknown'),
         );
         return;
       }
@@ -230,6 +259,7 @@ function ProviderModels({
                 id={`provider-model-id-${draft.key}`}
                 data-testid={`provider-model-id-${draft.key}`}
                 value={draft.modelId}
+                maxLength={PROVIDER_FIELD_MAX.modelId}
                 onChange={(e) => updateDraft(draft.key, { modelId: sanitizeProviderModelIdInput(e.target.value) })}
               />
             </label>
@@ -239,6 +269,7 @@ function ProviderModels({
                 id={`provider-model-name-${draft.key}`}
                 data-testid={`provider-model-name-${draft.key}`}
                 value={draft.name}
+                maxLength={PROVIDER_FIELD_MAX.modelName}
                 onChange={(e) => updateDraft(draft.key, { name: sanitizeProviderModelNameInput(e.target.value) })}
               />
             </label>
@@ -252,6 +283,7 @@ function ProviderModels({
                 data-testid={`provider-model-context-${draft.key}`}
                 inputMode="numeric"
                 value={draft.contextValue}
+                maxLength={PROVIDER_FIELD_MAX.contextDigits}
                 onChange={(e) => updateDraft(draft.key, { contextValue: sanitizeContextDigits(e.target.value) })}
               />
               <MenuSelect

@@ -68,7 +68,9 @@ export function WritingView() {
 
   return (
     <div data-testid="writing-view" className="writing-view">
-      <Textarea data-testid="writing-text" value={text} onChange={e => setText(e.target.value)} rows={12} />
+      <div data-selection-menu>
+        <Textarea data-testid="writing-text" value={text} onChange={e => setText(e.target.value)} rows={12} />
+      </div>
       <div className="writing-view__actions">
         <Button data-testid="writing-polish" variant="ghost" size="sm" onClick={() => void runAction('polish')}>{t('writing.polish')}</Button>
         <Button data-testid="writing-continue" variant="ghost" size="sm" onClick={() => void runAction('continue')}>{t('writing.continue')}</Button>
@@ -79,7 +81,7 @@ export function WritingView() {
           {t('writing.live')}
         </label>
       </div>
-      {live && <div data-testid="writing-live-result">{live.done.join('\n')}<span className="pending">{live.pending}</span></div>}
+      {live && <div data-testid="writing-live-result" data-selection-menu>{live.done.join('\n')}<span className="pending">{live.pending}</span></div>}
       {error && <div data-testid="writing-error" className="error-text">{error}</div>}
     </div>
   );

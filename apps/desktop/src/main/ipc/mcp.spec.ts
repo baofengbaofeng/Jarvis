@@ -16,6 +16,12 @@ describe('mcp store', () => {
     expect(store.list().length).toBe(1);
   });
 
+  it('persists the selected transport enum on list roundtrip', () => {
+    const store = createMcpStore(db);
+    store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [] });
+    expect(store.list()[0]?.transport).toBe('stdio');
+  });
+
   it('persists per-agent binding into config_json.agentIds', () => {
     const store = createMcpStore(db);
     store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [], agentIds: ['a1', 'a2'] });

@@ -5,6 +5,7 @@ import { toContentArray } from '@jarvis/core/renderer';
 import type { StepCardStatus } from '@jarvis/ui';
 import { useAgentStore } from './agent-store';
 import { useTaskStore } from './task-store';
+import { toast } from './toast-store';
 
 export type ChatStep = {
   id: string;
@@ -30,6 +31,8 @@ interface ChatState {
   newSession: () => Promise<void>;
   loadSession: (sessionId: string) => Promise<void>;
   loadSessions: () => Promise<void>;
+  deleteSession: (sessionId: string) => Promise<void>;
+  renameSession: (sessionId: string, title: string) => Promise<void>;
   send: (text: string) => Promise<void>;
   appendDelta: (delta: string) => void;
   finishStream: (text?: string, error?: string) => void;
@@ -80,9 +83,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await get().loadSessions();
   },
 
+  async deleteSession(sessionId: string) {
+    try {
+      await window.jarvis.invoke(IpcChannel.chatDeleteSession, sessionId);
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : String(e));
+      return;
+    }
+    const wasCurrent = get().sessionId === sessionId;
+    await get().loadSessions();
+    if (!wasCurrent) return;
+    if (get().sessions.length > 0) {
+      await get().loadSession(get().sessions[0].id);
+      return;
+    }
+    // Do not auto-create a replacement session — that looked like delete failed
+    // when the new row reused the default title ("新对话").
+    set({
+      sessionId: null,
+      messages: [],
+      steps: [],
+      streaming: false,
+      streamingText: '',
+      streamingTaskSessionId: null,
+    });
+  },
+
+  async renameSession(sessionId: string, title: string) {
+    try {
+      await window.jarvis.invoke(IpcChannel.chatRenameSession, { sessionId, title });
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : String(e));
+      return;
+    }
+    await get().loadSessions();
+  },
+
   async send(text: string) {
-    const { sessionId, pendingImages } = get();
-    if (!sessionId || get().streaming) return;
+    let { sessionId } = get();
+    const { pendingImages } = get();
+    if (get().streaming) return;
+    if (!sessionId) {
+      await get().newSession();
+      sessionId = get().sessionId;
+    }
+    if (!sessionId) return;
     const agentId = useAgentStore.getState().current?.id;
     if (!agentId) return;
     const content = pendingImages.length ? toContentArray(text, pendingImages) : text;

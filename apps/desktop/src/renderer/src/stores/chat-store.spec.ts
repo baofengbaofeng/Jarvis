@@ -61,4 +61,43 @@ describe('chat-store', () => {
     expect(invoke).toHaveBeenCalledWith(IpcChannel.taskCreate, { agentId: 'agent-1', prompt: 'run tests', sessionId: 'sess-1' });
     expect(useChatStore.getState().streaming).toBe(true);
   });
+
+  it('deleteSession removes the row and does not auto-create a replacement', async () => {
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === IpcChannel.chatDeleteSession) return undefined;
+      if (channel === IpcChannel.chatListSessions) return [];
+      return null;
+    });
+    useChatStore.setState({
+      sessionId: 'sess-1',
+      sessions: [{ id: 'sess-1', title: '新对话', createdAt: '', updatedAt: '' }],
+      messages: [{ id: 'm1', sessionId: 'sess-1', role: 'user', content: 'hi', createdAt: '' }],
+    });
+    await useChatStore.getState().deleteSession('sess-1');
+    expect(invoke).toHaveBeenCalledWith(IpcChannel.chatDeleteSession, 'sess-1');
+    expect(useChatStore.getState().sessions).toEqual([]);
+    expect(useChatStore.getState().sessionId).toBeNull();
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(invoke.mock.calls.some((c) => c[0] === IpcChannel.chatCreateSession)).toBe(false);
+  });
+
+  it('renameSession updates the session title in the list', async () => {
+    invoke.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IpcChannel.chatRenameSession) {
+        const { sessionId, title } = payload as { sessionId: string; title: string };
+        return { id: sessionId, title, createdAt: '', updatedAt: 'now' };
+      }
+      if (channel === IpcChannel.chatListSessions) {
+        return [{ id: 'sess-1', title: 'Renamed', createdAt: '', updatedAt: 'now' }];
+      }
+      return null;
+    });
+    useChatStore.setState({
+      sessionId: 'sess-1',
+      sessions: [{ id: 'sess-1', title: 'Old', createdAt: '', updatedAt: '' }],
+    });
+    await useChatStore.getState().renameSession('sess-1', 'Renamed');
+    expect(invoke).toHaveBeenCalledWith(IpcChannel.chatRenameSession, { sessionId: 'sess-1', title: 'Renamed' });
+    expect(useChatStore.getState().sessions[0].title).toBe('Renamed');
+  });
 });

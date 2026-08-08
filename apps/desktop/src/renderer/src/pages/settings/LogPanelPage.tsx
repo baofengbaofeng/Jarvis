@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, DataTable, EmptyState, PageHeader } from '@jarvis/ui';
+import { JarvisMark } from '../../components/brand/JarvisMark';
 
 interface LogFileEntry {
   name: string;
@@ -48,7 +49,11 @@ export function LogPanelPage() {
         actions={<Button variant="ghost" size="sm" onClick={() => void loadFiles()}>{t('settings.logs.refresh')}</Button>}
       />
       {files.length === 0 ? (
-        <EmptyState title={t('settings.logs.empty')} description={t('settings.logs.emptyHint')} />
+        <EmptyState
+          icon={<JarvisMark size="md" variant="app" />}
+          title={t('settings.logs.empty')}
+          description={t('settings.logs.emptyHint')}
+        />
       ) : (
         <div className="log-panel">
           <aside className="log-panel__files">

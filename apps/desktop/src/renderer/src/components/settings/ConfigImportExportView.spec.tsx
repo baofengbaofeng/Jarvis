@@ -46,6 +46,7 @@ describe('ConfigImportExportView', () => {
 
   it('imports a file with the chosen strategy', async () => {
     render(<ConfigImportExportView />);
+    expect(screen.getByLabelText('导入策略')).toBeTruthy();
     fireEvent.change(screen.getByTestId('strategy'), { target: { value: 'merge' } });
     fireEvent.click(screen.getByTestId('import'));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('dialog.pickPath', { purpose: 'config-import' }));
@@ -56,6 +57,18 @@ describe('ConfigImportExportView', () => {
       'merge',
     ));
     await waitFor(() => expect(screen.getByTestId('transfer-msg')).toBeTruthy());
+  });
+
+  it('imports with non-default skip strategy when selected', async () => {
+    render(<ConfigImportExportView />);
+    fireEvent.change(screen.getByTestId('strategy'), { target: { value: 'overwrite' } });
+    expect((screen.getByTestId('strategy') as HTMLSelectElement).value).toBe('overwrite');
+    fireEvent.click(screen.getByTestId('import'));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith(
+      'config.import',
+      importJson,
+      'overwrite',
+    ));
   });
 
   it('no-ops on import when the file picker is canceled', async () => {

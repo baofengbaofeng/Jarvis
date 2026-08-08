@@ -72,8 +72,19 @@ export async function launchJarvisElectron(dataDir?: string): Promise<LaunchedJa
 export async function completeOnboarding(window: Page): Promise<void> {
   await window.goto(rendererHref('/onboarding'));
   await window.getByTestId('onboarding').waitFor({ timeout: 30_000 });
+
+  // Step 1 requires name + https Base URL before provider.create advances.
+  await window.getByTestId('onboarding-step-1').waitFor({ timeout: 30_000 });
+  const step1Inputs = window.getByTestId('onboarding-step-1').locator('input');
+  await step1Inputs.nth(0).fill('E2E Provider');
+  await step1Inputs.nth(1).fill('https://example.com/v1');
   await window.getByTestId('onboarding-next').click();
+
+  await window.getByTestId('onboarding-step-2').waitFor({ timeout: 30_000 });
+  await window.getByTestId('onboarding-step-2').locator('input').fill('E2E Agent');
   await window.getByTestId('onboarding-next').click();
+
+  await window.getByTestId('onboarding-step-3').waitFor({ timeout: 30_000 });
   await window.getByTestId('onboarding-finish').click();
   await window.getByTestId('chat-page').waitFor({ timeout: 30_000 });
 }

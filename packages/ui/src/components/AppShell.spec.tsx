@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import { AppShell } from './AppShell';
 import { Sidebar } from './Sidebar';
 import { NavGroup } from './NavGroup';
 import { NavItem } from './NavItem';
 import { TopBar } from './TopBar';
+
+afterEach(cleanup);
 
 describe('AppShell', () => {
   it('lays out sidebar, topbar, and main', () => {
@@ -26,7 +28,22 @@ describe('AppShell', () => {
     expect(screen.getByTestId('jui-sidebar')).toBeTruthy();
     expect(screen.getByTestId('jui-topbar')).toBeTruthy();
     expect(screen.getByTestId('main-slot')).toBeTruthy();
+    expect(screen.queryByTestId('jui-appshell-right')).toBeNull();
     expect(screen.getByText('Chat').className).toMatch(/jui-navitem--active/);
+  });
+
+  it('allocates a right column only when rightPane is provided', () => {
+    render(
+      <AppShell
+        sidebar={<Sidebar brand="JARVIS">nav</Sidebar>}
+        rightPane={<div data-testid="right-slot">Panel</div>}
+      >
+        <div>Main</div>
+      </AppShell>,
+    );
+    expect(screen.getByTestId('jui-appshell').className).toMatch(/with-right/);
+    expect(screen.getByTestId('jui-appshell-right')).toBeTruthy();
+    expect(screen.getByTestId('right-slot')).toBeTruthy();
   });
 
   it('renders mainFooter when provided', () => {

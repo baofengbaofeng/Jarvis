@@ -1,4 +1,5 @@
-import { Tray, Menu, nativeImage } from 'electron';
+import { Tray, Menu, app, nativeImage } from 'electron';
+import { appResourcePath } from '../assets/appIconPath';
 
 export interface TrayCallbacks {
   onOpen: () => void;
@@ -7,8 +8,8 @@ export interface TrayCallbacks {
 }
 
 const TRAY_LABELS: Record<string, Record<string, string>> = {
-  'zh-CN': { open: '打开 JARVIS', daemon: 'Daemon 状态', restart: '重启 Daemon', quit: '退出' },
-  en: { open: 'Open JARVIS', daemon: 'Daemon Status', restart: 'Restart Daemon', quit: 'Quit' }
+  'zh-CN': { open: '打开 J.A.R.V.I.S', daemon: 'Daemon 状态', restart: '重启 Daemon', quit: '退出' },
+  en: { open: 'Open J.A.R.V.I.S', daemon: 'Daemon Status', restart: 'Restart Daemon', quit: 'Quit' }
 };
 
 export class TrayManager {
@@ -21,8 +22,9 @@ export class TrayManager {
   setLanguage(lang: string): void { this.lang = lang; }
 
   create(): Tray {
-    const icon = nativeImage.createEmpty();
-    this.tray = new Tray(icon);
+    const iconPath = appResourcePath('tray-icon.png', import.meta.dirname, app.isPackaged, process.resourcesPath);
+    const icon = nativeImage.createFromPath(iconPath);
+    this.tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
     this.rebuildMenu();
     this.tray.on('click', () => this.callbacks.onOpen());
     return this.tray;

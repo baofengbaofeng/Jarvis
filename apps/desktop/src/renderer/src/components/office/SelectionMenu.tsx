@@ -10,6 +10,15 @@ const ACTIONS: Array<{ key: SelectionAction; label: string }> = [
   { key: 'summarize', label: '总' }, { key: 'search', label: '搜' }
 ];
 
+/** Opt-in scopes for selection actions (user input / software output only). */
+export const SELECTION_MENU_SCOPE = '[data-selection-menu]';
+
+function nodeInSelectionMenuScope(node: Node | null): boolean {
+  if (!node) return false;
+  const el = node instanceof Element ? node : node.parentElement;
+  return Boolean(el?.closest(SELECTION_MENU_SCOPE));
+}
+
 export function SelectionMenu() {
   const { t } = useTranslation('common');
   const [pos, setPos] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -20,8 +29,16 @@ export function SelectionMenu() {
     const onMouseUp = () => {
       const sel = window.getSelection();
       const text = sel?.toString().trim() ?? '';
-      if (text.length > 0) setPos({ x: sel!.getRangeAt(0).getBoundingClientRect().right + 8, y: sel!.getRangeAt(0).getBoundingClientRect().top, text });
-      else setPos(null);
+      if (
+        text.length > 0
+        && nodeInSelectionMenuScope(sel?.anchorNode ?? null)
+        && nodeInSelectionMenuScope(sel?.focusNode ?? null)
+      ) {
+        const rect = sel!.getRangeAt(0).getBoundingClientRect();
+        setPos({ x: rect.right + 8, y: rect.top, text });
+      } else {
+        setPos(null);
+      }
     };
     document.addEventListener('mouseup', onMouseUp);
     return () => document.removeEventListener('mouseup', onMouseUp);

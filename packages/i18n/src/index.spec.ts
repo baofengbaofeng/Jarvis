@@ -18,8 +18,8 @@ describe('i18n resources', () => {
   });
   it('contains minimum keys', () => {
     const res = getResources();
-    expect(res['zh-CN'].common.app.title).toBe('JARVIS');
-    expect(res.en.common.app.title).toBe('JARVIS');
+    expect(res['zh-CN'].common.app.title).toBe('J.A.R.V.I.S');
+    expect(res.en.common.app.title).toBe('J.A.R.V.I.S');
     expect(res['zh-CN'].common.settings.title).toBeTruthy();
   });
 });

@@ -48,7 +48,7 @@ test('01-shell: language switcher on providers settings', async () => {
     await window.goto(rendererHref('/settings/providers'));
     await window.getByTestId('provider-settings').waitFor({ timeout: 30_000 });
     await window.getByTestId('settings-layout').getByTestId('language-switcher').selectOption('en');
-    await expect(window.locator('[data-testid="provider-settings"] h2')).toHaveText('Provider Management');
+    await expect(window.locator('[data-testid="provider-settings"] .jui-page-header__title')).toHaveText('Add Provider');
   } finally {
     await closeJarvisElectron(app);
     removeDataDir(dataDir);

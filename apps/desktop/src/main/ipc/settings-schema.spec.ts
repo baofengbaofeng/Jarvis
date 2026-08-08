@@ -7,9 +7,21 @@ describe('settings-schema (DESK-02)', () => {
     expect(validateSettingsValue('evil.key', 1)).toEqual({ ok: false, error: 'SETTINGS_KEY_INVALID' });
   });
 
+  it('allows onboarding_done used by the renderer settings store', () => {
+    expect(validateSettingsValue('onboarding_done', true)).toEqual({ ok: true, value: true });
+  });
+
   it('accepts permissions.* with valid level', () => {
     const r = validateSettingsValue('permissions.a1', { level: 'readwrite', allowCommands: [], allowDomains: [] });
     expect(r.ok).toBe(true);
+  });
+
+  it('accepts non-default readonly permissions level', () => {
+    const r = validateSettingsValue('permissions.a1', { level: 'readonly', allowCommands: [], allowDomains: [] });
+    expect(r).toEqual({
+      ok: true,
+      value: { level: 'readonly', allowCommands: [], allowDomains: [] },
+    });
   });
 
   it('rejects invalid permissions level', () => {

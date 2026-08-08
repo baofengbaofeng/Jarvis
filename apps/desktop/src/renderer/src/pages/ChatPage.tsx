@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@jarvis/ui';
+import { JarvisMark } from '../components/brand/JarvisMark';
 import { useChatStore } from '../stores/chat-store';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { ChatInput } from '../components/chat/ChatInput';
@@ -32,11 +33,18 @@ export function ChatPage() {
 
       {isEmpty ? (
         <div className="chat-page__empty" data-testid="chat-empty-composer">
-          <ChatInput />
+          <div className="chat-welcome" data-testid="chat-welcome">
+            <JarvisMark size="lg" variant="app" />
+            <h2 className="chat-welcome__title">{t('chat.welcome')}</h2>
+            <p className="chat-welcome__hint">{t('chat.welcomeHint')}</p>
+          </div>
+          <div data-selection-menu>
+            <ChatInput />
+          </div>
         </div>
       ) : (
         <>
-          <div className="chat-page__messages">
+          <div className="chat-page__messages" data-selection-menu>
             <div className="chat-page__stream">
               {messages.map(m => <MessageBubble key={m.id} message={m} />)}
               {(steps.length > 0 || streamingText) && (
@@ -51,7 +59,7 @@ export function ChatPage() {
               )}
             </div>
           </div>
-          <div className="chat-page__composer">
+          <div className="chat-page__composer" data-selection-menu>
             <ChatInput />
           </div>
         </>

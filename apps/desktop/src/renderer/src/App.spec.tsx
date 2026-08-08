@@ -127,6 +127,8 @@ describe('App', () => {
     window.history.replaceState({}, '', route);
     render(<App />);
     expect(screen.getByTestId('settings-layout')).toBeTruthy();
+    expect(screen.getByTestId('settings-sidebar-nav')).toBeTruthy();
+    expect(document.querySelector('.settings-layout__nav')).toBeNull();
     expect(screen.getByTestId(testid)).toBeTruthy();
   });
 

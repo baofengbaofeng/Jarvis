@@ -40,12 +40,12 @@ test('app boots and shows chat page when onboarding done', async ({ page }) => {
   await page.getByTestId('onboarding-finish').click();
   // Finish sets onboarding_done (via the bridge mock) and navigates to "/".
   await page.waitForSelector('[data-testid="chat-page"]', { timeout: 15_000 });
-  await expect(page.locator('h1, span').first()).toContainText('JARVIS');
+  await expect(page.locator('h1, span').first()).toContainText('J.A.R.V.I.S');
 });
 
 test('settings page opens and language toggles', async ({ page }) => {
   await page.goto('/#/settings/providers');
   await page.waitForSelector('[data-testid="provider-settings"]', { timeout: 15_000 });
   await page.getByTestId('language-switcher').selectOption('en');
-  await expect(page.locator('[data-testid="provider-settings"] h2')).toHaveText('Provider Management');
+  await expect(page.locator('[data-testid="provider-settings"] .jui-page-header__title')).toHaveText('Add Provider');
 });
