@@ -68,3 +68,5 @@ export * from './canvas/index';
 // MCP config normalize/validate is pure (no node:*), so settings UI can share
 // shapes and validation with main-process IPC.
 export * from './mcp/config';
+export * from './mcp/secrets';
+export * from './mcp/toolPolicy';
