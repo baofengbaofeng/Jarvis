@@ -32,6 +32,26 @@ describe('SafeUrlPolicy', () => {
     await expect(policy.assertAllowed('https://localhost')).rejects.toThrow('URL_PRIVATE_ADDRESS');
   });
 
+  it('rejects Fake-IP by default and allows when allowFakeIp is on', async () => {
+    const blocked = new SafeUrlPolicy({ lookup: async () => [{ address: '198.18.0.47', family: 4 }] });
+    await expect(blocked.assertAllowed('https://api.deepseek.com')).rejects.toThrow('URL_PRIVATE_ADDRESS');
+
+    const allowed = new SafeUrlPolicy({
+      allowFakeIp: true,
+      lookup: async () => [{ address: '198.18.0.47', family: 4 }],
+    });
+    await expect(allowed.assertAllowed('https://api.deepseek.com')).resolves.toBeInstanceOf(URL);
+
+    let dyn = false;
+    const dynamic = new SafeUrlPolicy({
+      allowFakeIp: () => dyn,
+      lookup: async () => [{ address: '198.18.0.47', family: 4 }],
+    });
+    await expect(dynamic.assertAllowed('https://api.deepseek.com')).rejects.toThrow('URL_PRIVATE_ADDRESS');
+    dyn = true;
+    await expect(dynamic.assertAllowed('https://api.deepseek.com')).resolves.toBeInstanceOf(URL);
+  });
+
   it('does not call the resolver again during HTTPS socket connect', async () => {
     const lookup = vi.fn()
       .mockResolvedValueOnce([{ address: '203.0.113.10', family: 4 }])

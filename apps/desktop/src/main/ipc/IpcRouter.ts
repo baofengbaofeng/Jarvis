@@ -10,7 +10,7 @@ import { validateSettingsValue, requiresSystemConfirm } from './settings-schema'
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
 import { createAgentTemplatesIpc } from './agent-templates';
-import { createMcpStore, testMcpServerById, type McpServerInput } from './mcp';
+import { createMcpStore, testMcpServerById, warmStartMcpServers, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
@@ -97,6 +97,8 @@ export class IpcRouter {
     const settings = createSettingsStore(this.db);
     const safeUrlPolicy = new SafeUrlPolicy({
       allowLoopbackDev: process.env['JARVIS_ALLOW_LOOPBACK_URLS'] === '1',
+      allowFakeIp: () =>
+        process.env['JARVIS_ALLOW_FAKE_IP_URLS'] === '1' || settings.get('network.allow_fake_ip') === true,
     });
     setDefaultWebSearchHttp(safeUrlPolicy);
     const secrets = createSecureStorage();
@@ -161,7 +163,7 @@ export class IpcRouter {
       agents.create({ name: input.name, systemPrompt: input.systemPrompt, modelId: null, workspaceId: input.workspaceId }));
     this.register('agent-templates.list', () => agentTemplates.list());
     this.register('agent-templates.createAgent', (_e, input) => agentTemplates.createAgent(_e, input as { templateId: string; name: string; workspaceId?: string }));
-    const mcpStore = createMcpStore(this.db);
+    const mcpStore = createMcpStore(this.db, { secrets });
     // Pass the agents store so skills import can copy SKILL.md into every bound
     // workspace's .jarvis/skills/ (the runtime injection surface), J2 fix.
     const skillsStore = createSkillsStore(this.db, agents, {
@@ -169,10 +171,69 @@ export class IpcRouter {
       http: safeUrlPolicy,
     });
     this.register('mcp.list', () => mcpStore.list());
-    this.register('mcp.create', (_e, input) => mcpStore.create(input as McpServerInput));
-    this.register('mcp.delete', (_e, id) => mcpStore.remove(id as string));
+    this.register('mcp.create', async (_e, input) => {
+      try {
+        const payload = input as McpServerInput;
+        const server = payload.secretValues
+          ? await mcpStore.createAsync(payload)
+          : mcpStore.create(payload);
+        return { ok: true as const, server };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('mcp.update', async (_e, args) => {
+      try {
+        const { id, ...patch } = (args ?? {}) as { id: string } & Partial<McpServerInput>;
+        const server = patch.secretValues
+          ? await mcpStore.updateAsync(id, patch)
+          : mcpStore.update(id, patch);
+        return { ok: true as const, server };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('mcp.delete', (_e, id) => {
+      try {
+        mcpStore.remove(id as string);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('mcp.setEnabled', (_e, id, enabled) => {
+      try {
+        const server = mcpStore.setEnabled(id as string, Boolean(enabled));
+        return { ok: true as const, server };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('mcp.test', (_e, args) =>
-      testMcpServerById(this.db, ((args ?? {}) as { id: string }).id));
+      testMcpServerById(this.db, ((args ?? {}) as { id: string }).id, {
+        secrets,
+        assertAllowedUrl: async (url) => { await safeUrlPolicy.assertAllowed(url); },
+        globalEnv: (settings.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+      }));
+    this.register('mcp.export', () => ({
+      ok: true as const,
+      document: mcpStore.exportDocument({
+        autoStartMcp: settings.get('mcp.auto_start') !== false,
+        logLevel: (settings.get('mcp.log_level') as string | undefined) ?? 'warn',
+        maxConcurrentTools: (settings.get('mcp.max_concurrent_tools') as number | undefined) ?? 3,
+        globalEnv: (settings.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+      }),
+    }));
+    this.register('mcp.import', (_e, args) => {
+      try {
+        const { text, strategy } = (args ?? {}) as { text: string; strategy?: 'skip' | 'overwrite' | 'merge' };
+        const doc = JSON.parse(text) as unknown;
+        const result = mcpStore.importDocument(doc, strategy ?? 'skip');
+        return { ok: true as const, ...result };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('skills.list', () => skillsStore.list());
     this.register('skills.importLocal', (_e, req) => {
       const dir = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'skills:import-dir');
@@ -188,7 +249,22 @@ export class IpcRouter {
         return { ok: false as const, error: code };
       }
     });
-    this.register('skills.delete', (_e, id) => skillsStore.remove(id as string));
+    this.register('skills.delete', (_e, id) => {
+      try {
+        skillsStore.remove(id as string);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('skills.setEnabled', (_e, id, enabled) => {
+      try {
+        const skill = skillsStore.setEnabled(id as string, Boolean(enabled));
+        return { ok: true as const, skill };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     const workspace = createWorkspaceService(this.db);
     this.register('workspace.bind', (_e, agentId, req) => {
       const path = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'workspace:bind');
@@ -629,6 +705,14 @@ export class IpcRouter {
     // 'squad:event' so the squad timeline (TimelineView) streams live. Same
     // disposeFns lifecycle as the persist subscription.
     this.disposeFns.push(createSquadEventPush(getMessageBus(), () => this.opts.getMainWindow?.() ?? null));
+
+    if (settings.get('mcp.auto_start') !== false) {
+      void warmStartMcpServers(this.db, {
+        secrets,
+        assertAllowedUrl: async (url) => { await safeUrlPolicy.assertAllowed(url); },
+        globalEnv: (settings.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+      });
+    }
   }
 
   listen(): void {

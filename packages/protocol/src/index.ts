@@ -37,6 +37,48 @@ export const PROVIDER_FIELD_MAX = {
   contextTokens: 100_000_000,
 } as const;
 
+/** Max lengths for MCP server fields (IPC + UI). */
+export const MCP_FIELD_MAX = {
+  name: 64,
+  command: 512,
+  args: 2048,
+  cwd: 1024,
+  url: 2048,
+  description: 512,
+  envKeys: 64,
+  envKeyLen: 128,
+  envValue: 4096,
+  headerKeys: 32,
+  headerKeyLen: 128,
+  toolList: 128,
+  toolName: 128,
+  timeoutMsMax: 600_000,
+} as const;
+
+/** Max lengths for Skills import / display fields (IPC + UI). */
+export const SKILL_FIELD_MAX = {
+  name: 64,
+  url: 2048,
+  path: 2048,
+  description: 512,
+} as const;
+
+/** Concurrency settings bounds (settings.concurrency). */
+export const CONCURRENCY_FIELD_MAX = {
+  perAgentMin: 1,
+  perAgentMax: 64,
+  machineMin: 1,
+  machineMax: 512,
+} as const;
+
+/** Agent env/cli text area limits. */
+export const ENV_FIELD_MAX = {
+  envText: 8192,
+  cliText: 2048,
+  key: 128,
+  value: 2048,
+} as const;
+
 export {
   PROVIDER_BASE_URL_PATTERN,
   PROVIDER_NAME_PATTERN,

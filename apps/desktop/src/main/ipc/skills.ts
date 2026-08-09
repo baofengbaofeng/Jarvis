@@ -8,7 +8,7 @@ import {
   type SafeHttpClient,
   type SkillMeta,
 } from '@jarvis/core';
-import type { AgentConfig } from '@jarvis/protocol';
+import { SKILL_FIELD_MAX, type AgentConfig } from '@jarvis/protocol';
 
 export interface SkillsAgentSource { list(): AgentConfig[] }
 
@@ -22,6 +22,18 @@ const SKILL_FETCH_LIMITS = {
   maxRedirects: 3,
   maxResponseBytes: 262144,
 };
+
+function asEnabled(value: unknown): boolean {
+  return Number(value ?? 1) === 1;
+}
+
+export function assertSkillImportUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) throw new Error('SKILL_URL_REQUIRED');
+  if (trimmed.length > SKILL_FIELD_MAX.url) throw new Error('SKILL_URL_TOO_LONG');
+  if (!/^https?:\/\//i.test(trimmed)) throw new Error('SKILL_URL_PROTOCOL');
+  return trimmed;
+}
 
 export function createSkillsStore(
   db: Database.Database,
@@ -59,8 +71,15 @@ export function createSkillsStore(
   return {
     list() {
       return (db.prepare('SELECT * FROM skills ORDER BY created_at').all() as Record<string, unknown>[]).map(r => ({
-        id: r.id as string, name: r.name as string, path: r.path as string, description: r.description as string
+        id: r.id as string,
+        name: r.name as string,
+        path: r.path as string,
+        description: r.description as string,
+        enabled: asEnabled(r.enabled),
       }));
+    },
+    listEnabled() {
+      return this.list().filter((s) => s.enabled);
     },
     importFromDir(dir: string): SkillMeta[] {
       const metas = scanSkillsDir(dir);
@@ -74,7 +93,8 @@ export function createSkillsStore(
       return out;
     },
     async importFromUrl(url: string): Promise<SkillMeta> {
-      const res = await http.request(url, { method: 'GET' }, SKILL_FETCH_LIMITS);
+      const safeUrl = assertSkillImportUrl(url);
+      const res = await http.request(safeUrl, { method: 'GET' }, SKILL_FETCH_LIMITS);
       if (!res.ok) throw new Error(`SKILL_HTTP_${res.status}`);
       const contentType = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
       if (contentType !== 'text/markdown' && contentType !== 'text/plain') {
@@ -82,6 +102,12 @@ export function createSkillsStore(
       }
       const text = await res.text();
       return persistSkill(importSkillDocument(text, root));
+    },
+    setEnabled(id: string, enabled: boolean) {
+      const cur = db.prepare('SELECT id FROM skills WHERE id = ?').get(id);
+      if (!cur) throw new Error('SKILL_NOT_FOUND');
+      db.prepare('UPDATE skills SET enabled=? WHERE id=?').run(enabled ? 1 : 0, id);
+      return this.list().find((s) => s.id === id)!;
     },
     remove(id: string) { db.prepare('DELETE FROM skills WHERE id = ?').run(id); }
   };

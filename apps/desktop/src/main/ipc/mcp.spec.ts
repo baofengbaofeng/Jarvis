@@ -28,6 +28,39 @@ describe('mcp store', () => {
     const listed = store.list();
     expect(listed[0].config.agentIds).toEqual(['a1', 'a2']);
   });
+
+  it('rejects empty or overlong name / command / args', () => {
+    const store = createMcpStore(db);
+    expect(() => store.create({ name: '  ', transport: 'stdio', command: 'npx', args: [] })).toThrow(
+      'MCP_NAME_REQUIRED',
+    );
+    expect(() =>
+      store.create({ name: 'n'.repeat(65), transport: 'stdio', command: 'npx', args: [] }),
+    ).toThrow('MCP_NAME_TOO_LONG');
+    expect(() =>
+      store.create({ name: 'ok', transport: 'stdio', command: 'c'.repeat(513), args: [] }),
+    ).toThrow('MCP_COMMAND_TOO_LONG');
+    expect(() =>
+      store.create({ name: 'ok', transport: 'stdio', command: 'npx', args: ['a'.repeat(2049)] }),
+    ).toThrow('MCP_ARGS_TOO_LONG');
+  });
+
+  it('toggles enabled and defaults new servers to enabled', () => {
+    const store = createMcpStore(db);
+    const s = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [] });
+    expect(s.enabled).toBe(true);
+    const off = store.setEnabled(s.id, false);
+    expect(off.enabled).toBe(false);
+    expect(store.list()[0]?.enabled).toBe(false);
+  });
+
+  it('updates cwd and persists on list', () => {
+    const store = createMcpStore(db);
+    const s = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [] });
+    const updated = store.update(s.id, { cwd: '/tmp/work' });
+    expect(updated.config.cwd).toBe('/tmp/work');
+    expect(store.list()[0]?.config.cwd).toBe('/tmp/work');
+  });
 });
 
 describe('mcp.test', () => {
@@ -53,10 +86,10 @@ describe('mcp.test', () => {
     expect(r.tools).toEqual(['read']);
   });
 
-  it('rejects non-stdio transport', async () => {
+  it('requires url for sse transport (remote supported)', async () => {
     const r = await testMcpServer({ name: 's', transport: 'sse', command: 'x' });
     expect(r.ok).toBe(false);
-    expect(r.error).toContain('not supported');
+    expect(r.error).toBe('MCP_URL_REQUIRED');
   });
 
   it('loads the executable from the persisted server id', async () => {

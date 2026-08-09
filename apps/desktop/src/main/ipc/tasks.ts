@@ -150,7 +150,19 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       const { agent, messages, env, apiKey, provider, modelId, workspaceRoot, policy } = await resolveAgentRun(agentId, prompt);
       await store.create(id, agentId);
       taskRuns.set(id, { agentId, modelId });
-      await registerAgentMcpTools(db, toolRegistry, agentId);
+      await registerAgentMcpTools(db, toolRegistry, agentId, {
+        secrets,
+        globalEnv: (deps.settings?.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+        registerOpts: {
+          maxConcurrent: (deps.settings?.get('mcp.max_concurrent_tools') as number | undefined) ?? 3,
+          toolWarningThreshold: (deps.settings?.get('mcp.tool_warning_threshold') as number | undefined) ?? 10_000,
+          logWarn: (msg) => {
+            const level = (deps.settings?.get('mcp.log_level') as string | undefined) ?? 'warn';
+            if (level === 'error') return;
+            console.warn(msg);
+          },
+        },
+      });
       registerMemoryToolsFor(agentId);
       // CORE-19: per-run visibility on the submit payload — never mutate shared engine state.
       // CORE-20: strip MCP tools not bound to this agent (shared registry may hold others).

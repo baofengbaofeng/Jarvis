@@ -70,8 +70,16 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 15 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table; v13 adds provider field length CHECKs; v14 adds models.context_tokens; v15 adds providers/models.enabled)', () => {
-    expect(latestVersion()).toBe(15);
+  it('reports latestVersion as 16 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table; v13 adds provider field length CHECKs; v14 adds models.context_tokens; v15 adds providers/models.enabled; v16 adds mcp_servers/skills.enabled)', () => {
+    expect(latestVersion()).toBe(16);
+  });
+
+  it('v16 adds mcp_servers.enabled and skills.enabled', () => {
+    applyMigrations(db);
+    const mcpCols = db.prepare('PRAGMA table_info(mcp_servers)').all() as Array<{ name: string }>;
+    const skillCols = db.prepare('PRAGMA table_info(skills)').all() as Array<{ name: string }>;
+    expect(mcpCols.map((c) => c.name)).toEqual(expect.arrayContaining(['enabled']));
+    expect(skillCols.map((c) => c.name)).toEqual(expect.arrayContaining(['enabled']));
   });
 
   // M6 Task 1 (L12): v4 adds task_id to agent_messages (the table was created

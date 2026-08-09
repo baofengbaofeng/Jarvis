@@ -42,4 +42,13 @@ describe('isRestrictedAddress', () => {
     expect(isRestrictedAddress('::1', { allowLoopback: true })).toBe(false);
     expect(isRestrictedAddress('10.0.0.1', { allowLoopback: true })).toBe(true);
   });
+
+  it('allows benchmark Fake-IP (198.18/15) only when allowFakeIp is set', () => {
+    expect(isRestrictedAddress('198.18.0.47')).toBe(true);
+    expect(isRestrictedAddress('198.19.255.255')).toBe(true);
+    expect(isRestrictedAddress('198.18.0.47', { allowFakeIp: true })).toBe(false);
+    expect(isRestrictedAddress('::ffff:198.18.0.47', { allowFakeIp: true })).toBe(false);
+    expect(isRestrictedAddress('10.0.0.1', { allowFakeIp: true })).toBe(true);
+    expect(isRestrictedAddress('127.0.0.1', { allowFakeIp: true })).toBe(true);
+  });
 });

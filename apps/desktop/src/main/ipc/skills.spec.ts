@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyMigrations } from '../db/migrations';
-import { createSkillsStore } from './skills';
+import { assertSkillImportUrl, createSkillsStore } from './skills';
 
 describe('createSkillsStore', () => {
   let db: Database.Database;
@@ -15,6 +15,29 @@ describe('createSkillsStore', () => {
     db = new Database(':memory:');
     applyMigrations(db);
     root = mkdtempSync(join(tmpdir(), 'jarvis-skills-store-'));
+  });
+
+  it('rejects invalid skill import URLs before fetching', () => {
+    expect(() => assertSkillImportUrl('')).toThrow('SKILL_URL_REQUIRED');
+    expect(() => assertSkillImportUrl('ftp://x')).toThrow('SKILL_URL_PROTOCOL');
+    expect(() => assertSkillImportUrl(`https://x/${'p'.repeat(2048)}`)).toThrow('SKILL_URL_TOO_LONG');
+  });
+
+  it('toggles enabled on listed skills', async () => {
+    const http = {
+      request: vi.fn(async () => new Response(
+        '---\nname: web-import\ndescription: d\ntriggers: []\n---\nbody',
+        { status: 200, headers: { 'content-type': 'text/markdown' } },
+      )),
+    };
+    const store = createSkillsStore(db, agents, { root, http });
+    await store.importFromUrl('https://skills.example/SKILL.md');
+    const listed = store.list();
+    expect(listed[0]?.enabled).toBe(true);
+    store.setEnabled(listed[0]!.id, false);
+    expect(store.list()[0]?.enabled).toBe(false);
+    expect(store.listEnabled()).toHaveLength(0);
+    rmSync(root, { recursive: true, force: true });
   });
 
   it('downloads through SafeHttpClient and writes under the managed root', async () => {

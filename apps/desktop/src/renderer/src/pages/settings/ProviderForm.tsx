@@ -1,6 +1,6 @@
-import { useState, type InputHTMLAttributes } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input } from '@jarvis/ui';
+import { Button } from '@jarvis/ui';
 import {
   PROVIDER_FIELD_MAX,
   isValidProviderName,
@@ -9,6 +9,7 @@ import {
   type Provider,
 } from '@jarvis/protocol';
 import { useProviderStore } from '../../stores/provider-store';
+import { FieldInput } from '../../components/settings/FieldInput';
 
 type ProviderType = 'openai-compatible' | 'anthropic-compatible';
 type FieldKey = 'name' | 'baseUrl' | 'apiKey' | 'form';
@@ -63,35 +64,6 @@ function mapProviderError(code: string, t: (key: string, opts?: Record<string, u
     default:
       return code || t('settings.provider.errors.unknown');
   }
-}
-
-/** Value + in-box validation error (help text stays outside under the label). */
-function FieldInput({
-  error,
-  errorTestId,
-  placeholder,
-  ...inputProps
-}: {
-  error?: string;
-  errorTestId: string;
-  placeholder?: string;
-} & Omit<InputHTMLAttributes<HTMLInputElement>, 'placeholder'>) {
-  const invalid = Boolean(error);
-  return (
-    <div
-      className={['form-input-shell', invalid ? 'form-input-shell--invalid' : ''].filter(Boolean).join(' ')}
-    >
-      <Input
-        {...inputProps}
-        placeholder={placeholder}
-        aria-invalid={invalid}
-        className="form-input-shell__input"
-      />
-      {error ? (
-        <p data-testid={errorTestId} role="alert" className="form-input-shell__error">{error}</p>
-      ) : null}
-    </div>
-  );
 }
 
 export type ProviderFormProps = {

@@ -59,11 +59,13 @@ describe('ConfigImportExportView', () => {
     await waitFor(() => expect(screen.getByTestId('transfer-msg')).toBeTruthy());
   });
 
-  it('imports with non-default skip strategy when selected', async () => {
+  it('imports with overwrite strategy after modal confirm', async () => {
     render(<ConfigImportExportView />);
     fireEvent.change(screen.getByTestId('strategy'), { target: { value: 'overwrite' } });
     expect((screen.getByTestId('strategy') as HTMLSelectElement).value).toBe('overwrite');
     fireEvent.click(screen.getByTestId('import'));
+    await waitFor(() => expect(screen.getByTestId('config-overwrite-modal')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('config-overwrite-confirm'));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith(
       'config.import',
       importJson,
