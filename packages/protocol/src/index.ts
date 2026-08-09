@@ -112,6 +112,12 @@ export interface Model {
   name: string;
   /** Absolute context window in tokens; null/undefined = unset. */
   contextTokens?: number | null;
+  /** Max completion tokens; null/undefined = omit max_tokens on request. */
+  maxOutputTokens?: number | null;
+  /** Default true when omitted (legacy rows / safe default). */
+  supportsTools?: boolean;
+  /** Default false when omitted (legacy / safe default). */
+  supportsImages?: boolean;
   /** When false (or parent provider disabled), hidden from selection. Omit = enabled. */
   enabled?: boolean;
   createdAt: string;
@@ -125,6 +131,12 @@ export interface SelectableModel {
   modelId: string;
   name: string;
   contextTokens?: number | null;
+  /** Max completion tokens; null/undefined = omit max_tokens on request. */
+  maxOutputTokens?: number | null;
+  /** Default true when omitted (legacy rows / safe default). */
+  supportsTools?: boolean;
+  /** Default false when omitted (legacy / safe default). */
+  supportsImages?: boolean;
 }
 
 export type ContextTokenUnit = 'K' | 'M';
