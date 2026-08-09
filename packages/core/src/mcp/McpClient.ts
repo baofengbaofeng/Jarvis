@@ -6,6 +6,8 @@ export interface McpClientDeps {
   spawnImpl?: SpawnImpl;
   /** CORE-08: per-request timeout in ms (default 30s). */
   requestTimeoutMs?: number;
+  cwd?: string;
+  env?: Record<string, string>;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -116,6 +118,8 @@ export function createMcpClient(command: string, args: string[], serverName: str
   const client = new McpClient(deps, serverName);
   // CORE-09: child error/exit must not crash main; CORE-08: reject pending on exit.
   client.attach(createStdioTransport(command, args, deps.spawnImpl, {
+    cwd: deps.cwd,
+    env: deps.env,
     onError: (err) => { client.rejectAllPending(`McpClient(${serverName}): ${err.message}`); },
     onClose: () => { client.rejectAllPending(`McpClient(${serverName}): child exited`); },
   }));

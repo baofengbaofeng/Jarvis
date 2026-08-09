@@ -37,4 +37,18 @@ describe('createStdioTransport (CORE-09)', () => {
     expect(String(onError.mock.calls[0][0])).toContain('ENOENT');
     transport.close();
   });
+
+  it('passes cwd and merges env over pickInheritEnv (including PATH)', () => {
+    const child = new FakeChild();
+    const spawnImpl = vi.fn(() => child as unknown as import('node:child_process').ChildProcess);
+    createStdioTransport('npx', ['-y', 'pkg'], spawnImpl, {
+      cwd: '/tmp/work',
+      env: { GITHUB_TOKEN: 'x' },
+    });
+    expect(spawnImpl).toHaveBeenCalledTimes(1);
+    const opts = spawnImpl.mock.calls[0]![2] as { cwd?: string; env?: Record<string, string> };
+    expect(opts.cwd).toBe('/tmp/work');
+    expect(opts.env?.GITHUB_TOKEN).toBe('x');
+    if (process.env.PATH) expect(opts.env?.PATH).toBe(process.env.PATH);
+  });
 });
