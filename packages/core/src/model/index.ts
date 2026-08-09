@@ -3,3 +3,4 @@
 // usage-accounting functions/records.
 export * from './usage';
 export * from './parseToolArguments';
+export * from './capabilities';

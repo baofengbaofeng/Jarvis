@@ -27,6 +27,15 @@ export function isImageUrl(url: string): boolean {
 // deserializes the TEXT column: a parsed string is only accepted as an array if
 // every part matches the union, so user text that merely looks like JSON is
 // never mis-parsed (validation-on-parse, documented in ChatService).
+/** True when content is a multimodal array that includes at least one image part. */
+export function contentHasImages(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  return content.some((p) => {
+    if (!p || typeof p !== 'object') return false;
+    return (p as { type?: unknown }).type === 'image_url';
+  });
+}
+
 export function isContentArray(content: unknown): content is NonNullable<MessageContent> {
   // An empty array is not a valid content message (toContentArray returns ''
   // for zero parts) — `.every` would vacuously accept it.
