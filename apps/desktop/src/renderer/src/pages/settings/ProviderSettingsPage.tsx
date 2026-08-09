@@ -26,7 +26,19 @@ type ModelDraft = {
   name: string;
   contextValue: string;
   contextUnit: ContextTokenUnit;
+  maxOutputValue: string;
+  supportsTools: boolean;
+  supportsImages: boolean;
+  /** Set when editing an existing model row (Model ID read-only). */
+  editingId?: string;
 };
+
+function splitContextTokens(tokens: number | null | undefined): { contextValue: string; contextUnit: ContextTokenUnit } {
+  if (tokens == null || !Number.isFinite(tokens) || tokens <= 0) return { contextValue: '', contextUnit: 'K' };
+  if (tokens % 1_000_000 === 0) return { contextValue: String(tokens / 1_000_000), contextUnit: 'M' };
+  if (tokens % 1_000 === 0) return { contextValue: String(tokens / 1_000), contextUnit: 'K' };
+  return { contextValue: '', contextUnit: 'K' };
+}
 
 function newModelDraft(): ModelDraft {
   return {
@@ -35,7 +47,36 @@ function newModelDraft(): ModelDraft {
     name: '',
     contextValue: '',
     contextUnit: 'K',
+    maxOutputValue: '',
+    supportsTools: true,
+    supportsImages: false,
   };
+}
+
+function draftFromModel(model: Model): ModelDraft {
+  const ctx = splitContextTokens(model.contextTokens);
+  return {
+    key: crypto.randomUUID(),
+    modelId: model.modelId,
+    name: model.name,
+    contextValue: ctx.contextValue,
+    contextUnit: ctx.contextUnit,
+    maxOutputValue: model.maxOutputTokens != null ? String(model.maxOutputTokens) : '',
+    supportsTools: model.supportsTools !== false,
+    supportsImages: model.supportsImages === true,
+    editingId: model.id,
+  };
+}
+
+function mapModelPersistError(error: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  if (error === 'PROVIDER_MODEL_CONTEXT_INVALID') return t('settings.provider.errors.modelContextInvalid');
+  if (error === 'PROVIDER_MODEL_MAX_OUTPUT_INVALID') return t('settings.provider.errors.modelMaxOutputInvalid');
+  if (error === 'PROVIDER_MODEL_ID_REQUIRED') return t('settings.provider.errors.modelIdRequired');
+  if (error === 'PROVIDER_MODEL_ID_TOO_LONG') return t('settings.provider.errors.modelIdTooLong', { max: PROVIDER_FIELD_MAX.modelId });
+  if (error === 'PROVIDER_MODEL_ID_INVALID') return t('settings.provider.errors.modelIdInvalid');
+  if (error === 'PROVIDER_MODEL_NAME_TOO_LONG') return t('settings.provider.errors.modelNameTooLong', { max: PROVIDER_FIELD_MAX.modelName });
+  if (error === 'PROVIDER_MODEL_NAME_INVALID') return t('settings.provider.errors.modelNameInvalid');
+  return t('settings.provider.errors.unknown');
 }
 
 function ProviderModels({
@@ -69,17 +110,32 @@ function ProviderModels({
     setDrafts((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   };
 
+  const beginEdit = (model: Model) => {
+    setDraftError(null);
+    setDrafts([draftFromModel(model)]);
+  };
+
+  const cancelEdit = (key: string) => {
+    setDraftError(null);
+    setDrafts((rows) => {
+      const next = rows.filter((row) => row.key !== key);
+      return next.length > 0 ? next : [newModelDraft()];
+    });
+  };
+
   const saveDraft = async (key: string) => {
     const draft = draftsRef.current.find((row) => row.key === key);
     if (!draft) return;
     const id = draft.modelId.trim();
-    if (!id) {
-      setDraftError(t('settings.provider.errors.modelIdRequired'));
-      return;
-    }
-    if (id.length > PROVIDER_FIELD_MAX.modelId) {
-      setDraftError(t('settings.provider.errors.modelIdTooLong', { max: PROVIDER_FIELD_MAX.modelId }));
-      return;
+    if (!draft.editingId) {
+      if (!id) {
+        setDraftError(t('settings.provider.errors.modelIdRequired'));
+        return;
+      }
+      if (id.length > PROVIDER_FIELD_MAX.modelId) {
+        setDraftError(t('settings.provider.errors.modelIdTooLong', { max: PROVIDER_FIELD_MAX.modelId }));
+        return;
+      }
     }
     const displayName = draft.name.trim();
     if (displayName.length > PROVIDER_FIELD_MAX.modelName) {
@@ -104,31 +160,35 @@ function ProviderModels({
         return;
       }
     }
-    setDraftError(null);
-    const res = (await window.jarvis.invoke('provider.addModel', providerId, {
-      modelId: id,
-      name: displayName || id,
-      contextTokens,
-    })) as { ok: true; model: Model } | { ok: false; error: string } | Model;
-    if (res && typeof res === 'object' && 'ok' in res) {
-      if (!res.ok) {
-        setDraftError(
-          res.error === 'PROVIDER_MODEL_CONTEXT_INVALID'
-            ? t('settings.provider.errors.modelContextInvalid')
-            : res.error === 'PROVIDER_MODEL_ID_REQUIRED'
-              ? t('settings.provider.errors.modelIdRequired')
-              : res.error === 'PROVIDER_MODEL_ID_TOO_LONG'
-                ? t('settings.provider.errors.modelIdTooLong', { max: PROVIDER_FIELD_MAX.modelId })
-                : res.error === 'PROVIDER_MODEL_ID_INVALID'
-                  ? t('settings.provider.errors.modelIdInvalid')
-                  : res.error === 'PROVIDER_MODEL_NAME_TOO_LONG'
-                    ? t('settings.provider.errors.modelNameTooLong', { max: PROVIDER_FIELD_MAX.modelName })
-                    : res.error === 'PROVIDER_MODEL_NAME_INVALID'
-                      ? t('settings.provider.errors.modelNameInvalid')
-                      : t('settings.provider.errors.unknown'),
-        );
+    const maxDigits = draft.maxOutputValue.trim();
+    let maxOutputTokens: number | null = null;
+    if (maxDigits) {
+      const n = Number(maxDigits);
+      if (!Number.isInteger(n) || n <= 0 || n > PROVIDER_FIELD_MAX.contextTokens) {
+        setDraftError(t('settings.provider.errors.modelMaxOutputInvalid'));
         return;
       }
+      maxOutputTokens = n;
+    }
+    setDraftError(null);
+    const payload = {
+      name: displayName || id,
+      contextTokens,
+      maxOutputTokens,
+      supportsTools: draft.supportsTools,
+      supportsImages: draft.supportsImages,
+    };
+    const res = draft.editingId
+      ? ((await window.jarvis.invoke('provider.updateModel', draft.editingId, payload)) as
+          | { ok: true; model: Model }
+          | { ok: false; error: string })
+      : ((await window.jarvis.invoke('provider.addModel', providerId, { modelId: id, ...payload })) as
+          | { ok: true; model: Model }
+          | { ok: false; error: string }
+          | Model);
+    if (res && typeof res === 'object' && 'ok' in res && !res.ok) {
+      setDraftError(mapModelPersistError(res.error, t));
+      return;
     }
     setDrafts((rows) => {
       const next = rows.filter((row) => row.key !== key);
@@ -162,6 +222,21 @@ function ProviderModels({
           formatContextTokens(row.contextTokens) ?? t('settings.provider.modelsEmpty'),
       },
       {
+        key: 'capabilities',
+        header: t('settings.provider.modelCapabilities'),
+        className: 'provider-models-table__capabilities',
+        render: (row: Model) => (
+          <span data-testid={`provider-model-caps-${row.id}`} className="provider-model-caps">
+            <span className={`provider-model-cap${row.supportsTools === false ? ' provider-model-cap--off' : ''}`}>
+              {t('settings.provider.capTools')}
+            </span>
+            <span className={`provider-model-cap${row.supportsImages === true ? '' : ' provider-model-cap--off'}`}>
+              {t('settings.provider.capImages')}
+            </span>
+          </span>
+        ),
+      },
+      {
         key: 'enabled',
         header: t('settings.provider.colEnabled'),
         className: 'provider-models-table__enabled',
@@ -188,7 +263,17 @@ function ProviderModels({
         header: t('settings.provider.colActions'),
         className: 'provider-models-table__actions',
         render: (row: Model) => (
-          <div className="provider-models-table__action-btn">
+          <div className="provider-models-table__action-btn provider-models-table__action-btn--pair">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="provider-icon-btn provider-icon-btn--edit"
+              data-testid={`provider-model-edit-${row.id}`}
+              aria-label={t('settings.provider.editModel')}
+              onClick={() => beginEdit(row)}
+            >
+              <IconPencil />
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -250,58 +335,108 @@ function ProviderModels({
         {drafts.map((draft) => (
           <div
             key={draft.key}
-            className="provider-models__add-row"
+            className="provider-models__draft-block"
             data-testid={`provider-model-add-row-${draft.key}`}
           >
-            <label className="provider-models__inline-field" htmlFor={`provider-model-id-${draft.key}`}>
-              <span className="form-field__label">{t('settings.provider.modelId')}</span>
-              <Input
-                id={`provider-model-id-${draft.key}`}
-                data-testid={`provider-model-id-${draft.key}`}
-                value={draft.modelId}
-                maxLength={PROVIDER_FIELD_MAX.modelId}
-                onChange={(e) => updateDraft(draft.key, { modelId: sanitizeProviderModelIdInput(e.target.value) })}
-              />
-            </label>
-            <label className="provider-models__inline-field" htmlFor={`provider-model-name-${draft.key}`}>
-              <span className="form-field__label">{t('settings.provider.modelName')}</span>
-              <Input
-                id={`provider-model-name-${draft.key}`}
-                data-testid={`provider-model-name-${draft.key}`}
-                value={draft.name}
-                maxLength={PROVIDER_FIELD_MAX.modelName}
-                onChange={(e) => updateDraft(draft.key, { name: sanitizeProviderModelNameInput(e.target.value) })}
-              />
-            </label>
-            <label
-              className="provider-models__inline-field provider-models__inline-field--context"
-              htmlFor={`provider-model-context-${draft.key}`}
-            >
-              <span className="form-field__label">{t('settings.provider.modelContext')}</span>
-              <Input
-                id={`provider-model-context-${draft.key}`}
-                data-testid={`provider-model-context-${draft.key}`}
-                inputMode="numeric"
-                value={draft.contextValue}
-                maxLength={PROVIDER_FIELD_MAX.contextDigits}
-                onChange={(e) => updateDraft(draft.key, { contextValue: sanitizeContextDigits(e.target.value) })}
-              />
-              <MenuSelect
-                testId={`provider-model-context-unit-${draft.key}`}
-                aria-label={t('settings.provider.modelContextUnit')}
-                value={draft.contextUnit}
-                options={unitOptions}
-                onChange={(v) => updateDraft(draft.key, { contextUnit: v as ContextTokenUnit })}
-              />
-            </label>
-            <Button
-              variant="primary"
-              size="sm"
-              data-testid={`provider-model-add-${draft.key}`}
-              onClick={() => void saveDraft(draft.key)}
-            >
-              {t('settings.provider.saveModel')}
-            </Button>
+            {draft.editingId ? (
+              <p className="provider-models__editing-banner" data-testid={`provider-model-editing-${draft.key}`}>
+                {t('settings.provider.editingModel', { modelId: draft.modelId })}
+              </p>
+            ) : null}
+            <div className="provider-models__add-row">
+              <label className="provider-models__inline-field" htmlFor={`provider-model-id-${draft.key}`}>
+                <span className="form-field__label">{t('settings.provider.modelId')}</span>
+                <Input
+                  id={`provider-model-id-${draft.key}`}
+                  data-testid={`provider-model-id-${draft.key}`}
+                  value={draft.modelId}
+                  maxLength={PROVIDER_FIELD_MAX.modelId}
+                  readOnly={Boolean(draft.editingId)}
+                  onChange={(e) => updateDraft(draft.key, { modelId: sanitizeProviderModelIdInput(e.target.value) })}
+                />
+              </label>
+              <label className="provider-models__inline-field" htmlFor={`provider-model-name-${draft.key}`}>
+                <span className="form-field__label">{t('settings.provider.modelName')}</span>
+                <Input
+                  id={`provider-model-name-${draft.key}`}
+                  data-testid={`provider-model-name-${draft.key}`}
+                  value={draft.name}
+                  maxLength={PROVIDER_FIELD_MAX.modelName}
+                  onChange={(e) => updateDraft(draft.key, { name: sanitizeProviderModelNameInput(e.target.value) })}
+                />
+              </label>
+              <label
+                className="provider-models__inline-field provider-models__inline-field--context"
+                htmlFor={`provider-model-context-${draft.key}`}
+              >
+                <span className="form-field__label">{t('settings.provider.modelContext')}</span>
+                <Input
+                  id={`provider-model-context-${draft.key}`}
+                  data-testid={`provider-model-context-${draft.key}`}
+                  inputMode="numeric"
+                  value={draft.contextValue}
+                  maxLength={PROVIDER_FIELD_MAX.contextDigits}
+                  onChange={(e) => updateDraft(draft.key, { contextValue: sanitizeContextDigits(e.target.value) })}
+                />
+                <MenuSelect
+                  testId={`provider-model-context-unit-${draft.key}`}
+                  aria-label={t('settings.provider.modelContextUnit')}
+                  value={draft.contextUnit}
+                  options={unitOptions}
+                  onChange={(v) => updateDraft(draft.key, { contextUnit: v as ContextTokenUnit })}
+                />
+              </label>
+            </div>
+            <div className="provider-models__add-row provider-models__add-row--caps">
+              <label className="provider-models__inline-field provider-models__inline-field--max" htmlFor={`provider-model-max-${draft.key}`}>
+                <span className="form-field__label">{t('settings.provider.modelMaxOutput')}</span>
+                <Input
+                  id={`provider-model-max-${draft.key}`}
+                  data-testid={`provider-model-max-${draft.key}`}
+                  inputMode="numeric"
+                  placeholder={t('settings.provider.modelMaxOutputPlaceholder')}
+                  value={draft.maxOutputValue}
+                  maxLength={PROVIDER_FIELD_MAX.contextDigits}
+                  onChange={(e) => updateDraft(draft.key, { maxOutputValue: sanitizeContextDigits(e.target.value) })}
+                />
+              </label>
+              <label className="provider-models__switch" data-testid={`provider-model-tools-${draft.key}`}>
+                <EnableToggle
+                  enabled={draft.supportsTools}
+                  testId={`provider-model-tools-toggle-${draft.key}`}
+                  aria-label={t('settings.provider.modelSupportsTools')}
+                  onChange={(next) => updateDraft(draft.key, { supportsTools: next })}
+                />
+                <span>{t('settings.provider.modelSupportsTools')}</span>
+              </label>
+              <label className="provider-models__switch" data-testid={`provider-model-images-${draft.key}`}>
+                <EnableToggle
+                  enabled={draft.supportsImages}
+                  testId={`provider-model-images-toggle-${draft.key}`}
+                  aria-label={t('settings.provider.modelSupportsImages')}
+                  onChange={(next) => updateDraft(draft.key, { supportsImages: next })}
+                />
+                <span>{t('settings.provider.modelSupportsImages')}</span>
+              </label>
+              {draft.editingId ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`provider-model-cancel-${draft.key}`}
+                  onClick={() => cancelEdit(draft.key)}
+                >
+                  {t('settings.provider.cancelEditModel')}
+                </Button>
+              ) : null}
+              <Button
+                variant="primary"
+                size="sm"
+                data-testid={`provider-model-add-${draft.key}`}
+                onClick={() => void saveDraft(draft.key)}
+              >
+                {t('settings.provider.saveModel')}
+              </Button>
+            </div>
           </div>
         ))}
       </div>

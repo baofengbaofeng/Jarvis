@@ -351,13 +351,23 @@ describe('ProviderSettingsPage', () => {
         }
         if (method === 'provider.addModel') {
           added.push({ args });
-          const input = args[1] as { modelId: string; name: string; contextTokens?: number | null };
+          const input = args[1] as {
+            modelId: string;
+            name: string;
+            contextTokens?: number | null;
+            maxOutputTokens?: number | null;
+            supportsTools?: boolean;
+            supportsImages?: boolean;
+          };
           const model = {
             id: 'm2',
             providerId: 'p1',
             modelId: input.modelId,
             name: input.name,
             contextTokens: input.contextTokens ?? null,
+            maxOutputTokens: input.maxOutputTokens ?? null,
+            supportsTools: input.supportsTools !== false,
+            supportsImages: input.supportsImages === true,
             createdAt: '',
           };
           models = [...models, model];
@@ -402,7 +412,16 @@ describe('ProviderSettingsPage', () => {
     await waitFor(() => expect(screen.getByTestId('provider-model-m2')).toBeTruthy());
     expect(screen.getByTestId('provider-models-cell-p1').textContent).toMatch(/ModelY/);
     expect(screen.getByText('128K')).toBeTruthy();
-    expect(added).toEqual([{ args: ['p1', { modelId: 'gpt-y', name: 'ModelY', contextTokens: 128_000 }] }]);
+    expect(added).toEqual([{
+      args: ['p1', {
+        modelId: 'gpt-y',
+        name: 'ModelY',
+        contextTokens: 128_000,
+        maxOutputTokens: null,
+        supportsTools: true,
+        supportsImages: false,
+      }],
+    }]);
     expect(screen.queryByTestId(`provider-model-add-row-${draftKey}`)).toBeNull();
     expect(screen.getAllByTestId(/^provider-model-add-row-/)).toHaveLength(1);
 
@@ -453,5 +472,77 @@ describe('ProviderSettingsPage', () => {
     expect((screen.getByTestId(`provider-model-id-${draftKey}`) as HTMLInputElement).maxLength).toBe(128);
     expect((screen.getByTestId(`provider-model-name-${draftKey}`) as HTMLInputElement).maxLength).toBe(64);
     expect((screen.getByTestId(`provider-model-context-${draftKey}`) as HTMLInputElement).maxLength).toBe(6);
+  });
+
+  it('defaults capability toggles and edits an existing model', async () => {
+    const updates: unknown[] = [];
+    let models = [{
+      id: 'm1',
+      providerId: 'p1',
+      modelId: 'gpt-x',
+      name: 'Model X',
+      contextTokens: 64_000,
+      maxOutputTokens: null as number | null,
+      supportsTools: true,
+      supportsImages: false,
+      createdAt: '',
+    }];
+    (window as unknown as { jarvis: unknown }).jarvis = {
+      invoke: async (method: string, ...args: unknown[]) => {
+        if (method === 'provider.list') {
+          return [{ id: 'p1', name: 'My-Provider', type: 'openai-compatible', baseUrl: 'https://x.com', apiKeyRef: 'k', createdAt: '', updatedAt: '' }];
+        }
+        if (method === 'provider.listModels') return models;
+        if (method === 'provider.updateModel') {
+          updates.push(args);
+          const patch = args[1] as {
+            name: string;
+            contextTokens?: number | null;
+            maxOutputTokens?: number | null;
+            supportsTools?: boolean;
+            supportsImages?: boolean;
+          };
+          models = [{
+            ...models[0]!,
+            name: patch.name,
+            contextTokens: patch.contextTokens ?? null,
+            maxOutputTokens: patch.maxOutputTokens ?? null,
+            supportsTools: patch.supportsTools !== false,
+            supportsImages: patch.supportsImages === true,
+          }];
+          return { ok: true, model: models[0] };
+        }
+        return [];
+      },
+      onDidReceive: () => () => {},
+    };
+    render(<ProviderSettingsPage />);
+    await waitFor(() => expect(screen.getByTestId('provider-edit-models-p1')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('provider-edit-models-p1'));
+    await waitFor(() => expect(screen.getByTestId('provider-models-table')).toBeTruthy());
+    expect(screen.getByTestId('provider-model-caps-m1').textContent).toMatch(/工具|Tools/);
+    expect(screen.getByTestId('provider-model-caps-m1').querySelector('.provider-model-cap--off')).toBeTruthy();
+
+    const draftKey = screen.getByTestId(/^provider-model-add-row-/).getAttribute('data-testid')!
+      .replace('provider-model-add-row-', '');
+    expect(screen.getByTestId(`provider-model-tools-toggle-${draftKey}`).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId(`provider-model-images-toggle-${draftKey}`).getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(screen.getByTestId('provider-model-edit-m1'));
+    await waitFor(() => expect(screen.getByTestId(/^provider-model-editing-/)).toBeTruthy());
+    const editKey = screen.getByTestId(/^provider-model-add-row-/).getAttribute('data-testid')!
+      .replace('provider-model-add-row-', '');
+    expect((screen.getByTestId(`provider-model-id-${editKey}`) as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByTestId(`provider-model-name-${editKey}`) as HTMLInputElement).value).toBe('Model X');
+    fireEvent.change(screen.getByTestId(`provider-model-max-${editKey}`), { target: { value: '2048' } });
+    fireEvent.click(screen.getByTestId(`provider-model-images-toggle-${editKey}`));
+    fireEvent.click(screen.getByTestId(`provider-model-add-${editKey}`));
+    await waitFor(() => expect(updates.length).toBe(1));
+    expect(updates[0]).toEqual(['m1', expect.objectContaining({
+      name: 'Model X',
+      maxOutputTokens: 2048,
+      supportsImages: true,
+      supportsTools: true,
+    })]);
   });
 });

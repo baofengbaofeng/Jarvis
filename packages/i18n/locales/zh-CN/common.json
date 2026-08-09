@@ -223,11 +223,24 @@
       "modelContextUnit": "单位",
       "modelContextUnitK": "K",
       "modelContextUnitM": "M",
+      "modelMaxOutput": "最大输出 Token",
+      "modelMaxOutputPlaceholder": "留空则不限制 / 由服务商决定",
+      "modelSupportsTools": "支持工具",
+      "modelSupportsImages": "支持图像",
+      "modelCapabilities": "能力",
+      "editModel": "编辑模型",
+      "cancelEditModel": "取消",
+      "capTools": "工具",
+      "capImages": "图像",
+      "editingModel": "正在编辑：{{modelId}}（Model ID 不可改）",
       "deleteModelTitle": "删除模型",
       "deleteModelConfirm": "确定删除模型「{{name}}」？删除后不可恢复。",
       "addModel": "添加模型",
       "saveModel": "保存",
       "removeModel": "删除",
+      "notices": {
+        "toolsUnsupported": "当前模型未开启工具支持，将以无工具方式继续。"
+      },
       "type": "类型",
       "typeHint": "官方 Anthropic 或 Messages API 选 Anthropic；多数网关选 OpenAI。不确定时可选 Anthropic。",
       "typeOpenai": "OpenAI",
@@ -250,6 +263,8 @@
         "modelNameInvalid": "显示名称仅允许中文、英文字母、数字与 - _",
         "modelNameTooLong": "显示名称不能超过 {{max}} 个字符",
         "modelContextInvalid": "上下文容量须为正整数，且换算后不超过 100M",
+        "modelMaxOutputInvalid": "最大输出 Token 须为正整数",
+        "modelImagesUnsupported": "当前模型未开启图像支持",
         "secureStorage": "系统安全存储不可用，无法保存秘钥",
         "unknown": "保存失败，请检查填写内容后重试"
       }

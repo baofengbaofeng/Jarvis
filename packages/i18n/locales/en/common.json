@@ -223,11 +223,24 @@
       "modelContextUnit": "Unit",
       "modelContextUnitK": "K",
       "modelContextUnitM": "M",
+      "modelMaxOutput": "Max output tokens",
+      "modelMaxOutputPlaceholder": "Empty = unlimited / provider default",
+      "modelSupportsTools": "Supports tools",
+      "modelSupportsImages": "Supports images",
+      "modelCapabilities": "Capabilities",
+      "editModel": "Edit model",
+      "cancelEditModel": "Cancel",
+      "capTools": "Tools",
+      "capImages": "Images",
+      "editingModel": "Editing {{modelId}} (Model ID is read-only)",
       "deleteModelTitle": "Delete model",
       "deleteModelConfirm": "Delete model “{{name}}”? This cannot be undone.",
       "addModel": "Add model",
       "saveModel": "Save",
       "removeModel": "Delete",
+      "notices": {
+        "toolsUnsupported": "This model is configured without tool support; continuing without tools."
+      },
       "type": "Type",
       "typeHint": "Use Anthropic for official Anthropic or Messages API; most gateways use OpenAI. Prefer Anthropic if unsure.",
       "typeOpenai": "OpenAI",
@@ -250,6 +263,8 @@
         "modelNameInvalid": "Display name may only use Chinese characters, Latin letters, digits, hyphen, and underscore",
         "modelNameTooLong": "Display name must be at most {{max}} characters",
         "modelContextInvalid": "Context capacity must be a positive integer and at most 100M after conversion",
+        "modelMaxOutputInvalid": "Max output tokens must be a positive integer",
+        "modelImagesUnsupported": "This model is configured without image support",
         "secureStorage": "Secure storage is unavailable; token cannot be saved",
         "unknown": "Save failed. Check the form and try again"
       }
