@@ -62,16 +62,24 @@ export function initIpcSubscriptions(): void {
   window.jarvis.onDidReceive(IpcEvent.chatDone, (p) => {
     const { sessionId, error } = p as { sessionId: string; error?: string };
     if (sessionId !== useChatStore.getState().sessionId) return;
-    useChatStore.getState().finishStream(undefined, error);
+    const localized =
+      error === 'MODEL_IMAGES_UNSUPPORTED'
+        ? i18n.t('settings.provider.errors.modelImagesUnsupported')
+        : error;
+    useChatStore.getState().finishStream(undefined, localized);
   });
 
   window.jarvis.onDidReceive(IpcEvent.taskLog, (p) => {
     const { id, line } = p as { id: string; line: string };
     if (id !== useTaskStore.getState().activeTaskId) return;
-    useTaskStore.getState().appendLog(line);
+    const localized =
+      line === 'MODEL_TOOLS_UNSUPPORTED'
+        ? i18n.t('settings.provider.notices.toolsUnsupported')
+        : line;
+    useTaskStore.getState().appendLog(localized);
     const chat = useChatStore.getState();
     if (chat.streamingTaskSessionId !== chat.sessionId) return;
-    chat.appendDelta(line);
+    chat.appendDelta(localized);
   });
 
   window.jarvis.onDidReceive(IpcEvent.taskComplete, (p) => {
