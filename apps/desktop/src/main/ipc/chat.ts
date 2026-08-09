@@ -2,8 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { IpcEvent } from '@jarvis/protocol';
-import { createChatService } from '@jarvis/core';
-import { ModelRouter } from '@jarvis/core';
+import { contentHasImages, createChatService, gateModelCapabilities, ModelRouter } from '@jarvis/core';
 import type { MessageContent } from '@jarvis/core';
 import type { SecureStorage } from '../secrets/SecureStorage';
 import type { AgentConfig, ChatRole } from '@jarvis/protocol';
@@ -82,7 +81,9 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
       const history = await chatService.loadMessages(sessionId);
       const agent = await dbAdapter.loadAgent(agentId);
       const binding = db.prepare(`
-        SELECT p.*, m.model_id AS api_model_id, m.enabled AS model_enabled, p.enabled AS provider_enabled
+        SELECT p.*, m.model_id AS api_model_id, m.enabled AS model_enabled, p.enabled AS provider_enabled,
+               m.max_output_tokens AS max_output_tokens, m.supports_tools AS supports_tools,
+               m.supports_images AS supports_images
         FROM providers p JOIN models m ON m.provider_id = p.id WHERE m.id = ?
       `).get(agent.modelId) as Record<string, unknown> | undefined;
       if (!binding) throw new Error('agent has no valid model/provider binding');
@@ -90,6 +91,20 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
       if (Number(binding.model_enabled ?? 1) !== 1) throw new Error('MODEL_DISABLED');
       const provider = binding;
       const sendChunk = (chunk: unknown) => { getWindow()?.webContents.send(IpcEvent.chatDelta, { sessionId, chunk }); };
+      const modelMessages = chatService.buildModelMessages(history, agent.systemPrompt);
+      const gate = gateModelCapabilities({
+        capabilities: {
+          maxOutputTokens: (binding.max_output_tokens as number | null) ?? null,
+          supportsTools: Number(binding.supports_tools ?? 1) === 1,
+          supportsImages: Number(binding.supports_images ?? 0) === 1,
+        },
+        hasToolsAvailable: false,
+        hasImages: contentHasImages(content) || modelMessages.some((m) => contentHasImages(m.content)),
+      });
+      if (gate.error) {
+        getWindow()?.webContents.send(IpcEvent.chatDone, { sessionId, error: gate.error });
+        return { ok: false as const, error: gate.error };
+      }
 
       let full = '';
       try {
@@ -106,8 +121,9 @@ export function registerChatHandlers(db: Database.Database, secrets: SecureStora
             updatedAt: provider.updated_at as string,
           },
           modelId,
-          messages: chatService.buildModelMessages(history, agent.systemPrompt),
-          stream: true
+          messages: modelMessages,
+          stream: true,
+          maxTokens: gate.maxTokens,
         }, {
           apiKeyResolver: async (ref) => secrets.get(ref),
           onChunk: (c) => {

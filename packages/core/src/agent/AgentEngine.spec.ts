@@ -283,4 +283,84 @@ describe('AgentEngine', () => {
     expect(seenTools[0]).toEqual(['echo', 'mcp:fs:read']);
     expect(executed).not.toContain('mcp:other:x');
   });
+
+  it('strips tools and notices when modelCapabilities.supportsTools is false', async () => {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'echo', description: '', parameters: {} }, async () => ({ ok: true, output: 'x' }));
+    const seen: Array<{ tools?: unknown; maxTokens?: number }> = [];
+    const notices: string[] = [];
+    const chat = async (req: { tools?: unknown; maxTokens?: number }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      seen.push({ tools: req.tools, maxTokens: req.maxTokens });
+      opts.onChunk?.({ kind: 'delta', delta: 'ok' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 2 });
+    await engine.run({
+      agent,
+      messages: [{ role: 'user', content: 'go' }],
+      cwd: '/',
+      env: {},
+      apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' },
+      modelId: 'm1',
+      modelCapabilities: { supportsTools: false, supportsImages: false, maxOutputTokens: 2048 },
+      onNotice: (code) => { notices.push(code); },
+    });
+    expect(seen[0]?.tools).toBeUndefined();
+    expect(seen[0]?.maxTokens).toBe(2048);
+    expect(notices).toEqual(['MODEL_TOOLS_UNSUPPORTED']);
+  });
+
+  it('prefers engine cfg.maxTokens over model maxOutputTokens', async () => {
+    const reg = new ToolRegistry();
+    let maxTokens: number | undefined;
+    const chat = async (req: { maxTokens?: number }, opts: { onChunk?: (c: ChatChunk) => void }) => {
+      maxTokens = req.maxTokens;
+      opts.onChunk?.({ kind: 'delta', delta: 'ok' });
+      opts.onChunk?.({ kind: 'done' });
+      return { text: 'ok', usage: null };
+    };
+    const engine = new AgentEngine({ modelRouter: { chat }, toolRegistry: reg, maxSteps: 1, maxTokens: 1 });
+    await engine.run({
+      agent,
+      messages: [{ role: 'user', content: 'go' }],
+      cwd: '/',
+      env: {},
+      apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' },
+      modelId: 'm1',
+      modelCapabilities: { maxOutputTokens: 4096, supportsTools: true, supportsImages: false },
+    });
+    expect(maxTokens).toBe(1);
+  });
+
+  it('throws MODEL_IMAGES_UNSUPPORTED when images are present and unsupported', async () => {
+    const reg = new ToolRegistry();
+    const engine = new AgentEngine({
+      modelRouter: {
+        chat: async () => {
+          throw new Error('should not chat');
+        },
+      },
+      toolRegistry: reg,
+      maxSteps: 1,
+    });
+    await expect(engine.run({
+      agent,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'see' },
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,AA' } },
+        ],
+      }],
+      cwd: '/',
+      env: {},
+      apiKey: 'sk',
+      provider: { type: 'openai-compatible', baseUrl: 'https://x.com' },
+      modelId: 'm1',
+      modelCapabilities: { supportsTools: true, supportsImages: false },
+    })).rejects.toThrow('MODEL_IMAGES_UNSUPPORTED');
+  });
 });

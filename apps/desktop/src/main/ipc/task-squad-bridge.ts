@@ -25,6 +25,7 @@ export interface ResolvedAgentRun {
   modelId: string;
   workspaceRoot: string;
   policy: import('@jarvis/core').SandboxPolicy;
+  modelCapabilities?: import('@jarvis/core').ModelCapabilityFields;
 }
 
 export interface SquadBridgeDeps {
@@ -55,8 +56,16 @@ export function createSquadRunner(deps: SquadBridgeDeps): SquadRunner {
     // CORE-19 / CORE-20: per-run visibility + MCP binding filter.
     const afterPlan = planVisibleTools(toolRegistry.list().map(t => t.name), run.agent.planOnly);
     const { visibleTools, toolFilter } = mcpVisibilityForAgent(db, agentId, afterPlan);
-    const result = await engine.run({ ...run, cwd: run.workspaceRoot, visibleTools, toolFilter });
-    return result.text;
+    let resultNotice: string | undefined;
+    const result = await engine.run({
+      ...run,
+      cwd: run.workspaceRoot,
+      visibleTools,
+      toolFilter,
+      onNotice: (code) => { resultNotice = code; },
+    });
+    // Soft-degrade notice is returned as a prefix so callers/UI can surface it.
+    return resultNotice ? `${resultNotice}\n${result.text}` : result.text;
   };
 
   const buildMemberPrompt = (subtask: string, context: string): string =>

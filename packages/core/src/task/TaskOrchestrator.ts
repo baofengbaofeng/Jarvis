@@ -2,6 +2,7 @@ import type { AgentConfig } from '@jarvis/protocol';
 import type { AgentEngine, EngineRunInput } from '../agent/AgentEngine';
 import type { SandboxPolicy } from '../sandbox/Sandbox';
 import type { ToolCall, ToolResult } from '../agent/types';
+import type { ModelCapabilityFields } from '../model/capabilities';
 import type { Usage } from '../model/types';
 import { transition, type TaskState } from './TaskStateMachine';
 
@@ -29,6 +30,7 @@ export interface SubmitInput {
   visibleTools?: string[];
   // CORE-20: run-scoped MCP/agent tool authorization predicate.
   toolFilter?: (name: string) => boolean;
+  modelCapabilities?: ModelCapabilityFields;
 }
 
 export interface TaskOrchestratorCallbacks {
@@ -172,6 +174,10 @@ export class TaskOrchestrator {
           waitIfPaused: () => this.waitIfPaused(input.id),
           onDelta: (d) => { this.cb.onLog?.(input.id, d); void this.store.appendLog(input.id, d); },
           onTool: (call, toolResult) => { this.cb.onTool?.(input.id, call, toolResult); },
+          onNotice: (code) => {
+            this.cb.onLog?.(input.id, code);
+            void this.store.appendLog(input.id, code);
+          },
         });
         // A paused task that nevertheless finishes must still transition to a
         // terminal state and fire onDone, or it would hang forever.

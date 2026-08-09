@@ -54,7 +54,19 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     const ctx = workspace.loadContext(agentId);
     const workspaceRoot = agent.workspaceId ?? '.';
     const messages = buildTaskMessages(ctx, agent, prompt, workspaceRoot, db, agent.id, memory);
-    const modelRow = db.prepare('SELECT m.model_id, p.base_url, p.type, p.api_key_ref FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?').get(agent.modelId) as { model_id: string; base_url: string; type: 'openai-compatible' | 'anthropic-compatible'; api_key_ref: string } | undefined;
+    const modelRow = db.prepare(`
+      SELECT m.model_id, m.max_output_tokens, m.supports_tools, m.supports_images,
+             p.base_url, p.type, p.api_key_ref
+      FROM models m JOIN providers p ON p.id = m.provider_id WHERE m.id = ?
+    `).get(agent.modelId) as {
+      model_id: string;
+      max_output_tokens: number | null;
+      supports_tools: number | null;
+      supports_images: number | null;
+      base_url: string;
+      type: 'openai-compatible' | 'anthropic-compatible';
+      api_key_ref: string;
+    } | undefined;
     if (!modelRow) throw new Error('agent has no valid model binding');
     const apiKey = await secrets.get(modelRow.api_key_ref);
     if (!apiKey) throw new Error('missing api key');
@@ -67,7 +79,22 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       allowCommands: savedPolicy?.allowCommands ?? [],
       allowDomains: savedPolicy?.allowDomains ?? []
     };
-    return { agent, messages, env, apiKey, provider: { type: modelRow.type, baseUrl: modelRow.base_url }, modelId: modelRow.model_id, workspaceRoot, policy };
+    const modelCapabilities = {
+      maxOutputTokens: modelRow.max_output_tokens ?? null,
+      supportsTools: Number(modelRow.supports_tools ?? 1) === 1,
+      supportsImages: Number(modelRow.supports_images ?? 0) === 1,
+    };
+    return {
+      agent,
+      messages,
+      env,
+      apiKey,
+      provider: { type: modelRow.type, baseUrl: modelRow.base_url },
+      modelId: modelRow.model_id,
+      workspaceRoot,
+      policy,
+      modelCapabilities,
+    };
   };
 
   const chatService = createChatService(createChatDbAdapter(db));
@@ -147,7 +174,7 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
     async create(_event: Electron.IpcMainInvokeEvent, args: { agentId: string; prompt: string; sessionId?: string }) {
       const { agentId, prompt, sessionId } = args;
       const id = randomUUID();
-      const { agent, messages, env, apiKey, provider, modelId, workspaceRoot, policy } = await resolveAgentRun(agentId, prompt);
+      const { agent, messages, env, apiKey, provider, modelId, workspaceRoot, policy, modelCapabilities } = await resolveAgentRun(agentId, prompt);
       await store.create(id, agentId);
       taskRuns.set(id, { agentId, modelId });
       await registerAgentMcpTools(db, toolRegistry, agentId, {
@@ -176,7 +203,10 @@ export function registerTaskHandlers(db: Database.Database, secrets: SecureStora
       if (agent.workspaceId) {
         await snapshotBeforeTask(agent.workspaceId, id, snapshotStore);
       }
-      orchestrator.submit({ id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider, modelId, workspaceRoot, policy, visibleTools, toolFilter });
+      orchestrator.submit({
+        id, agent, messages, cwd: agent.workspaceId ?? '.', env, apiKey, provider, modelId,
+        workspaceRoot, policy, visibleTools, toolFilter, modelCapabilities,
+      });
       return { id };
     },
     cancel: (_e: unknown, id: string) => orchestrator.cancel(id),

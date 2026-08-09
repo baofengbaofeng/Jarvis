@@ -134,4 +134,40 @@ describe('chat handlers', () => {
     expect(doneCalls).toHaveLength(1);
     expect(doneCalls[0][1]).toEqual({ sessionId: s.id });
   });
+
+  it('hard-fails when the model does not support images', async () => {
+    const send = vi.fn();
+    const getWin = () => ({ webContents: { send } }) as unknown as BrowserWindow;
+    const fakeRouter = {
+      chat: async () => {
+        throw new Error('should not call router');
+      },
+    } as unknown as ModelRouter;
+    const chat = registerChatHandlers(db, secrets, getWin, { router: fakeRouter });
+    const s = await chat.createSession('Img');
+    const now = new Date().toISOString();
+    const providerId = randomUUID();
+    const modelId = randomUUID();
+    const agentId = randomUUID();
+    db.prepare('INSERT INTO providers (id, name, type, base_url, api_key_ref, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+      .run(providerId, 'P', 'openai-compatible', 'https://x.com', `provider:${providerId}:key`, now, now);
+    db.prepare(
+      'INSERT INTO models (id, provider_id, model_id, name, supports_images, created_at) VALUES (?,?,?,?,?,?)',
+    ).run(modelId, providerId, 'm-1', 'M1', 0, now);
+    db.prepare(
+      'INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(agentId, 'A', `a-${agentId}`, '', 'sys', modelId, null, 128000, 0, now, now);
+
+    const r = await chat.send(fakeEvent, {
+      sessionId: s.id,
+      agentId,
+      content: [
+        { type: 'text', text: 'look' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,AA' } },
+      ],
+    });
+    expect(r).toEqual({ ok: false, error: 'MODEL_IMAGES_UNSUPPORTED' });
+    const doneCalls = send.mock.calls.filter((c) => c[0] === IpcEvent.chatDone);
+    expect(doneCalls[0]?.[1]).toEqual({ sessionId: s.id, error: 'MODEL_IMAGES_UNSUPPORTED' });
+  });
 });

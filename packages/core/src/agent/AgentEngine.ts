@@ -1,5 +1,7 @@
 import type { AgentConfig } from '@jarvis/protocol';
 import type { AssistantToolCallMessage, ChatChunk, ChatRequest, ModelMessage, ToolResultMessage, Usage } from '../model/types';
+import { gateModelCapabilities, type ModelCapabilityFields } from '../model/capabilities';
+import { contentHasImages } from '../office/content';
 import { sumUsage } from '../model/usage';
 import type { ToolRegistry } from './ToolRegistry';
 import type { ApprovalRequest, TaskResult, ToolCall, ToolResult } from './types';
@@ -19,7 +21,7 @@ export interface AgentEngineConfig {
 
 export interface EngineRunInput {
   agent: AgentConfig;
-  messages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }>;
+  messages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: ModelMessage['content'] }>;
   cwd: string;
   env: Record<string, string>;
   apiKey: string;
@@ -42,6 +44,10 @@ export interface EngineRunInput {
   // CORE-22: cooperative pause — resolves when the run is not paused (or when
   // resumed). Awaited before each model step and each tool execution.
   waitIfPaused?: () => Promise<void>;
+  /** Per-model capability flags from the bound Model row. */
+  modelCapabilities?: ModelCapabilityFields;
+  /** Soft notices (e.g. tools stripped); called at most once per run. */
+  onNotice?: (code: 'MODEL_TOOLS_UNSUPPORTED') => void;
 }
 
 export class AgentEngine {
@@ -54,6 +60,7 @@ export class AgentEngine {
     let toolCalls = 0;
     const usageParts: Usage[] = [];
     let finalText = '';
+    let noticedToolsUnsupported = false;
 
     for (let step = 0; step < this.maxSteps; step++) {
       // CORE-22: do not start another model call while the task is paused.
@@ -66,6 +73,17 @@ export class AgentEngine {
         if (toolFilter && !toolFilter(t.name)) return false;
         return true;
       });
+      const gate = gateModelCapabilities({
+        capabilities: input.modelCapabilities ?? {},
+        explicitMaxTokens: this.cfg.maxTokens,
+        hasToolsAvailable: visible.length > 0,
+        hasImages: working.some((m) => contentHasImages(m.content)),
+      });
+      if (gate.error) throw new Error(gate.error);
+      if (gate.notice && !noticedToolsUnsupported) {
+        noticedToolsUnsupported = true;
+        input.onNotice?.(gate.notice);
+      }
       const req: ChatRequest = {
         provider: { id: agent.id, name: agent.name, type: input.provider.type, baseUrl: input.provider.baseUrl, apiKeyRef: '', createdAt: '', updatedAt: '' },
         modelId: input.modelId,
@@ -73,8 +91,8 @@ export class AgentEngine {
         // resolves, and an adapter must serialize the transcript it was given.
         messages: [...working],
         stream: true,
-        maxTokens: this.cfg.maxTokens,
-        ...(visible.length > 0 ? { tools: visible, toolChoice: 'auto' as const } : {})
+        maxTokens: gate.maxTokens,
+        ...(gate.includeTools ? { tools: visible, toolChoice: 'auto' as const } : {})
       };
 
       let callCalls: ToolCall[] = [];
