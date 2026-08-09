@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
 import type { ClientRequest } from 'node:http';
+import type { LookupAddress, LookupOptions } from 'node:dns';
 import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest';
 
 const httpsRequestMock = vi.fn();
@@ -154,6 +155,28 @@ describe('SafeUrlPolicy (https.request path)', () => {
         try {
           expect(err).toBeNull();
           expect(address).toBe('203.0.113.10');
+          resolve();
+        } catch (e) { reject(e); }
+      });
+    });
+  });
+
+  it('returns address arrays when Node asks lookup with all:true', async () => {
+    emitResponse(200, { body: Buffer.from('ok') });
+    const policy = new SafeUrlPolicy({ lookup: PUBLIC_LOOKUP });
+    await policy.request('https://public.example/', {}, LIMITS);
+    const options = httpsRequestMock.mock.calls[0]![0] as {
+      lookup: (
+        host: string,
+        opts: LookupOptions,
+        cb: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,
+      ) => void;
+    };
+    await new Promise<void>((resolve, reject) => {
+      options.lookup('public.example', { all: true }, (err, address) => {
+        try {
+          expect(err).toBeNull();
+          expect(address).toEqual([{ address: '203.0.113.10', family: 4 }]);
           resolve();
         } catch (e) { reject(e); }
       });

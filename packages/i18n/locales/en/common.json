@@ -347,7 +347,9 @@
     "wipe_keychain": "Also delete API keys from the Keychain",
     "wipe_now": "Wipe now",
     "wipe_msg": "Wipe result",
-    "local_only": "Local-only mode (data never leaves this machine)"
+    "local_only": "Local-only mode (data never leaves this machine)",
+    "allow_fake_ip": "Allow proxy Fake-IP DNS (198.18.0.0/15)",
+    "allow_fake_ip_hint": "Enable when a system proxy (e.g. Clash Fake-IP) resolves public APIs to 198.18.x.x. Keep off unless you need it — it relaxes outbound SSRF checks for that range only."
   },
   "configTransfer": {
     "title": "Config Import / Export",

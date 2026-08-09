@@ -14,6 +14,7 @@ const ALLOWED_KEYS = new Set([
   'theme',
   'proxy_json',
   'data_policy.local_only',
+  'network.allow_fake_ip',
   'search_providers',
   'image.api_key_ref',
   'image.base_url',
@@ -52,6 +53,12 @@ export function validateSettingsValue(key: string, value: unknown): { ok: true; 
       return { ok: false, error: 'SETTINGS_CONCURRENCY_INVALID' };
     }
     return { ok: true, value: Math.floor(value) };
+  }
+  if (key === 'network.allow_fake_ip') {
+    if (typeof value !== 'boolean') {
+      return { ok: false, error: 'SETTINGS_NETWORK_INVALID' };
+    }
+    return { ok: true, value };
   }
   if (key === 'mcp.auto_start') {
     if (typeof value !== 'boolean') return { ok: false, error: 'SETTINGS_MCP_INVALID' };

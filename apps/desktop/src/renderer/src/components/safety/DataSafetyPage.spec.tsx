@@ -10,13 +10,18 @@ const invoke = vi.fn(async (m: string) => {
   if (m === 'wipe.run') return { deleted: {}, keychainDeleted: 0, workspaceRemoved: false, vacuumed: true };
   return undefined;
 });
+const settingsGet = vi.fn(async () => undefined);
 const settingsSet = vi.fn(async () => {});
 
 beforeAll(async () => {
   await i18n.use(initReactI18next).init({ resources: getResources(), lng: 'zh-CN', ns: ['common'], defaultNS: 'common' });
 });
 
-beforeEach(() => { (window as any).jarvis = { invoke, settingsSet }; });
+beforeEach(() => {
+  settingsGet.mockReset().mockResolvedValue(undefined);
+  settingsSet.mockReset();
+  (window as any).jarvis = { invoke, settingsGet, settingsSet };
+});
 
 afterEach(() => { cleanup(); });
 
@@ -44,5 +49,23 @@ describe('DataSafetyPage', () => {
     await waitFor(() => expect(screen.getByTestId('local-only')).toBeTruthy());
     fireEvent.click(screen.getByTestId('local-only'));
     await waitFor(() => expect(settingsSet).toHaveBeenCalledWith('data_policy', { local_only: true }));
+  });
+
+  it('persists network.allow_fake_ip for Clash Fake-IP DNS', async () => {
+    settingsSet.mockResolvedValue({ ok: true });
+    render(<DataSafetyPage />);
+    await waitFor(() => expect(screen.getByTestId('allow-fake-ip')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('allow-fake-ip'));
+    await waitFor(() => expect(settingsSet).toHaveBeenCalledWith('network.allow_fake_ip', true));
+    expect((screen.getByTestId('allow-fake-ip') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('reverts allow-fake-ip when settings.set rejects the key', async () => {
+    settingsSet.mockResolvedValue({ ok: false, error: 'SETTINGS_KEY_INVALID' });
+    render(<DataSafetyPage />);
+    await waitFor(() => expect(screen.getByTestId('allow-fake-ip')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('allow-fake-ip'));
+    await waitFor(() => expect(settingsSet).toHaveBeenCalledWith('network.allow_fake_ip', true));
+    await waitFor(() => expect((screen.getByTestId('allow-fake-ip') as HTMLInputElement).checked).toBe(false));
   });
 });

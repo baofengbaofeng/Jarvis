@@ -6,6 +6,8 @@ import { isRestrictedAddress, type SafeFetchLimits, type SafeHttpClient } from '
 
 export interface SafeUrlPolicyOptions {
   allowLoopbackDev?: boolean;
+  /** Static or live reader — true allows Clash-style Fake-IP (198.18.0.0/15). */
+  allowFakeIp?: boolean | (() => boolean);
   lookup?: (hostname: string) => Promise<LookupAddress[]>;
   fetchImpl?: typeof fetch;
 }
@@ -23,13 +25,19 @@ const DEFAULT_LIMITS: SafeFetchLimits = {
 
 export class SafeUrlPolicy implements SafeHttpClient {
   private readonly allowLoopback: boolean;
+  private readonly allowFakeIp: boolean | (() => boolean);
   private readonly lookupFn: (hostname: string) => Promise<LookupAddress[]>;
   private readonly fetchImpl?: typeof fetch;
 
   constructor(opts: SafeUrlPolicyOptions = {}) {
     this.allowLoopback = opts.allowLoopbackDev ?? false;
+    this.allowFakeIp = opts.allowFakeIp ?? false;
     this.lookupFn = opts.lookup ?? ((host) => dnsLookup(host, { all: true, verbatim: true }));
     this.fetchImpl = opts.fetchImpl;
+  }
+
+  private resolveAllowFakeIp(): boolean {
+    return typeof this.allowFakeIp === 'function' ? this.allowFakeIp() : this.allowFakeIp;
   }
 
   async assertAllowed(raw: string, signal?: AbortSignal): Promise<URL> {
@@ -86,8 +94,9 @@ export class SafeUrlPolicy implements SafeHttpClient {
     if (url.username || url.password) throw new Error('URL_CREDENTIALS_FORBIDDEN');
 
     const addresses = await this.lookupFn(url.hostname);
+    const allowFakeIp = this.resolveAllowFakeIp();
     for (const entry of addresses) {
-      if (isRestrictedAddress(entry.address, { allowLoopback: this.allowLoopback })) {
+      if (isRestrictedAddress(entry.address, { allowLoopback: this.allowLoopback, allowFakeIp })) {
         throw new Error('URL_PRIVATE_ADDRESS');
       }
     }
@@ -108,13 +117,34 @@ export class SafeUrlPolicy implements SafeHttpClient {
     return new Promise<Response>((resolve, reject) => {
       const { url, addresses } = target;
       let index = 0;
+      // Node's net/https path calls lookup with `{ all: true }` and expects an
+      // address *array* as the second callback arg — the single-string form leaves
+      // `address` undefined and surfaces "Invalid IP address: undefined".
       const lookup = (
         _hostname: string,
-        _options: LookupOptions | number,
-        callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+        options: LookupOptions | number | undefined,
+        callback?: (
+          err: NodeJS.ErrnoException | null,
+          address: string | LookupAddress[],
+          family?: number,
+        ) => void,
       ) => {
+        let opts: LookupOptions = {};
+        let cb = callback;
+        if (typeof options === 'function') {
+          cb = options as typeof callback;
+        } else if (typeof options === 'number') {
+          opts = { family: options };
+        } else if (options) {
+          opts = options;
+        }
         const entry = addresses[index++] ?? addresses[addresses.length - 1]!;
-        callback(null, entry.address, entry.family);
+        if (!cb) return;
+        if (opts.all) {
+          cb(null, [{ address: entry.address, family: entry.family }]);
+          return;
+        }
+        cb(null, entry.address, entry.family);
       };
 
       const options: nodeHttps.RequestOptions = {
@@ -207,6 +237,7 @@ async function readLimitedResponse(
 export function createDefaultSafeUrlPolicy(): SafeUrlPolicy {
   return new SafeUrlPolicy({
     allowLoopbackDev: process.env['JARVIS_ALLOW_LOOPBACK_URLS'] === '1',
+    allowFakeIp: process.env['JARVIS_ALLOW_FAKE_IP_URLS'] === '1',
   });
 }
 

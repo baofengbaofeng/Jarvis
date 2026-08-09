@@ -97,6 +97,8 @@ export class IpcRouter {
     const settings = createSettingsStore(this.db);
     const safeUrlPolicy = new SafeUrlPolicy({
       allowLoopbackDev: process.env['JARVIS_ALLOW_LOOPBACK_URLS'] === '1',
+      allowFakeIp: () =>
+        process.env['JARVIS_ALLOW_FAKE_IP_URLS'] === '1' || settings.get('network.allow_fake_ip') === true,
     });
     setDefaultWebSearchHttp(safeUrlPolicy);
     const secrets = createSecureStorage();

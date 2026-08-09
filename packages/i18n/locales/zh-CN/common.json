@@ -349,7 +349,9 @@
     "wipe_keychain": "同时删除 Keychain 中的 API Key",
     "wipe_now": "立即擦除",
     "wipe_msg": "擦除结果",
-    "local_only": "纯本地模式（数据不出本机）"
+    "local_only": "纯本地模式（数据不出本机）",
+    "allow_fake_ip": "允许代理 Fake-IP DNS（198.18.0.0/15）",
+    "allow_fake_ip_hint": "当系统代理（如 Clash Fake-IP）把公网 API 解析到 198.18.x.x 时开启。默认关闭；仅放宽该网段的出站 SSRF 检查。"
   },
   "configTransfer": {
     "title": "配置导入 / 导出",

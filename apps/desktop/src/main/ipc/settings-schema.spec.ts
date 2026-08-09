@@ -46,4 +46,10 @@ describe('settings-schema (DESK-02)', () => {
     expect(validateSettingsValue('mcp.global_env', { A: '1' }).ok).toBe(true);
     expect(validateSettingsValue('mcp.log_level', 'trace').ok).toBe(false);
   });
+
+  it('accepts boolean network.allow_fake_ip', () => {
+    expect(validateSettingsValue('network.allow_fake_ip', true)).toEqual({ ok: true, value: true });
+    expect(validateSettingsValue('network.allow_fake_ip', false)).toEqual({ ok: true, value: false });
+    expect(validateSettingsValue('network.allow_fake_ip', 'yes').ok).toBe(false);
+  });
 });

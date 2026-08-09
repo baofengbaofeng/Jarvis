@@ -9,16 +9,23 @@ export interface SafeHttpClient {
   request(url: string, init: RequestInit | undefined, limits: SafeFetchLimits): Promise<Response>;
 }
 
+export interface RestrictedAddressOptions {
+  allowLoopback?: boolean;
+  /** When true, allow RFC 2544 benchmark / common proxy Fake-IP range 198.18.0.0/15. */
+  allowFakeIp?: boolean;
+}
+
 /** Returns true when the address must be blocked for outbound HTTPS (SSRF). */
-export function isRestrictedAddress(address: string, opts: { allowLoopback?: boolean } = {}): boolean {
+export function isRestrictedAddress(address: string, opts: RestrictedAddressOptions = {}): boolean {
   const allowLoopback = opts.allowLoopback ?? false;
+  const allowFakeIp = opts.allowFakeIp ?? false;
 
   // IPv4-mapped IPv6: ::ffff:x.x.x.x
   const v4Mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (v4Mapped) return isRestrictedIPv4(v4Mapped[1], allowLoopback);
+  if (v4Mapped) return isRestrictedIPv4(v4Mapped[1], allowLoopback, allowFakeIp);
 
-  if (address.includes(':')) return isRestrictedIPv6(address, allowLoopback);
-  return isRestrictedIPv4(address, allowLoopback);
+  if (address.includes(':')) return isRestrictedIPv6(address, allowLoopback, allowFakeIp);
+  return isRestrictedIPv4(address, allowLoopback, allowFakeIp);
 }
 
 function parseIPv4(octets: string): number {
@@ -34,7 +41,7 @@ function inRange(ip: number, base: string, bits: number): boolean {
   return (ip & mask) === (b & mask);
 }
 
-function isRestrictedIPv4(address: string, allowLoopback: boolean): boolean {
+function isRestrictedIPv4(address: string, allowLoopback: boolean, allowFakeIp: boolean): boolean {
   const ip = parseIPv4(address);
   if (ip < 0) return true;
 
@@ -46,7 +53,7 @@ function isRestrictedIPv4(address: string, allowLoopback: boolean): boolean {
   if (inRange(ip, '172.16.0.0', 12)) return true;
   if (inRange(ip, '192.0.0.0', 24)) return true;
   if (inRange(ip, '192.168.0.0', 16)) return true;
-  if (inRange(ip, '198.18.0.0', 15)) return true;
+  if (!allowFakeIp && inRange(ip, '198.18.0.0', 15)) return true;
   if (inRange(ip, '224.0.0.0', 4)) return true;
   if (inRange(ip, '240.0.0.0', 4)) return true;
   return false;
@@ -84,7 +91,7 @@ function ipv6PrefixMatch(value: bigint, prefixBits: number, prefixValue: bigint)
   return (value >> shift) === (prefixValue >> shift);
 }
 
-function isRestrictedIPv6(address: string, allowLoopback: boolean): boolean {
+function isRestrictedIPv6(address: string, allowLoopback: boolean, allowFakeIp: boolean): boolean {
   const value = expandIPv6(address);
   if (value === null) return true;
 
@@ -105,7 +112,7 @@ function isRestrictedIPv6(address: string, allowLoopback: boolean): boolean {
   if ((value & (0xffffn << 96n)) === mappedBase) {
     const v4 = Number(value & 0xffffffffn);
     const octets = [(v4 >>> 24) & 255, (v4 >>> 16) & 255, (v4 >>> 8) & 255, v4 & 255].join('.');
-    return isRestrictedIPv4(octets, allowLoopback);
+    return isRestrictedIPv4(octets, allowLoopback, allowFakeIp);
   }
 
   return false;
