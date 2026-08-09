@@ -42,6 +42,17 @@ export const MCP_FIELD_MAX = {
   name: 64,
   command: 512,
   args: 2048,
+  cwd: 1024,
+  url: 2048,
+  description: 512,
+  envKeys: 64,
+  envKeyLen: 128,
+  envValue: 4096,
+  headerKeys: 32,
+  headerKeyLen: 128,
+  toolList: 128,
+  toolName: 128,
+  timeoutMsMax: 600_000,
 } as const;
 
 /** Max lengths for Skills import / display fields (IPC + UI). */

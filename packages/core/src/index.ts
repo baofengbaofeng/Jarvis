@@ -24,6 +24,7 @@ export * from './mcp/McpClient';
 export * from './mcp/transport';
 export * from './mcp/register';
 export * from './mcp/toolFilter';
+export * from './mcp/config';
 export * from './tools';
 export * from './skills/SkillsLoader';
 export * from './plugins/PluginHost';
