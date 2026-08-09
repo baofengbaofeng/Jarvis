@@ -29,6 +29,7 @@ export * from './mcp/secrets';
 export * from './mcp/toolPolicy';
 export * from './mcp/sseTransport';
 export * from './mcp/httpTransport';
+export * from './mcp/concurrency';
 export * from './tools';
 export * from './skills/SkillsLoader';
 export * from './plugins/PluginHost';

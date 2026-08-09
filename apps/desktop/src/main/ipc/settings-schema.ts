@@ -27,6 +27,11 @@ const ALLOWED_KEYS = new Set([
   'onboarding.completed',
   // Renderer settings-store / init-store use this key (legacy alias of onboarding.completed).
   'onboarding_done',
+  'mcp.auto_start',
+  'mcp.log_level',
+  'mcp.max_concurrent_tools',
+  'mcp.tool_warning_threshold',
+  'mcp.global_env',
 ]);
 
 export function isAllowedSettingsKey(key: string): boolean {
@@ -47,6 +52,34 @@ export function validateSettingsValue(key: string, value: unknown): { ok: true; 
       return { ok: false, error: 'SETTINGS_CONCURRENCY_INVALID' };
     }
     return { ok: true, value: Math.floor(value) };
+  }
+  if (key === 'mcp.auto_start') {
+    if (typeof value !== 'boolean') return { ok: false, error: 'SETTINGS_MCP_INVALID' };
+    return { ok: true, value };
+  }
+  if (key === 'mcp.log_level') {
+    if (value !== 'error' && value !== 'warn' && value !== 'info' && value !== 'debug') {
+      return { ok: false, error: 'SETTINGS_MCP_INVALID' };
+    }
+    return { ok: true, value };
+  }
+  if (key === 'mcp.max_concurrent_tools') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 1 || value > 16) {
+      return { ok: false, error: 'SETTINGS_MCP_INVALID' };
+    }
+    return { ok: true, value: Math.floor(value) };
+  }
+  if (key === 'mcp.tool_warning_threshold') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 1000) {
+      return { ok: false, error: 'SETTINGS_MCP_INVALID' };
+    }
+    return { ok: true, value: Math.floor(value) };
+  }
+  if (key === 'mcp.global_env') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, error: 'SETTINGS_MCP_INVALID' };
+    }
+    return { ok: true, value };
   }
   return { ok: true, value };
 }

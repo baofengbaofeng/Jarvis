@@ -11,12 +11,14 @@ import {
   filterMcpToolNames,
   toClaudeMcpExport,
   fromClaudeMcpImport,
+  normalizeAutoApprove,
   type ClaudeMcpDocument,
   type McpClient,
   type McpServerConfigJson,
   type SecretOrPlain,
   type SpawnImpl,
   type ToolRegistry,
+  type RegisterMcpToolsOpts,
 } from '@jarvis/core';
 import { assertMcpCommand } from './mcpCommand';
 import { openMcpClientForServer, type McpSecretStore } from './mcpOpen';
@@ -380,6 +382,24 @@ export interface McpRegistrationDeps {
   globalEnv?: Record<string, SecretOrPlain>;
   fetchImpl?: typeof fetch;
   assertAllowedUrl?: (url: string) => Promise<void>;
+  registerOpts?: RegisterMcpToolsOpts;
+}
+
+/** Collect normalized autoApprove tool ids for servers bound to an agent. */
+export function listAutoApproveToolIds(db: Database.Database, agentId: string): string[] {
+  const rows = db.prepare('SELECT name, config_json, enabled FROM mcp_servers').all() as Array<{
+    name: string;
+    config_json: string;
+    enabled?: number;
+  }>;
+  const out: string[] = [];
+  for (const s of rows) {
+    if (!asEnabled(s.enabled)) continue;
+    const cfg = normalizeMcpServerConfig(JSON.parse(s.config_json ?? '{}'));
+    if (!cfg.agentIds?.includes(agentId)) continue;
+    out.push(...normalizeAutoApprove(s.name, cfg.autoApprove));
+  }
+  return out;
 }
 
 export function listBoundMcpServerNames(db: Database.Database, agentId: string): string[] {
@@ -429,18 +449,53 @@ export async function registerAgentMcpTools(
     if (!cfg.agentIds?.includes(agentId)) continue;
     if (mcpClientCache.has(s.id)) {
       const cached = mcpClientCache.get(s.id)!;
-      await registerMcpTools(toolRegistry, cached.client, s.name);
+      await registerMcpTools(toolRegistry, cached.client, s.name, {
+        ...deps.registerOpts,
+        allowedTools: cfg.allowedTools,
+        blockedTools: cfg.blockedTools,
+      });
       continue;
     }
     let client: McpClient | undefined;
     try {
       client = await openMcpClientForServer({ name: s.name, transport: s.transport, config: cfg }, deps);
       await client.initialize();
-      await registerMcpTools(toolRegistry, client, s.name);
+      await registerMcpTools(toolRegistry, client, s.name, {
+        ...deps.registerOpts,
+        allowedTools: cfg.allowedTools,
+        blockedTools: cfg.blockedTools,
+      });
       mcpClientCache.set(s.id, { client, serverName: s.name });
     } catch (e) {
       if (client) { try { client.close(); } catch { /* ignore */ } }
       console.error(`mcp: failed to register server ${s.name}`, e);
+    }
+  }
+}
+
+/** Warm-connect enabled servers (mcp.auto_start). Failures are logged, non-fatal. */
+export async function warmStartMcpServers(
+  db: Database.Database,
+  deps: McpRegistrationDeps = {},
+): Promise<void> {
+  const rows = db.prepare('SELECT id, name, transport, config_json, enabled FROM mcp_servers').all() as Array<{
+    id: string;
+    name: string;
+    transport: string;
+    config_json: string;
+    enabled?: number;
+  }>;
+  for (const s of rows) {
+    if (!asEnabled(s.enabled) || mcpClientCache.has(s.id)) continue;
+    const cfg = normalizeMcpServerConfig(JSON.parse(s.config_json ?? '{}'));
+    let client: McpClient | undefined;
+    try {
+      client = await openMcpClientForServer({ name: s.name, transport: s.transport, config: cfg }, deps);
+      await client.initialize();
+      mcpClientCache.set(s.id, { client, serverName: s.name });
+    } catch (e) {
+      if (client) { try { client.close(); } catch { /* ignore */ } }
+      console.error(`mcp: auto_start failed for ${s.name}`, e);
     }
   }
 }

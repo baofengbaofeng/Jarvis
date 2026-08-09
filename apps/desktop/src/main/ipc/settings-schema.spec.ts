@@ -37,4 +37,13 @@ describe('settings-schema (DESK-02)', () => {
     expect(validateSettingsValue('concurrency.per_agent', 0).ok).toBe(false);
     expect(validateSettingsValue('concurrency.per_agent', 4)).toEqual({ ok: true, value: 4 });
   });
+
+  it('accepts mcp global settings keys', () => {
+    expect(validateSettingsValue('mcp.auto_start', true)).toEqual({ ok: true, value: true });
+    expect(validateSettingsValue('mcp.log_level', 'debug')).toEqual({ ok: true, value: 'debug' });
+    expect(validateSettingsValue('mcp.max_concurrent_tools', 3)).toEqual({ ok: true, value: 3 });
+    expect(validateSettingsValue('mcp.tool_warning_threshold', 10000)).toEqual({ ok: true, value: 10000 });
+    expect(validateSettingsValue('mcp.global_env', { A: '1' }).ok).toBe(true);
+    expect(validateSettingsValue('mcp.log_level', 'trace').ok).toBe(false);
+  });
 });

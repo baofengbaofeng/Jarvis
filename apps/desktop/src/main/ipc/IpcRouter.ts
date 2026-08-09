@@ -10,7 +10,7 @@ import { validateSettingsValue, requiresSystemConfirm } from './settings-schema'
 import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
 import { createAgentTemplatesIpc } from './agent-templates';
-import { createMcpStore, testMcpServerById, type McpServerInput } from './mcp';
+import { createMcpStore, testMcpServerById, warmStartMcpServers, type McpServerInput } from './mcp';
 import { createSkillsStore } from './skills';
 import { createWorkspaceIpc, createWorkspaceService } from './workspace';
 import { createTemplatesStore } from './templates';
@@ -703,6 +703,14 @@ export class IpcRouter {
     // 'squad:event' so the squad timeline (TimelineView) streams live. Same
     // disposeFns lifecycle as the persist subscription.
     this.disposeFns.push(createSquadEventPush(getMessageBus(), () => this.opts.getMainWindow?.() ?? null));
+
+    if (settings.get('mcp.auto_start') !== false) {
+      void warmStartMcpServers(this.db, {
+        secrets,
+        assertAllowedUrl: async (url) => { await safeUrlPolicy.assertAllowed(url); },
+        globalEnv: (settings.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+      });
+    }
   }
 
   listen(): void {

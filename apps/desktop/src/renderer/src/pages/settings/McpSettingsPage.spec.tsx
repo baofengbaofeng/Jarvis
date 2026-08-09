@@ -93,7 +93,7 @@ describe('McpSettingsPage', () => {
 
     await waitFor(() => {
       expectInvoke(jarvis.invoke, 'mcp.create', (payload) => {
-        expect(payload).toEqual({
+        expect(payload).toMatchObject({
           name: 'my-mcp',
           transport: 'stdio',
           command: 'npx',

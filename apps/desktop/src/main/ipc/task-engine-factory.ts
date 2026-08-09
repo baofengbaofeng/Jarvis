@@ -30,6 +30,7 @@ import { createCodeIndexAdapter } from './coding';
 import { appendAudit } from './task-messages';
 import { createDefaultSafeUrlPolicy } from '../security/SafeUrlPolicy';
 import type { SafeHttpClient } from '@jarvis/core';
+import { listAutoApproveToolIds } from './mcp';
 
 export interface TaskEngineDeps {
   chatFn?: EngineChatFn;
@@ -118,7 +119,8 @@ export function createTaskEngineRuntime(
         return false;
       }
       const grants = db.prepare('SELECT server_id, tool_name FROM mcp_grants WHERE granted = 1 AND (agent_id = ? OR agent_id = ?)').all(req.agent.id, '') as Array<{ server_id: string; tool_name: string }>;
-      const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`)];
+      const autoApprove = listAutoApproveToolIds(db, req.agent.id);
+      const allowAlways = ['read_file', 'list_dir', ...grants.map(g => `mcp:${g.server_id}:${g.tool_name}`), ...autoApprove];
       const sensitivity = toolRegistry.get(req.toolName)?.sensitivity;
       const decision = approvalGate.evaluate(req.toolName, req.args, { allowAlways, sensitiveCommands: [] }, { sensitivity });
       if (decision === 'allow') return true;
