@@ -695,10 +695,13 @@ describe('approval gate wiring (M3 Task 7)', () => {
     };
     const tasks = registerTaskHandlers(db, secrets, getWindow, createAgentStore(db), { chatFn: fn });
     const agentId = seedAgent();
-    // CORE-20: unbound MCP tools are filtered before approval — bind by name.
+    // CORE-20: unbound MCP tools are filtered before approval — bind via agent.mcpServerIds.
     // Use non-stdio transport so create() does not spawn a real child process.
+    const serverId = randomUUID();
     db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
-      .run(randomUUID(), 'fs', 'sse', JSON.stringify({ agentIds: [agentId] }), new Date().toISOString());
+      .run(serverId, 'fs', 'sse', JSON.stringify({}), new Date().toISOString());
+    db.prepare('UPDATE agents SET mcp_server_ids_json = ? WHERE id = ?')
+      .run(JSON.stringify([serverId]), agentId);
     await tasks.create(fakeEvent, { agentId, prompt: 'go' });
     await vi.waitFor(() => expect(approvals.length).toBe(1));
     expect(approvals[0].toolName).toBe('mcp:fs:read');

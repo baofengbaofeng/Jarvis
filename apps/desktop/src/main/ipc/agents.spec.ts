@@ -21,6 +21,22 @@ describe('agent store', () => {
     expect(updated.systemPrompt).toBe('new prompt');
   });
 
+  it('persists mcpServerIds and keeps them across unrelated patches', async () => {
+    const store = createAgentStore(db);
+    const a = store.create({
+      name: 'A',
+      systemPrompt: '',
+      modelId: null,
+      workspaceId: null,
+      mcpServerIds: ['srv1', 'srv2'],
+    });
+    expect(a.mcpServerIds).toEqual(['srv1', 'srv2']);
+    const renamed = store.update(a.id, { name: 'B' });
+    expect(renamed.mcpServerIds).toEqual(['srv1', 'srv2']);
+    const cleared = store.update(a.id, { mcpServerIds: [] });
+    expect(cleared.mcpServerIds).toEqual([]);
+  });
+
   it('defaults context_passing to full and persists an explicit strategy', async () => {
     const store = createAgentStore(db);
     // Default when not provided.

@@ -2,12 +2,20 @@ import { create } from 'zustand';
 import type { AgentConfig } from '@jarvis/protocol';
 import { IpcChannel } from '@jarvis/protocol';
 
+type AgentWrite = {
+  name: string;
+  systemPrompt: string;
+  modelId: string | null;
+  workspaceId: string | null;
+  mcpServerIds?: string[];
+};
+
 interface AgentState {
   agents: AgentConfig[];
   current: AgentConfig | null;
   refresh: () => Promise<void>;
-  create: (input: { name: string; systemPrompt: string; modelId: string | null; workspaceId: string | null }) => Promise<AgentConfig>;
-  update: (id: string, patch: Partial<{ name: string; systemPrompt: string; modelId: string | null; workspaceId: string | null }>) => Promise<void>;
+  create: (input: AgentWrite) => Promise<AgentConfig>;
+  update: (id: string, patch: Partial<AgentWrite>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   setCurrent: (a: AgentConfig) => void;
 }

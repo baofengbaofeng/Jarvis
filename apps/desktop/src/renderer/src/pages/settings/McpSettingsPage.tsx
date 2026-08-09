@@ -19,11 +19,9 @@ interface McpServerRow {
     url?: string;
     description?: string;
     timeoutMs?: number;
-    agentIds?: string[];
     autoApprove?: string[];
   };
 }
-interface AgentOption { id: string; name: string }
 type Transport = 'stdio' | 'sse' | 'http';
 type FieldKey = 'name' | 'command' | 'args' | 'url' | 'form';
 
@@ -61,7 +59,6 @@ function fieldForError(code: string): FieldKey {
 export function McpSettingsPage() {
   const { t } = useTranslation('common');
   const [servers, setServers] = useState<McpServerRow[]>([]);
-  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [transport, setTransport] = useState<Transport>('stdio');
@@ -72,7 +69,6 @@ export function McpSettingsPage() {
   const [description, setDescription] = useState('');
   const [timeoutMs, setTimeoutMs] = useState('30000');
   const [autoApprove, setAutoApprove] = useState('');
-  const [agentIds, setAgentIds] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [deleting, setDeleting] = useState<McpServerRow | null>(null);
@@ -84,14 +80,12 @@ export function McpSettingsPage() {
   const [ioMsg, setIoMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [srv, agts, auto, max] = await Promise.all([
+    const [srv, auto, max] = await Promise.all([
       window.jarvis.invoke('mcp.list') as Promise<McpServerRow[]>,
-      window.jarvis.invoke('agent.list') as Promise<AgentOption[]>,
       window.jarvis.settingsGet('mcp.auto_start'),
       window.jarvis.settingsGet('mcp.max_concurrent_tools'),
     ]);
     setServers(Array.isArray(srv) ? srv : []);
-    setAgents(Array.isArray(agts) ? agts : []);
     if (typeof auto === 'boolean') setAutoStart(auto);
     if (typeof max === 'number') setMaxConcurrent(String(max));
   }, []);
@@ -109,7 +103,6 @@ export function McpSettingsPage() {
     setDescription('');
     setTimeoutMs('30000');
     setAutoApprove('');
-    setAgentIds([]);
     setFieldErrors({});
   };
 
@@ -133,7 +126,6 @@ export function McpSettingsPage() {
     setDescription(row.config.description ?? '');
     setTimeoutMs(String(row.config.timeoutMs ?? 30_000));
     setAutoApprove((row.config.autoApprove ?? []).join(', '));
-    setAgentIds(row.config.agentIds ?? []);
     setFieldErrors({});
   };
 
@@ -149,7 +141,6 @@ export function McpSettingsPage() {
       description: description.trim() || undefined,
       timeoutMs: Number(timeoutMs) || 30_000,
       autoApprove: autoApprove.split(/[,\s]+/).filter(Boolean),
-      agentIds,
     };
     if (transport === 'stdio') {
       const trimmedCommand = command.trim();
@@ -180,9 +171,6 @@ export function McpSettingsPage() {
     resetForm();
     await refresh();
   };
-
-  const toggleAgent = (id: string) =>
-    setAgentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const test = async (s: McpServerRow) => {
     const r = (await window.jarvis.invoke('mcp.test', { id: s.id })) as {
@@ -396,15 +384,6 @@ export function McpSettingsPage() {
           <div className="form-field">
             <label htmlFor="mcp-auto-approve">{t('settings.mcp.autoApprove')}</label>
             <FieldInput id="mcp-auto-approve" data-testid="mcp-auto-approve" value={autoApprove} onChange={(e) => setAutoApprove(e.target.value)} />
-          </div>
-          <div data-testid="mcp-agents" className="checkbox-group">
-            <span className="form-field__label">{t('settings.mcp.agents')}</span>
-            {agents.map((a) => (
-              <label key={a.id} className="checkbox-label">
-                <input type="checkbox" checked={agentIds.includes(a.id)} onChange={() => toggleAgent(a.id)} />
-                {a.name}
-              </label>
-            ))}
           </div>
           {fieldErrors.form ? (
             <p data-testid="mcp-form-error" role="alert" className="form-field__error">{fieldErrors.form}</p>

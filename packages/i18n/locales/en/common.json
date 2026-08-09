@@ -51,7 +51,7 @@
     },
     "mcp": {
       "title": "MCP Servers",
-      "subtitle": "Configure local stdio or remote SSE/HTTP MCP servers, bind Agents, and import/export Claude-style mcpServers JSON.",
+      "subtitle": "MCP (Model Context Protocol) gives Agents shared external tools. Configure local stdio servers (npx/uvx/node, etc.) or remote SSE / Streamable HTTP endpoints here first; then select which servers each Agent may use in Agent settings. Disabling pauses connections without deleting config. Import/export Claude-style mcpServers JSON — secrets are never written as plaintext.",
       "name": "Name",
       "nameHint": "Used to distinguish servers in the list; prefer a short Latin identifier.",
       "transport": "Transport",
@@ -289,7 +289,11 @@
     "modelId": "Model",
     "modelPlaceholder": "Select a model",
     "modelDisabledBound": "Current binding is disabled — pick another",
-    "modelNone": "No enabled models available"
+    "modelNone": "No enabled models available",
+    "mcpServers": "MCP servers",
+    "mcpServersHint": "Choose which configured MCP servers this Agent may use (servers are shared, not owned by an Agent).",
+    "mcpServersEmpty": "No MCP servers yet — add them under Settings → MCP first.",
+    "mcpDisabled": "disabled"
   },
   "agents": { "add": "Add Agent" },
   "board": {

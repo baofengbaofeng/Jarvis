@@ -162,6 +162,8 @@ export interface AgentConfig {
   // instead of wiping on a blank save.
   envVars?: Record<string, string>;
   cliArgs?: string[];
+  /** Enabled MCP server ids this Agent opts into (shared MCP capabilities). */
+  mcpServerIds?: string[];
   createdAt: string;
   updatedAt: string;
 }

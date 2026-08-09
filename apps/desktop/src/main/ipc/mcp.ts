@@ -67,7 +67,8 @@ export function buildMcpConfigFromInput(input: McpServerInput): McpServerConfigJ
     ...legacy,
     command: input.command ?? legacy.command,
     args: input.args ?? legacy.args,
-    agentIds: input.agentIds ?? legacy.agentIds,
+    // Binding lives on agents.mcp_server_ids_json — never store agentIds on servers.
+    agentIds: [],
     cwd: input.cwd ?? legacy.cwd,
     description: input.description ?? legacy.description,
     env: input.env ?? legacy.env,
@@ -204,7 +205,7 @@ export function createMcpStore(
         autoApprove: patch.autoApprove !== undefined ? patch.autoApprove : existing.autoApprove,
         allowedTools: patch.allowedTools !== undefined ? patch.allowedTools : existing.allowedTools,
         blockedTools: patch.blockedTools !== undefined ? patch.blockedTools : existing.blockedTools,
-        agentIds: patch.agentIds !== undefined ? patch.agentIds : existing.agentIds,
+        agentIds: [],
       });
       assertMcpServerConfig(cfg, transport);
       if (transport === 'stdio') assertMcpCommand(cfg.command ?? '', cfg.args ?? []);
@@ -281,7 +282,6 @@ export function createMcpStore(
               autoApprove: s.config.autoApprove,
               allowedTools: s.config.allowedTools,
               blockedTools: s.config.blockedTools,
-              agentIds: s.config.agentIds,
             });
             this.setEnabled(hit.id, s.enabled);
             imported++;
@@ -304,7 +304,6 @@ export function createMcpStore(
           autoApprove: s.config.autoApprove,
           allowedTools: s.config.allowedTools,
           blockedTools: s.config.blockedTools,
-          agentIds: s.config.agentIds,
         });
         if (!s.enabled) this.setEnabled(row.id, false);
         imported++;
@@ -385,34 +384,50 @@ export interface McpRegistrationDeps {
   registerOpts?: RegisterMcpToolsOpts;
 }
 
+/** Server UUIDs the agent opted into (agents.mcp_server_ids_json). */
+export function agentBoundMcpServerIds(db: Database.Database, agentId: string): Set<string> {
+  const row = db.prepare('SELECT mcp_server_ids_json FROM agents WHERE id = ?').get(agentId) as
+    | { mcp_server_ids_json?: string }
+    | undefined;
+  if (!row) return new Set();
+  try {
+    const parsed = JSON.parse(row.mcp_server_ids_json ?? '[]') as unknown;
+    return new Set(Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
 /** Collect normalized autoApprove tool ids for servers bound to an agent. */
 export function listAutoApproveToolIds(db: Database.Database, agentId: string): string[] {
-  const rows = db.prepare('SELECT name, config_json, enabled FROM mcp_servers').all() as Array<{
+  const bound = agentBoundMcpServerIds(db, agentId);
+  if (bound.size === 0) return [];
+  const rows = db.prepare('SELECT id, name, config_json, enabled FROM mcp_servers').all() as Array<{
+    id: string;
     name: string;
     config_json: string;
     enabled?: number;
   }>;
   const out: string[] = [];
   for (const s of rows) {
-    if (!asEnabled(s.enabled)) continue;
+    if (!asEnabled(s.enabled) || !bound.has(s.id)) continue;
     const cfg = normalizeMcpServerConfig(JSON.parse(s.config_json ?? '{}'));
-    if (!cfg.agentIds?.includes(agentId)) continue;
     out.push(...normalizeAutoApprove(s.name, cfg.autoApprove));
   }
   return out;
 }
 
 export function listBoundMcpServerNames(db: Database.Database, agentId: string): string[] {
-  const rows = db.prepare('SELECT name, config_json, enabled FROM mcp_servers').all() as Array<{
+  const bound = agentBoundMcpServerIds(db, agentId);
+  if (bound.size === 0) return [];
+  const rows = db.prepare('SELECT id, name, enabled FROM mcp_servers').all() as Array<{
+    id: string;
     name: string;
-    config_json: string;
     enabled?: number;
   }>;
   const names: string[] = [];
   for (const s of rows) {
-    if (!asEnabled(s.enabled)) continue;
-    const cfg = JSON.parse(s.config_json ?? '{}') as { agentIds?: string[] };
-    if (cfg.agentIds?.includes(agentId)) names.push(s.name);
+    if (asEnabled(s.enabled) && bound.has(s.id)) names.push(s.name);
   }
   return names;
 }
@@ -443,10 +458,10 @@ export async function registerAgentMcpTools(
     config_json: string;
     enabled?: number;
   }>;
+  const bound = agentBoundMcpServerIds(db, agentId);
   for (const s of rows) {
-    if (!asEnabled(s.enabled)) continue;
+    if (!asEnabled(s.enabled) || !bound.has(s.id)) continue;
     const cfg = normalizeMcpServerConfig(JSON.parse(s.config_json ?? '{}'));
-    if (!cfg.agentIds?.includes(agentId)) continue;
     if (mcpClientCache.has(s.id)) {
       const cached = mcpClientCache.get(s.id)!;
       await registerMcpTools(toolRegistry, cached.client, s.name, {

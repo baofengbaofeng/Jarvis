@@ -5,10 +5,32 @@ import { createAgentVersionStore } from './agents-versions';
 
 export type ContextPassing = 'full' | 'summary' | 'conclusion' | 'custom';
 
-export interface AgentInput { name: string; systemPrompt: string; modelId: string | null; workspaceId: string | null; description?: string; contextBudgetTokens?: number; planOnly?: boolean; envVars?: Record<string, string>; cliArgs?: string[]; contextPassing?: ContextPassing }
+export interface AgentInput {
+  name: string;
+  systemPrompt: string;
+  modelId: string | null;
+  workspaceId: string | null;
+  description?: string;
+  contextBudgetTokens?: number;
+  planOnly?: boolean;
+  envVars?: Record<string, string>;
+  cliArgs?: string[];
+  contextPassing?: ContextPassing;
+  mcpServerIds?: string[];
+}
 
 export function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'agent';
+}
+
+function parseMcpServerIds(raw: unknown): string[] {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 export function createAgentStore(db: Database.Database) {
@@ -29,6 +51,7 @@ export function createAgentStore(db: Database.Database) {
       // so legacy agents pass the leader context verbatim without reconfig.
       contextPassing: (r.context_passing as ContextPassing) ?? 'full',
       envVars, cliArgs,
+      mcpServerIds: parseMcpServerIds(r.mcp_server_ids_json),
       createdAt: r.created_at as string, updatedAt: r.updated_at as string
     };
   };
@@ -39,19 +62,21 @@ export function createAgentStore(db: Database.Database) {
     return rowToAgent(r);
   };
 
-  // M6 Task 9 (L31) review fix: the single 12-column UPDATE shared by `update`
+  // M6 Task 9 (L31) review fix: the single UPDATE shared by `update`
   // (after snapshotting the old config) AND the version store's rollback path
   // (`applyRaw`). Both resolve a full AgentConfig first, then write it here, so
   // the SQL lives in ONE place — a future schema change or new update side-effect
   // cannot be applied to one path and silently missed by the other (which would
   // make a rollback partially apply).
   const writeAgentColumns = (c: AgentConfig): void => {
-    db.prepare('UPDATE agents SET name=?, slug=?, system_prompt=?, model_id=?, workspace_id=?, description=?, context_budget_tokens=?, plan_only=?, env_vars_json=?, cli_args_json=?, context_passing=?, updated_at=? WHERE id=?')
+    db.prepare('UPDATE agents SET name=?, slug=?, system_prompt=?, model_id=?, workspace_id=?, description=?, context_budget_tokens=?, plan_only=?, env_vars_json=?, cli_args_json=?, context_passing=?, mcp_server_ids_json=?, updated_at=? WHERE id=?')
       .run(c.name, slugify(c.name), c.systemPrompt, c.modelId, c.workspaceId, c.description ?? '',
         c.contextBudgetTokens, c.planOnly ? 1 : 0,
         JSON.stringify(c.envVars ?? {}), JSON.stringify(c.cliArgs ?? []),
         // c.contextPassing is always defined (rowToAgent defaults to 'full').
-        c.contextPassing ?? 'full', now(), c.id);
+        c.contextPassing ?? 'full',
+        JSON.stringify(c.mcpServerIds ?? []),
+        now(), c.id);
   };
 
   // M6 Task 9 (L31): snapshot-free raw write used ONLY by the version store's
@@ -77,10 +102,10 @@ export function createAgentStore(db: Database.Database) {
     create(input: AgentInput): AgentConfig {
       const id = randomUUID();
       const slug = slugify(input.name);
-      db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, context_passing, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, context_passing, mcp_server_ids_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
         .run(id, input.name, slug, input.description ?? '', input.systemPrompt, input.modelId, input.workspaceId,
           input.contextBudgetTokens ?? 128000, input.planOnly ? 1 : 0, JSON.stringify(input.envVars ?? {}), JSON.stringify(input.cliArgs ?? []),
-          input.contextPassing ?? 'full', now(), now());
+          input.contextPassing ?? 'full', JSON.stringify(input.mcpServerIds ?? []), now(), now());
       return get(id);
     },
     update(id: string, patch: Partial<AgentInput>): AgentConfig {
@@ -106,6 +131,7 @@ export function createAgentStore(db: Database.Database) {
         // cur.contextPassing is always defined (rowToAgent defaults to 'full'),
         // so an unrelated patch cannot clobber a saved strategy with the DB default.
         contextPassing: patch.contextPassing ?? cur.contextPassing,
+        mcpServerIds: patch.mcpServerIds !== undefined ? patch.mcpServerIds : cur.mcpServerIds,
       };
       // Single shared write path — identical columns/order to the rollback path
       // (writeAgentColumns), so update and rollback round-trip the same config.

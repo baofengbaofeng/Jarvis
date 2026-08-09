@@ -22,11 +22,11 @@ describe('mcp store', () => {
     expect(store.list()[0]?.transport).toBe('stdio');
   });
 
-  it('persists per-agent binding into config_json.agentIds', () => {
+  it('does not store agent binding on the server (Agent owns mcpServerIds)', () => {
     const store = createMcpStore(db);
     store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [], agentIds: ['a1', 'a2'] });
     const listed = store.list();
-    expect(listed[0].config.agentIds).toEqual(['a1', 'a2']);
+    expect(listed[0].config.agentIds ?? []).toEqual([]);
   });
 
   it('rejects empty or overlong name / command / args', () => {
@@ -141,8 +141,10 @@ describe('registerAgentMcpTools client cache', () => {
   }
 
   it('spawns + registers ONCE per server and reuses the cached client on later runs', async () => {
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, mcp_server_ids_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run('a1', 'A', 'a', '', '', null, null, 128000, 0, '{}', '[]', JSON.stringify(['srv1']), new Date().toISOString(), new Date().toISOString());
     db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
-      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [], agentIds: ['a1'] }), new Date().toISOString());
+      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [] }), new Date().toISOString());
     const registry = new ToolRegistry();
     let spawns = 0;
     const deps = { spawnImpl: () => { spawns++; return new FakeProc() as unknown as import('node:child_process').ChildProcess; } };
@@ -153,16 +155,20 @@ describe('registerAgentMcpTools client cache', () => {
   });
 
   it('does not register a server bound to a different agent', async () => {
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, mcp_server_ids_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run('a2', 'A2', 'a2', '', '', null, null, 128000, 0, '{}', '[]', JSON.stringify(['srv1']), new Date().toISOString(), new Date().toISOString());
     db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
-      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [], agentIds: ['a2'] }), new Date().toISOString());
+      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [] }), new Date().toISOString());
     const registry = new ToolRegistry();
     await registerAgentMcpTools(db, registry, 'a1', { spawnImpl: () => new FakeProc() as unknown as import('node:child_process').ChildProcess });
     expect(registry.has('mcp:fs:read')).toBe(false);
   });
 
   it('keeps MCP tools in the shared registry but filters visibility per agent (CORE-20)', async () => {
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, mcp_server_ids_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run('a1', 'A', 'a', '', '', null, null, 128000, 0, '{}', '[]', JSON.stringify(['srv1']), new Date().toISOString(), new Date().toISOString());
     db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
-      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [], agentIds: ['a1'] }), new Date().toISOString());
+      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', args: [] }), new Date().toISOString());
     const registry = new ToolRegistry();
     registry.register({ name: 'read_file', description: '', parameters: {} }, async () => ({ ok: true, output: '' }));
     await registerAgentMcpTools(db, registry, 'a1', { spawnImpl: () => new FakeProc() as unknown as import('node:child_process').ChildProcess });

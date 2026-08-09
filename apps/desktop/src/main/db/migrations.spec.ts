@@ -70,8 +70,8 @@ describe('db migrations', () => {
     }
   });
 
-  it('reports latestVersion as 16 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table; v13 adds provider field length CHECKs; v14 adds models.context_tokens; v15 adds providers/models.enabled; v16 adds mcp_servers/skills.enabled)', () => {
-    expect(latestVersion()).toBe(16);
+  it('reports latestVersion as 17 (v5 reshapes squads for the M6 squad model; v6 adds agents.context_passing; v7 reshapes agent_call_edges for L14; v8 adds agent_memory/agent_config_versions for F11; v9 adds the L36 tasks.multica_task_id unique index; v10 creates the B9 token_usage table; v11 creates the J5 audit_logs table; v12 creates the K6 task_artifacts table; v13 adds provider field length CHECKs; v14 adds models.context_tokens; v15 adds providers/models.enabled; v16 adds mcp_servers/skills.enabled; v17 agents.mcp_server_ids_json)', () => {
+    expect(latestVersion()).toBe(17);
   });
 
   it('v16 adds mcp_servers.enabled and skills.enabled', () => {
@@ -254,5 +254,30 @@ describe('db migrations', () => {
     expect((db.prepare('SELECT COUNT(*) c FROM task_artifacts').get() as { c: number }).c).toBe(2);
     // Idempotent: re-applying migrations must not throw.
     applyMigrations(db);
+  });
+
+  it('v17 adds agents.mcp_server_ids_json and inverts legacy mcp agentIds', () => {
+    applyMigrations(db);
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO agents (id, name, slug, description, system_prompt, model_id, workspace_id, context_budget_tokens, plan_only, env_vars_json, cli_args_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run('a1', 'A', 'a', '', '', null, null, 128000, 0, '{}', '[]', now, now);
+    db.prepare('INSERT INTO mcp_servers (id, name, transport, config_json, created_at) VALUES (?,?,?,?,?)')
+      .run('srv1', 'fs', 'stdio', JSON.stringify({ command: 'npx', agentIds: ['a1'] }), now);
+    // Re-open path: simulate pre-v17 by running only through a fresh DB truncated to v16 is heavy;
+    // instead assert post-v17 column exists and invert logic via after() by applying after on a DB
+    // that already has data with agentIds — re-run after by manually invoking the migration body.
+    const cols = db.prepare('PRAGMA table_info(agents)').all() as Array<{ name: string }>;
+    expect(cols.map(c => c.name)).toContain('mcp_server_ids_json');
+
+    // Fresh DB already at v17: invert already ran with empty tables. Seed legacy shape and
+    // re-run the invert routine from MIGRATIONS[v17].after.
+    const v17 = MIGRATIONS.find(m => m.version === 17);
+    expect(v17?.after).toBeTypeOf('function');
+    v17!.after!(db);
+
+    const agent = db.prepare('SELECT mcp_server_ids_json FROM agents WHERE id = ?').get('a1') as { mcp_server_ids_json: string };
+    expect(JSON.parse(agent.mcp_server_ids_json)).toEqual(['srv1']);
+    const srv = db.prepare('SELECT config_json FROM mcp_servers WHERE id = ?').get('srv1') as { config_json: string };
+    expect(JSON.parse(srv.config_json)).not.toHaveProperty('agentIds');
   });
 });

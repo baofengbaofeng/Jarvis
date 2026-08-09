@@ -27,10 +27,9 @@ describe('McpSettingsPage', () => {
             name: 'fs',
             transport: 'stdio',
             enabled: true,
-            config: { command: 'npx', args: [], agentIds: ['a1'] },
+            config: { command: 'npx', args: [] },
           }];
         }
-        if (m === 'agent.list') return [{ id: 'a1', name: 'Agent 1' }, { id: 'a2', name: 'Agent 2' }];
         if (m === 'mcp.test') {
           expect(payload).toEqual({ id: 's1' });
           return { ok: true, tools: ['read', 'write'] };
@@ -47,7 +46,6 @@ describe('McpSettingsPage', () => {
     const jarvis = installMockJarvis({
       invoke: async (m) => {
         if (m === 'mcp.list') return [];
-        if (m === 'agent.list') return [];
         return { ok: true };
       },
     });
@@ -62,7 +60,6 @@ describe('McpSettingsPage', () => {
     installMockJarvis({
       invoke: async (m) => {
         if (m === 'mcp.list') return [];
-        if (m === 'agent.list') return [];
         return { ok: true };
       },
     });
@@ -73,22 +70,20 @@ describe('McpSettingsPage', () => {
     expect((screen.getByTestId('mcp-args') as HTMLInputElement).maxLength).toBe(2048);
   });
 
-  it('submits mcp.create with transport, args, and selected agentIds', async () => {
+  it('submits mcp.create with transport and args (no agent bind)', async () => {
     const jarvis = installMockJarvis({
       invoke: async (m) => {
         if (m === 'mcp.list') return [];
-        if (m === 'agent.list') return [{ id: 'a1', name: 'Agent 1' }, { id: 'a2', name: 'Agent 2' }];
         if (m === 'mcp.create') return { ok: true, server: { id: 'new', name: 'my-mcp', transport: 'stdio', config: {} } };
         return { ok: true };
       },
     });
     render(<McpSettingsPage />);
-    await waitFor(() => expect(screen.getByText('Agent 2')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('mcp-add')).toBeTruthy());
 
     fireEvent.change(screen.getByTestId('mcp-name'), { target: { value: 'my-mcp' } });
     fireEvent.change(screen.getByTestId('mcp-command'), { target: { value: 'npx' } });
     fireEvent.change(screen.getByTestId('mcp-args'), { target: { value: '-y pkg' } });
-    fireEvent.click(screen.getByLabelText('Agent 2'));
     fireEvent.click(screen.getByTestId('mcp-add'));
 
     await waitFor(() => {
@@ -98,11 +93,12 @@ describe('McpSettingsPage', () => {
           transport: 'stdio',
           command: 'npx',
           args: ['-y', 'pkg'],
-          agentIds: ['a2'],
         });
+        expect(payload).not.toHaveProperty('agentIds');
         return true;
       });
     });
+    expect(screen.queryByTestId('mcp-agents')).toBeNull();
   });
 
   it('lists servers in a table and runs the Test button', async () => {
@@ -119,7 +115,6 @@ describe('McpSettingsPage', () => {
         if (m === 'mcp.list') {
           return [{ id: 's1', name: 'fs', transport: 'stdio', enabled: true, config: {} }];
         }
-        if (m === 'agent.list') return [];
         if (m === 'mcp.delete') return { ok: true };
         return { ok: true };
       },

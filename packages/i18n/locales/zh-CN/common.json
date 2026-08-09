@@ -51,7 +51,7 @@
     },
     "mcp": {
       "title": "MCP 服务",
-      "subtitle": "配置本地 stdio 或远程 SSE/HTTP MCP 服务，绑定 Agent，并导入/导出 Claude 风格 mcpServers JSON。",
+      "subtitle": "MCP（Model Context Protocol）为 Agent 提供可共享的外部工具能力。先在此添加本地 stdio（npx/uvx/node 等）或远程 SSE / Streamable HTTP 服务；再在 Agent 配置中按需选用这些服务。禁用仅暂停连接，配置仍保留。支持导入/导出 Claude 风格的 mcpServers JSON，密钥不会以明文写出。",
       "name": "名称",
       "nameHint": "用于在列表中区分服务；建议使用简短英文标识。",
       "transport": "传输类型",
@@ -289,7 +289,11 @@
     "modelId": "模型",
     "modelPlaceholder": "选择模型",
     "modelDisabledBound": "当前绑定已禁用，请重新选择",
-    "modelNone": "暂无可用模型"
+    "modelNone": "暂无可用模型",
+    "mcpServers": "MCP 服务",
+    "mcpServersHint": "选择本 Agent 可使用的已配置 MCP 服务（服务本身不归属于任一 Agent）。",
+    "mcpServersEmpty": "尚无 MCP 服务，请先在设置 → MCP 中添加。",
+    "mcpDisabled": "已禁用"
   },
   "agents": {
     "add": "添加 Agent"

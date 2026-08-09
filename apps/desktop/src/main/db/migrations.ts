@@ -1,6 +1,11 @@
 import type Database from 'better-sqlite3';
 
-export interface Migration { version: number; sql: string }
+export interface Migration {
+  version: number;
+  sql: string;
+  /** Optional DML after version SQL (same transaction as applyMigrations). */
+  after?: (db: Database.Database) => void;
+}
 
 export const MIGRATIONS: Migration[] = [
   {
@@ -437,6 +442,37 @@ export const MIGRATIONS: Migration[] = [
     ALTER TABLE mcp_servers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE skills ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
     `
+  },
+  // v17: Agent owns MCP bindings (mcpServerIds). Invert legacy config_json.agentIds.
+  {
+    version: 17,
+    sql: `
+    ALTER TABLE agents ADD COLUMN mcp_server_ids_json TEXT NOT NULL DEFAULT '[]';
+    `,
+    after(db) {
+      const servers = db.prepare('SELECT id, config_json FROM mcp_servers').all() as Array<{ id: string; config_json: string }>;
+      const byAgent = new Map<string, string[]>();
+      for (const s of servers) {
+        let cfg: Record<string, unknown> = {};
+        try { cfg = JSON.parse(s.config_json ?? '{}') as Record<string, unknown>; } catch { cfg = {}; }
+        const agentIds = Array.isArray(cfg.agentIds) ? cfg.agentIds.filter((x): x is string => typeof x === 'string') : [];
+        for (const aid of agentIds) {
+          const list = byAgent.get(aid) ?? [];
+          if (!list.includes(s.id)) list.push(s.id);
+          byAgent.set(aid, list);
+        }
+        if ('agentIds' in cfg) {
+          delete cfg.agentIds;
+          db.prepare('UPDATE mcp_servers SET config_json = ? WHERE id = ?').run(JSON.stringify(cfg), s.id);
+        }
+      }
+      const updateAgent = db.prepare('UPDATE agents SET mcp_server_ids_json = ? WHERE id = ?');
+      for (const [agentId, serverIds] of byAgent) {
+        const exists = db.prepare('SELECT id FROM agents WHERE id = ?').get(agentId);
+        if (!exists) continue;
+        updateAgent.run(JSON.stringify(serverIds), agentId);
+      }
+    },
   }
 ];
 
@@ -455,6 +491,7 @@ export function applyMigrations(db: Database.Database, migrations: Migration[] =
     if (applied.has(m.version)) continue;
     const applyOne = db.transaction(() => {
       db.exec(m.sql);
+      m.after?.(db);
       insertVersion.run(m.version, new Date().toISOString());
     });
     applyOne();
