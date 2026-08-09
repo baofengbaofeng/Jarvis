@@ -7,7 +7,7 @@ import { createCodeIndexAdapter, reindexWorkspace, applyDiffToFile, readDiffFile
 import { searchMentions } from './mention';
 import { createSettingsStore } from './settings';
 import { validateSettingsValue, requiresSystemConfirm } from './settings-schema';
-import { createProviderStore, type ProviderInput, type ModelInput } from './providers';
+import { createProviderStore, type ProviderInput, type ModelInput, type ModelUpdateInput } from './providers';
 import { createAgentStore, type AgentInput } from './agents';
 import { createAgentTemplatesIpc } from './agent-templates';
 import { createMcpStore, testMcpServerById, warmStartMcpServers, type McpServerInput } from './mcp';
@@ -425,6 +425,14 @@ export class IpcRouter {
     this.register('provider.addModel', (_e, providerId, input) => {
       try {
         const model = providers.addModel(providerId as string, input as ModelInput);
+        return { ok: true as const, model };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('provider.updateModel', (_e, id, input) => {
+      try {
+        const model = providers.updateModel(id as string, input as ModelUpdateInput);
         return { ok: true as const, model };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };

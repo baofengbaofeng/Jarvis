@@ -49,7 +49,13 @@ export function createConfigIpc(db: Database.Database, settingsGet?: (k: string)
       base_url: string;
       api_key_ref: string | null;
     }>;
-    const models = db.prepare('SELECT id, provider_id AS providerId, model_id AS modelId, name FROM models').all() as ExportPayload['models'];
+    const models = db.prepare(`
+      SELECT id, provider_id AS providerId, model_id AS modelId, name,
+             context_tokens AS contextTokens, enabled,
+             max_output_tokens AS maxOutputTokens,
+             supports_tools AS supportsTools, supports_images AS supportsImages
+      FROM models
+    `).all() as ExportPayload['models'];
     const agents = db.prepare('SELECT id, name, slug, description, system_prompt AS systemPrompt, model_id AS modelId FROM agents').all() as ExportPayload['agents'];
     return buildExport(providers, models, agents, redactExportSettings(readSettings()));
   };

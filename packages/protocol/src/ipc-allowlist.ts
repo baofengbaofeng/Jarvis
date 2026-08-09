@@ -69,6 +69,7 @@ export const ALLOWED_INVOKE = new Set<string>([
   'provider.listModels',
   'provider.listSelectableModels',
   'provider.addModel',
+  'provider.updateModel',
   'provider.deleteModel',
   'provider.setEnabled',
   'provider.setModelEnabled',

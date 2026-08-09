@@ -230,4 +230,78 @@ describe('provider store', () => {
       store.addModel(p.id, { modelId: 'ok', name: 'Ok', contextTokens: 100_000_001 }),
     ).toThrow('PROVIDER_MODEL_CONTEXT_INVALID');
   });
+
+  it('persists model capability fields with defaults when omitted', async () => {
+    const store = createProviderStore(db, secrets);
+    const p = await store.create({ name: 'P', type: 'openai-compatible', baseUrl: 'https://x.com', apiKey: 'sk-t' });
+    const defaults = store.addModel(p.id, { modelId: 'm-default', name: 'Default' });
+    expect(defaults.maxOutputTokens).toBeNull();
+    expect(defaults.supportsTools).toBe(true);
+    expect(defaults.supportsImages).toBe(false);
+
+    const custom = store.addModel(p.id, {
+      modelId: 'm-custom',
+      name: 'Custom',
+      maxOutputTokens: 4096,
+      supportsTools: false,
+      supportsImages: true,
+    });
+    expect(custom.maxOutputTokens).toBe(4096);
+    expect(custom.supportsTools).toBe(false);
+    expect(custom.supportsImages).toBe(true);
+    expect(store.listModels(p.id).find((m) => m.id === custom.id)).toMatchObject({
+      maxOutputTokens: 4096,
+      supportsTools: false,
+      supportsImages: true,
+    });
+  });
+
+  it('rejects invalid maxOutputTokens', async () => {
+    const store = createProviderStore(db, secrets);
+    const p = await store.create({ name: 'P', type: 'openai-compatible', baseUrl: 'https://x.com', apiKey: 'sk-t' });
+    for (const maxOutputTokens of [0, -1, 1.5, 100_000_001]) {
+      expect(() => store.addModel(p.id, { modelId: 'm', name: 'M', maxOutputTokens })).toThrow(
+        'PROVIDER_MODEL_MAX_OUTPUT_INVALID',
+      );
+    }
+  });
+
+  it('updates model fields without changing modelId', async () => {
+    const store = createProviderStore(db, secrets);
+    const p = await store.create({ name: 'P', type: 'openai-compatible', baseUrl: 'https://x.com', apiKey: 'sk-t' });
+    const m = store.addModel(p.id, { modelId: 'keep-id', name: 'Old', contextTokens: 1000 });
+    const updated = store.updateModel(m.id, {
+      name: 'New',
+      contextTokens: 2000,
+      maxOutputTokens: 512,
+      supportsTools: false,
+      supportsImages: true,
+    });
+    expect(updated.modelId).toBe('keep-id');
+    expect(updated.name).toBe('New');
+    expect(updated.contextTokens).toBe(2000);
+    expect(updated.maxOutputTokens).toBe(512);
+    expect(updated.supportsTools).toBe(false);
+    expect(updated.supportsImages).toBe(true);
+    expect(() => store.updateModel('missing', { name: 'X' })).toThrow(/model not found/);
+  });
+
+  it('returns capability fields from listSelectableModels', async () => {
+    const store = createProviderStore(db, secrets);
+    const p = await store.create({ name: 'P', type: 'openai-compatible', baseUrl: 'https://x.com', apiKey: 'sk-t' });
+    store.addModel(p.id, {
+      modelId: 'm1',
+      name: 'M1',
+      maxOutputTokens: 1024,
+      supportsTools: true,
+      supportsImages: true,
+    });
+    const selectable = store.listSelectableModels();
+    expect(selectable).toHaveLength(1);
+    expect(selectable[0]).toMatchObject({
+      maxOutputTokens: 1024,
+      supportsTools: true,
+      supportsImages: true,
+    });
+  });
 });
