@@ -182,3 +182,138 @@ export function assertMcpServerConfig(cfg: McpServerConfigJson, transport: McpTr
     if (url.length > MCP_FIELD_MAX.url) throw new Error('MCP_URL_TOO_LONG');
   }
 }
+
+export interface ClaudeMcpExportServer {
+  type?: string;
+  transport?: string;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, SecretOrPlain>;
+  url?: string;
+  headers?: Record<string, SecretOrPlain>;
+  timeout?: number;
+  disabled?: boolean;
+  description?: string;
+  autoApprove?: string[];
+  allowedTools?: string[] | null;
+  blockedTools?: string[];
+}
+
+export interface ClaudeMcpDocument {
+  mcpServers: Record<string, ClaudeMcpExportServer>;
+  autoStartMcp?: boolean;
+  logLevel?: string;
+  maxConcurrentTools?: number;
+  globalEnv?: Record<string, SecretOrPlain>;
+}
+
+export const MINIMAL_MCP_SAMPLE: ClaudeMcpDocument = {
+  mcpServers: {
+    filesystem: {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/bf/work'],
+      cwd: '/Users/bf/work',
+      timeout: 60_000,
+      autoApprove: ['list_directory', 'read_file'],
+      description: 'Local filesystem',
+    },
+    github: {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      env: { GITHUB_TOKEN: { secretRef: 'mcp.pending.env.GITHUB_TOKEN' } },
+      description: 'GitHub API',
+    },
+  },
+  autoStartMcp: true,
+  logLevel: 'warn',
+  maxConcurrentTools: 3,
+};
+
+/** Redact plaintext env/header values for export (keep secretRef objects). */
+function redactSecrets(map?: Record<string, SecretOrPlain>): Record<string, SecretOrPlain> | undefined {
+  if (!map) return undefined;
+  const out: Record<string, SecretOrPlain> = {};
+  for (const [k, v] of Object.entries(map)) {
+    out[k] = typeof v === 'string' ? { secretRef: `export.redacted.${k}` } : v;
+  }
+  return out;
+}
+
+export function toClaudeMcpExport(
+  servers: Array<{ name: string; transport: string; enabled: boolean; config: McpServerConfigJson }>,
+  globals: { autoStartMcp?: boolean; logLevel?: string; maxConcurrentTools?: number; globalEnv?: Record<string, SecretOrPlain> } = {},
+): ClaudeMcpDocument {
+  const mcpServers: Record<string, ClaudeMcpExportServer> = {};
+  for (const s of servers) {
+    const key = s.name;
+    mcpServers[key] = {
+      type: s.transport === 'http' ? 'streamable-http' : s.transport,
+      command: s.config.command,
+      args: s.config.args,
+      cwd: s.config.cwd,
+      env: redactSecrets(s.config.env),
+      url: s.config.url,
+      headers: redactSecrets(s.config.headers),
+      timeout: s.config.timeoutMs,
+      disabled: !s.enabled,
+      description: s.config.description,
+      autoApprove: s.config.autoApprove,
+      allowedTools: s.config.allowedTools,
+      blockedTools: s.config.blockedTools,
+    };
+  }
+  return {
+    mcpServers,
+    autoStartMcp: globals.autoStartMcp,
+    logLevel: globals.logLevel,
+    maxConcurrentTools: globals.maxConcurrentTools,
+    globalEnv: redactSecrets(globals.globalEnv),
+  };
+}
+
+export interface ImportedMcpServer {
+  key: string;
+  name: string;
+  transport: McpTransportKind;
+  enabled: boolean;
+  config: McpServerConfigJson;
+}
+
+export function fromClaudeMcpImport(doc: unknown): {
+  servers: ImportedMcpServer[];
+  globals: { autoStartMcp?: boolean; logLevel?: string; maxConcurrentTools?: number; globalEnv?: Record<string, SecretOrPlain> };
+} {
+  const root = doc && typeof doc === 'object' ? doc as Record<string, unknown> : {};
+  const serversRaw = root.mcpServers;
+  if (!serversRaw || typeof serversRaw !== 'object' || Array.isArray(serversRaw)) {
+    throw new Error('MCP_IMPORT_INVALID');
+  }
+  const servers: ImportedMcpServer[] = [];
+  for (const [key, raw] of Object.entries(serversRaw as Record<string, unknown>)) {
+    const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const transport = normalizeTransport(o.type ?? o.transport ?? 'stdio');
+    const config = normalizeMcpServerConfig(o);
+    assertMcpServerConfig(config, transport);
+    servers.push({
+      key,
+      name: typeof o.name === 'string' && o.name.trim() ? o.name.trim() : key,
+      transport,
+      enabled: o.disabled !== true,
+      config,
+    });
+  }
+  return {
+    servers,
+    globals: {
+      autoStartMcp: typeof root.autoStartMcp === 'boolean' ? root.autoStartMcp : undefined,
+      logLevel: typeof root.logLevel === 'string' ? root.logLevel : undefined,
+      maxConcurrentTools: typeof root.maxConcurrentTools === 'number' ? root.maxConcurrentTools : undefined,
+      globalEnv: root.globalEnv && typeof root.globalEnv === 'object'
+        ? normalizeMcpServerConfig({ env: root.globalEnv }).env
+        : undefined,
+    },
+  };
+}

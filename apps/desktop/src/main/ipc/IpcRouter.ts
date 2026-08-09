@@ -161,7 +161,7 @@ export class IpcRouter {
       agents.create({ name: input.name, systemPrompt: input.systemPrompt, modelId: null, workspaceId: input.workspaceId }));
     this.register('agent-templates.list', () => agentTemplates.list());
     this.register('agent-templates.createAgent', (_e, input) => agentTemplates.createAgent(_e, input as { templateId: string; name: string; workspaceId?: string }));
-    const mcpStore = createMcpStore(this.db);
+    const mcpStore = createMcpStore(this.db, { secrets });
     // Pass the agents store so skills import can copy SKILL.md into every bound
     // workspace's .jarvis/skills/ (the runtime injection surface), J2 fix.
     const skillsStore = createSkillsStore(this.db, agents, {
@@ -169,9 +169,23 @@ export class IpcRouter {
       http: safeUrlPolicy,
     });
     this.register('mcp.list', () => mcpStore.list());
-    this.register('mcp.create', (_e, input) => {
+    this.register('mcp.create', async (_e, input) => {
       try {
-        const server = mcpStore.create(input as McpServerInput);
+        const payload = input as McpServerInput;
+        const server = payload.secretValues
+          ? await mcpStore.createAsync(payload)
+          : mcpStore.create(payload);
+        return { ok: true as const, server };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    this.register('mcp.update', async (_e, args) => {
+      try {
+        const { id, ...patch } = (args ?? {}) as { id: string } & Partial<McpServerInput>;
+        const server = patch.secretValues
+          ? await mcpStore.updateAsync(id, patch)
+          : mcpStore.update(id, patch);
         return { ok: true as const, server };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
@@ -194,7 +208,30 @@ export class IpcRouter {
       }
     });
     this.register('mcp.test', (_e, args) =>
-      testMcpServerById(this.db, ((args ?? {}) as { id: string }).id));
+      testMcpServerById(this.db, ((args ?? {}) as { id: string }).id, {
+        secrets,
+        assertAllowedUrl: async (url) => { await safeUrlPolicy.assertAllowed(url); },
+        globalEnv: (settings.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+      }));
+    this.register('mcp.export', () => ({
+      ok: true as const,
+      document: mcpStore.exportDocument({
+        autoStartMcp: settings.get('mcp.auto_start') !== false,
+        logLevel: (settings.get('mcp.log_level') as string | undefined) ?? 'warn',
+        maxConcurrentTools: (settings.get('mcp.max_concurrent_tools') as number | undefined) ?? 3,
+        globalEnv: (settings.get('mcp.global_env') as Record<string, string | { secretRef: string }> | undefined) ?? undefined,
+      }),
+    }));
+    this.register('mcp.import', (_e, args) => {
+      try {
+        const { text, strategy } = (args ?? {}) as { text: string; strategy?: 'skip' | 'overwrite' | 'merge' };
+        const doc = JSON.parse(text) as unknown;
+        const result = mcpStore.importDocument(doc, strategy ?? 'skip');
+        return { ok: true as const, ...result };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     this.register('skills.list', () => skillsStore.list());
     this.register('skills.importLocal', (_e, req) => {
       const dir = this.resolvePath((req as { capability: string }).capability, _e.sender.id, 'skills:import-dir');

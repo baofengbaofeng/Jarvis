@@ -58,3 +58,24 @@ describe('assertMcpServerConfig', () => {
     expect(() => assertMcpServerConfig(cfg, 'http')).toThrow('MCP_URL_REQUIRED');
   });
 });
+
+describe('claude mcp import/export', () => {
+  it('round-trips and redacts plaintext secrets on export', async () => {
+    const { toClaudeMcpExport, fromClaudeMcpImport, MINIMAL_MCP_SAMPLE } = await import('./config');
+    const exported = toClaudeMcpExport([
+      {
+        name: 'fs',
+        transport: 'stdio',
+        enabled: true,
+        config: normalizeMcpServerConfig({
+          command: 'npx',
+          args: ['-y', 'pkg'],
+          env: { TOKEN: 'plaintext-secret' },
+        }),
+      },
+    ]);
+    expect(exported.mcpServers.fs?.env?.TOKEN).toEqual({ secretRef: 'export.redacted.TOKEN' });
+    const imported = fromClaudeMcpImport(MINIMAL_MCP_SAMPLE);
+    expect(imported.servers.map((s) => s.key).sort()).toEqual(['filesystem', 'github']);
+  });
+});

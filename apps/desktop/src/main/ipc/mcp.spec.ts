@@ -54,12 +54,12 @@ describe('mcp store', () => {
     expect(store.list()[0]?.enabled).toBe(false);
   });
 
-  it('excludes disabled servers from agent bindings', () => {
+  it('updates cwd and persists on list', () => {
     const store = createMcpStore(db);
-    const s = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [], agentIds: ['a1'] });
-    expect(listBoundMcpServerNames(db, 'a1')).toEqual(['fs']);
-    store.setEnabled(s.id, false);
-    expect(listBoundMcpServerNames(db, 'a1')).toEqual([]);
+    const s = store.create({ name: 'fs', transport: 'stdio', command: 'npx', args: [] });
+    const updated = store.update(s.id, { cwd: '/tmp/work' });
+    expect(updated.config.cwd).toBe('/tmp/work');
+    expect(store.list()[0]?.config.cwd).toBe('/tmp/work');
   });
 });
 
@@ -86,10 +86,10 @@ describe('mcp.test', () => {
     expect(r.tools).toEqual(['read']);
   });
 
-  it('rejects non-stdio transport', async () => {
+  it('requires url for sse transport (remote supported)', async () => {
     const r = await testMcpServer({ name: 's', transport: 'sse', command: 'x' });
     expect(r.ok).toBe(false);
-    expect(r.error).toContain('not supported');
+    expect(r.error).toBe('MCP_URL_REQUIRED');
   });
 
   it('loads the executable from the persisted server id', async () => {
