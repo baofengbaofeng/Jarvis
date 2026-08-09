@@ -473,7 +473,16 @@ export const MIGRATIONS: Migration[] = [
         updateAgent.run(JSON.stringify(serverIds), agentId);
       }
     },
-  }
+  },
+  // v18: per-model max output tokens + tools/images capability flags.
+  {
+    version: 18,
+    sql: `
+    ALTER TABLE models ADD COLUMN max_output_tokens INTEGER;
+    ALTER TABLE models ADD COLUMN supports_tools INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE models ADD COLUMN supports_images INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 export function latestVersion(): number {
